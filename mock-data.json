@@ -1,0 +1,534 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "admin@assessment.local",
+      "password": "admin123",
+      "role": "admin",
+      "created_at": "2025-08-20T21:20:10.008Z"
+    },
+    {
+      "id": "2",
+      "email": "user@assessment.local",
+      "password": "user123",
+      "role": "user",
+      "created_at": "2025-08-20T21:20:10.008Z"
+    },
+    {
+      "id": "3",
+      "email": "teacher@assessment.local",
+      "password": "teacher123",
+      "role": "teacher",
+      "created_at": "2025-08-20T21:20:10.008Z"
+    },
+    {
+      "id": "4",
+      "email": "student@assessment.local",
+      "password": "student123",
+      "role": "student",
+      "created_at": "2025-08-20T21:20:10.008Z"
+    },
+    {
+      "id": "5",
+      "email": "viveks@happimynd.com",
+      "password": "vivek123",
+      "role": "user",
+      "created_at": "2025-08-23T03:48:48.383Z"
+    },
+    {
+      "id": "1755921917315",
+      "email": "wqaa@xam.com",
+      "password": "1234",
+      "role": "user",
+      "user_name": "Waq",
+      "profile": "CU Student"
+    },
+    {
+      "id": "1755922579313",
+      "email": "qwerty@happimynd.com",
+      "password": "1234",
+      "role": "user",
+      "user_name": "Ashish",
+      "profile": "CU Student"
+    },
+    {
+      "id": "1755929782130",
+      "email": "not@happimynd.com",
+      "password": "1234",
+      "role": "user",
+      "user_name": "Vivek",
+      "profile": "Home Maker"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "1755922232270",
+      "name": "Senior Citizen",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-23T04:10:32.271Z",
+      "updated_at": "2025-08-23T04:10:32.271Z"
+    },
+    {
+      "id": "1755922239230",
+      "name": "HCL",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-23T04:10:39.231Z",
+      "updated_at": "2025-08-23T04:10:39.231Z"
+    },
+    {
+      "id": "1755926765791",
+      "name": "Home Maker",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-23T05:26:05.794Z",
+      "updated_at": "2025-08-23T05:26:05.795Z"
+    },
+    {
+      "id": "1755929396594",
+      "name": "Student (ABC)",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-23T06:09:56.595Z",
+      "updated_at": "2025-08-23T06:09:56.595Z"
+    }
+  ],
+  "packets": [
+    {
+      "id": "ei_depression",
+      "name": "Depression",
+      "description": "Understanding and recognizing symptoms of depression, mood changes, and emotional well-being",
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-22T23:00:00.000Z"
+    },
+    {
+      "id": "ei_anxiety",
+      "name": "Anxiety",
+      "description": "Identifying anxiety patterns, stress responses, and coping mechanisms for anxious thoughts",
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-22T23:00:00.000Z"
+    },
+    {
+      "id": "ei_stress",
+      "name": "Stress Management",
+      "description": "Recognizing stress triggers, understanding stress responses, and developing healthy coping strategies",
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-22T23:00:00.000Z"
+    },
+    {
+      "id": "ei_self_awareness",
+      "name": "Self Awareness",
+      "description": "Understanding personal emotions, recognizing emotional patterns, and developing emotional intelligence",
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-22T23:00:00.000Z"
+    },
+    {
+      "id": "ei_empathy",
+      "name": "Empathy",
+      "description": "Understanding others' emotions, developing compassion, and building emotional connections",
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-22T23:00:00.000Z"
+    }
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "packet_id": "ei_depression",
+      "question_text": "Which of the following is a common symptom of depression?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "text": "Increased energy and motivation",
+          "marks": 1
+        },
+        {
+          "text": "Persistent sadness and loss of interest",
+          "marks": 4
+        },
+        {
+          "text": "Improved sleep patterns",
+          "marks": 1
+        },
+        {
+          "text": "Enhanced social interactions",
+          "marks": 2
+        }
+      ],
+      "marks": 8,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "2",
+      "packet_id": "ei_depression",
+      "question_text": "Depression can affect both physical and mental health.",
+      "question_type": "true_false",
+      "options": [
+        {
+          "text": "True",
+          "marks": 4
+        },
+        {
+          "text": "False",
+          "marks": 1
+        }
+      ],
+      "marks": 5,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "3",
+      "packet_id": "ei_anxiety",
+      "question_text": "What is a common physical symptom of anxiety?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "text": "Decreased heart rate",
+          "marks": 1
+        },
+        {
+          "text": "Rapid breathing and sweating",
+          "marks": 4
+        },
+        {
+          "text": "Lowered blood pressure",
+          "marks": 1
+        },
+        {
+          "text": "Reduced muscle tension",
+          "marks": 2
+        }
+      ],
+      "marks": 8,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "4",
+      "packet_id": "ei_anxiety",
+      "question_text": "Anxiety is always harmful and should be avoided completely.",
+      "question_type": "true_false",
+      "options": [
+        {
+          "text": "True",
+          "marks": 1
+        },
+        {
+          "text": "False",
+          "marks": 4
+        }
+      ],
+      "marks": 5,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "5",
+      "packet_id": "ei_stress",
+      "question_text": "Which stress management technique involves focusing on the present moment?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "text": "Worrying about future events",
+          "marks": 1
+        },
+        {
+          "text": "Mindfulness meditation",
+          "marks": 4
+        },
+        {
+          "text": "Avoiding all responsibilities",
+          "marks": 1
+        },
+        {
+          "text": "Suppressing emotions",
+          "marks": 2
+        }
+      ],
+      "marks": 8,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "6",
+      "packet_id": "ei_stress",
+      "question_text": "Chronic stress can have negative effects on health.",
+      "question_type": "true_false",
+      "options": [
+        {
+          "text": "True",
+          "marks": 4
+        },
+        {
+          "text": "False",
+          "marks": 1
+        }
+      ],
+      "marks": 5,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "7",
+      "packet_id": "ei_self_awareness",
+      "question_text": "What is emotional self-awareness?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "text": "Ignoring your emotions completely",
+          "marks": 1
+        },
+        {
+          "text": "Understanding and recognizing your own emotions",
+          "marks": 4
+        },
+        {
+          "text": "Controlling others' emotions",
+          "marks": 2
+        },
+        {
+          "text": "Suppressing all emotional responses",
+          "marks": 1
+        }
+      ],
+      "marks": 8,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "8",
+      "packet_id": "ei_self_awareness",
+      "question_text": "Self-awareness helps in making better life decisions.",
+      "question_type": "true_false",
+      "options": [
+        {
+          "text": "True",
+          "marks": 4
+        },
+        {
+          "text": "False",
+          "marks": 1
+        }
+      ],
+      "marks": 5,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "9",
+      "packet_id": "ei_empathy",
+      "question_text": "What does empathy involve?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "text": "Only feeling sorry for someone",
+          "marks": 2
+        },
+        {
+          "text": "Understanding and sharing another person's feelings",
+          "marks": 4
+        },
+        {
+          "text": "Ignoring others' emotions",
+          "marks": 1
+        },
+        {
+          "text": "Telling others how to feel",
+          "marks": 1
+        }
+      ],
+      "marks": 8,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    },
+    {
+      "id": "10",
+      "packet_id": "ei_empathy",
+      "question_text": "Empathy can be developed and improved over time.",
+      "question_type": "true_false",
+      "options": [
+        {
+          "text": "True",
+          "marks": 4
+        },
+        {
+          "text": "False",
+          "marks": 1
+        }
+      ],
+      "marks": 5,
+      "created_at": "2025-08-22T23:20:00.000Z",
+      "updated_at": "2025-08-22T23:20:00.000Z"
+    }
+  ],
+  "quizzes": [
+    {
+      "id": "ei_quiz_001",
+      "name": "Emotional Intelligence Assessment",
+      "description": "Comprehensive assessment covering all 5 emotional intelligence areas",
+      "time_limit": 30,
+      "passing_score": 70,
+      "created_at": "2025-08-22T23:00:00.000Z",
+      "updated_at": "2025-08-23T04:04:20.499Z",
+      "packet_ids": [
+        "ei_depression",
+        "ei_anxiety",
+        "ei_stress",
+        "ei_self_awareness",
+        "ei_empathy"
+      ]
+    },
+    {
+      "id": "1755929671284",
+      "name": "Happi Assess EI",
+      "description": "New quiz description",
+      "time_limit": 30,
+      "total_questions": 0,
+      "passing_score": 70,
+      "created_at": "2025-08-23T06:14:31.285Z",
+      "updated_at": "2025-08-23T06:14:31.300Z",
+      "packet_ids": [
+        "ei_depression",
+        "ei_stress",
+        "ei_empathy"
+      ]
+    }
+  ],
+  "quizAssignments": [
+    {
+      "id": "1755926791115",
+      "quiz_id": "ei_quiz_001",
+      "profile_id": "1755926765791",
+      "assigned_at": "2025-08-23T05:26:31.116Z",
+      "due_date": "2025-08-30T05:26:31.116Z",
+      "status": "assigned",
+      "created_at": "2025-08-23T05:26:31.116Z",
+      "updated_at": "2025-08-23T05:26:31.116Z"
+    },
+    {
+      "id": "1755929700068",
+      "quiz_id": "1755929671284",
+      "profile_id": "1755922232270",
+      "assigned_at": "2025-08-23T06:15:00.069Z",
+      "due_date": "2025-08-30T06:15:00.069Z",
+      "status": "assigned",
+      "created_at": "2025-08-23T06:15:00.069Z",
+      "updated_at": "2025-08-23T06:15:00.069Z"
+    }
+  ],
+  "quizAttempts": [
+    {
+      "id": "1755921939959",
+      "quiz_id": "ei_quiz_001",
+      "profile_id": "1755719178991",
+      "user_id": "1755921917315",
+      "score": 46,
+      "total_questions": 10,
+      "correct_answers": 30,
+      "total_marks": 30,
+      "packet_marks": {
+        "Depression": {
+          "marks": 5,
+          "questions": 2
+        },
+        "Anxiety": {
+          "marks": 5,
+          "questions": 2
+        },
+        "Stress Management": {
+          "marks": 8,
+          "questions": 2
+        },
+        "Self Awareness": {
+          "marks": 6,
+          "questions": 2
+        },
+        "Empathy": {
+          "marks": 6,
+          "questions": 2
+        }
+      },
+      "started_at": "2025-08-23T04:05:39.962Z",
+      "completed_at": "2025-08-23T04:05:39.953Z",
+      "status": "completed",
+      "created_at": "2025-08-23T04:05:39.962Z",
+      "updated_at": "2025-08-23T04:05:39.962Z"
+    },
+    {
+      "id": "1755922595880",
+      "quiz_id": "ei_quiz_001",
+      "profile_id": "1755719178991",
+      "user_id": "1755922579313",
+      "score": 38,
+      "total_questions": 10,
+      "correct_answers": 25,
+      "total_marks": 25,
+      "packet_marks": {
+        "Depression": {
+          "marks": 2,
+          "questions": 2
+        },
+        "Anxiety": {
+          "marks": 6,
+          "questions": 2
+        },
+        "Stress Management": {
+          "marks": 3,
+          "questions": 2
+        },
+        "Self Awareness": {
+          "marks": 8,
+          "questions": 2
+        },
+        "Empathy": {
+          "marks": 6,
+          "questions": 2
+        }
+      },
+      "started_at": "2025-08-23T04:16:35.882Z",
+      "completed_at": "2025-08-23T04:16:35.870Z",
+      "status": "completed",
+      "created_at": "2025-08-23T04:16:35.882Z",
+      "updated_at": "2025-08-23T04:16:35.882Z"
+    },
+    {
+      "id": "1755929798701",
+      "quiz_id": "ei_quiz_001",
+      "profile_id": "1755926765791",
+      "user_id": "1755929782130",
+      "score": 35,
+      "total_questions": 10,
+      "correct_answers": 23,
+      "total_marks": 23,
+      "packet_marks": {
+        "Depression": {
+          "marks": 5,
+          "questions": 2
+        },
+        "Anxiety": {
+          "marks": 3,
+          "questions": 2
+        },
+        "Stress Management": {
+          "marks": 5,
+          "questions": 2
+        },
+        "Self Awareness": {
+          "marks": 5,
+          "questions": 2
+        },
+        "Empathy": {
+          "marks": 5,
+          "questions": 2
+        }
+      },
+      "started_at": "2025-08-23T06:16:38.702Z",
+      "completed_at": "2025-08-23T06:16:38.692Z",
+      "status": "completed",
+      "created_at": "2025-08-23T06:16:38.702Z",
+      "updated_at": "2025-08-23T06:16:38.702Z"
+    }
+  ]
+}

@@ -1,0 +1,400 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "admin@assessment.local",
+      "password": "admin123",
+      "role": "admin"
+    },
+    {
+      "id": "2",
+      "email": "user@assessment.local",
+      "password": "user123",
+      "role": "user"
+    },
+    {
+      "id": "1755700689751",
+      "email": "user1@happimynd.com",
+      "password": "user1",
+      "role": "user"
+    },
+    {
+      "id": "1755703513401",
+      "email": "user1@assessment.local",
+      "password": "user1",
+      "role": "user"
+    },
+    {
+      "id": "1755714231112",
+      "email": "mayank@happimynd.com",
+      "password": "user1",
+      "role": "user"
+    },
+    {
+      "id": "1755715659272",
+      "email": "yuy@happimynd.com",
+      "password": "1234",
+      "role": "user",
+      "user_name": "YUY",
+      "profile": "student"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "1755719138905",
+      "name": "Senior Citizen",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-20T19:45:38.907Z",
+      "updated_at": "2025-08-20T19:45:38.907Z"
+    },
+    {
+      "id": "1755719178991",
+      "name": "CU Student",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-20T19:46:18.992Z",
+      "updated_at": "2025-08-20T19:46:18.992Z"
+    },
+    {
+      "id": "1755719209738",
+      "name": "HCL ",
+      "email": "new@example.com",
+      "role": "student",
+      "created_at": "2025-08-20T19:46:49.739Z",
+      "updated_at": "2025-08-20T19:46:49.739Z"
+    }
+  ],
+  "packets": [
+    {
+      "id": "1755719317656",
+      "name": "Logical Reasoning",
+      "description": "New description",
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719366320",
+      "name": "General Question",
+      "description": "New description",
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.321Z"
+    },
+    {
+      "id": "1755719404031",
+      "name": "Work Life Balance",
+      "description": "New description",
+      "created_at": "2025-08-20T19:50:04.031Z",
+      "updated_at": "2025-08-20T19:50:04.031Z"
+    }
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "packet_id": null,
+      "question": "Sample question?",
+      "question_text": "Sample question?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "Option A",
+        "Option B",
+        "Option C",
+        "Option D"
+      ],
+      "correct_answer": "Option A",
+      "marks": 2,
+      "created_at": "2025-08-20T13:59:48.269Z",
+      "updated_at": "2025-08-20T13:59:48.269Z"
+    },
+    {
+      "id": "2",
+      "packet_id": null,
+      "question": "Another question?",
+      "question_text": "Another question?",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": [
+        "True",
+        "False"
+      ],
+      "correct_answer": "True",
+      "marks": 1,
+      "created_at": "2025-08-20T13:59:48.269Z",
+      "updated_at": "2025-08-20T13:59:48.269Z"
+    },
+    {
+      "id": "1755719317657",
+      "packet_id": "1755719317656",
+      "question": "If all roses are flowers and some flowers fade quickly, which statement is true?",
+      "question_text": "If all roses are flowers and some flowers fade quickly, which statement is true?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "All flowers are roses",
+        "Some roses fade quickly",
+        "All flowers fade quickly",
+        "None of the above"
+      ],
+      "correct_answer": "Some roses fade quickly",
+      "marks": 2,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317658",
+      "packet_id": "1755719317656",
+      "question": "Find the missing number: 2, 6, 12, 20, ?",
+      "question_text": "Find the missing number: 2, 6, 12, 20, ?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "28",
+        "20",
+        "30",
+        "32"
+      ],
+      "correct_answer": "28",
+      "marks": 2,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317659",
+      "packet_id": "1755719317656",
+      "question": "In a certain code, CAT = 24 and DOG = 26. What is BAT?",
+      "question_text": "In a certain code, CAT = 24 and DOG = 26. What is BAT?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "22",
+        "23",
+        "24",
+        "25"
+      ],
+      "correct_answer": "23",
+      "marks": 2,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317660",
+      "packet_id": "1755719317656",
+      "question": "If A is B's father, B is C's brother, and C is D's mother, what is A's relation to D?",
+      "question_text": "If A is B's father, B is C's brother, and C is D's mother, what is A's relation to D?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "Grandfather",
+        "Father",
+        "Uncle",
+        "Cannot be determined"
+      ],
+      "correct_answer": "Grandfather",
+      "marks": 2,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317661",
+      "packet_id": "1755719317656",
+      "question": "In syllogisms, if all A are B and all B are C, then all A are C.",
+      "question_text": "In syllogisms, if all A are B and all B are C, then all A are C.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "true",
+      "marks": 1,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317662",
+      "packet_id": "1755719317656",
+      "question": "If the average of three numbers is 20, their total is 60.",
+      "question_text": "If the average of three numbers is 20, their total is 60.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "true",
+      "marks": 1,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719317663",
+      "packet_id": "1755719317656",
+      "question": "An even number multiplied by an odd number is always odd.",
+      "question_text": "An even number multiplied by an odd number is always odd.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "false",
+      "marks": 1,
+      "created_at": "2025-08-20T19:48:37.656Z",
+      "updated_at": "2025-08-20T19:48:37.656Z"
+    },
+    {
+      "id": "1755719366321",
+      "packet_id": "1755719366320",
+      "question": "Who is known as the \"Father of Computers\"?",
+      "question_text": "Who is known as the \"Father of Computers\"?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "Charles Babbage",
+        "Alan Turing",
+        "Bill Gates",
+        "Steve Jobs"
+      ],
+      "correct_answer": "Charles Babbage",
+      "marks": 1,
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.320Z"
+    },
+    {
+      "id": "1755719366322",
+      "packet_id": "1755719366320",
+      "question": "Which planet is known as the Red Planet?",
+      "question_text": "Which planet is known as the Red Planet?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "Venus",
+        "Mars",
+        "Jupiter",
+        "Saturn"
+      ],
+      "correct_answer": "Mars",
+      "marks": 2,
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.320Z"
+    },
+    {
+      "id": "1755719366323",
+      "packet_id": "1755719366320",
+      "question": "The Sun rises in the west.",
+      "question_text": "The Sun rises in the west.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "false",
+      "marks": 1,
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.320Z"
+    },
+    {
+      "id": "1755719366324",
+      "packet_id": "1755719366320",
+      "question": "Water boils at 100°C at sea level.",
+      "question_text": "Water boils at 100°C at sea level.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "true",
+      "marks": 1,
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.320Z"
+    },
+    {
+      "id": "1755719366325",
+      "packet_id": "1755719366320",
+      "question": "Mount Everest is the highest peak on Earth.",
+      "question_text": "Mount Everest is the highest peak on Earth.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "true",
+      "marks": 1,
+      "created_at": "2025-08-20T19:49:26.320Z",
+      "updated_at": "2025-08-20T19:49:26.320Z"
+    },
+    {
+      "id": "1755719404032",
+      "packet_id": "1755719404031",
+      "question": "Which of the following best describes work-life balance?",
+      "question_text": "Which of the following best describes work-life balance?",
+      "type": "mcq",
+      "question_type": "mcq",
+      "options": [
+        "Spending equal hours on work and personal life",
+        "Prioritizing work over personal life",
+        "Maintaining harmony between work and personal responsibilities",
+        "Avoiding work completely"
+      ],
+      "correct_answer": "Maintaining harmony between work and personal responsibilities",
+      "marks": 1,
+      "created_at": "2025-08-20T19:50:04.031Z",
+      "updated_at": "2025-08-20T19:50:04.031Z"
+    },
+    {
+      "id": "1755719404033",
+      "packet_id": "1755719404031",
+      "question": "Work-life balance is the same for everyone.",
+      "question_text": "Work-life balance is the same for everyone.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "false",
+      "marks": 1,
+      "created_at": "2025-08-20T19:50:04.031Z",
+      "updated_at": "2025-08-20T19:50:04.031Z"
+    },
+    {
+      "id": "1755719404034",
+      "packet_id": "1755719404031",
+      "question": "Remote work can sometimes improve work-life balance.",
+      "question_text": "Remote work can sometimes improve work-life balance.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "true",
+      "marks": 1,
+      "created_at": "2025-08-20T19:50:04.031Z",
+      "updated_at": "2025-08-20T19:50:04.031Z"
+    },
+    {
+      "id": "1755719404035",
+      "packet_id": "1755719404031",
+      "question": "More working hours always mean better productivity.",
+      "question_text": "More working hours always mean better productivity.",
+      "type": "true_false",
+      "question_type": "true_false",
+      "options": null,
+      "correct_answer": "false",
+      "marks": 1,
+      "created_at": "2025-08-20T19:50:04.031Z",
+      "updated_at": "2025-08-20T19:50:04.031Z"
+    }
+  ],
+  "quizzes": [
+    {
+      "id": "1755720038805",
+      "name": "Happi Test",
+      "description": "",
+      "time_limit": null,
+      "total_questions": 0,
+      "passing_score": 70,
+      "packet_ids": [
+        "1755719317656",
+        "1755719366320",
+        "1755719404031"
+      ],
+      "created_at": "2025-08-20T20:00:38.805Z",
+      "updated_at": "2025-08-20T20:00:38.805Z"
+    }
+  ],
+  "quizAssignments": [
+    {
+      "id": "1755720038806",
+      "quiz_id": "1755720038805",
+      "profile_id": "1755719178991",
+      "assigned_at": "2025-08-20T20:00:38.805Z",
+      "due_date": "2025-08-27T20:00:38.805Z",
+      "status": "assigned",
+      "created_at": "2025-08-20T20:00:38.805Z",
+      "updated_at": "2025-08-20T20:00:38.805Z"
+    }
+  ],
+  "quizAttempts": []
+}

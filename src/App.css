@@ -1,0 +1,102 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Basic Material-UI overrides */
+.MuiCard-root {
+  margin: 1rem;
+  padding: 1rem;
+}
+
+/* Specific height for quiz assignment graph cards */
+.css-8b1pq6-MuiPaper-root-MuiCard-root {
+  height: 700px !important;
+}
+
+.MuiButton-root {
+  margin: 0.5rem;
+}
+
+.MuiTextField-root {
+  margin: 0.5rem;
+}
+
+/* Dashboard layout */
+.dashboard-container {
+  padding: 1rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stats-card {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.stats-number {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.stats-label {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  #root {
+    padding: 1rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
