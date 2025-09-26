@@ -97,7 +97,8 @@ export const useDatabase = () => {
   const updatePacket = useCallback(async (id, updates) => {
     try {
       const updatedPacket = await packetService.updatePacket(id, updates)
-      setPackets(prev => prev.map(p => p.id === id ? updatedPacket : p))
+      // Preserve existing packet data and only update the specified fields
+      setPackets(prev => prev.map(p => p.id === id ? { ...p, ...updatedPacket } : p))
       return updatedPacket
     } catch (err) {
       console.error('Error updating packet:', err)

@@ -287,11 +287,19 @@ export const quizService = {
     try {
       const id = generateId();
       const stmt = db.prepare(`
-        INSERT INTO quizzes (id, name, description, time_limit, passing_score)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO quizzes (id, name, description, time_limit, passing_score, report_header, report_footer)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
       
-      stmt.run(id, quiz.name, quiz.description, quiz.time_limit, quiz.passing_score || 70);
+      stmt.run(
+        id, 
+        quiz.name, 
+        quiz.description, 
+        quiz.time_limit, 
+        quiz.passing_score || 70,
+        quiz.report_header || '',
+        quiz.report_footer || ''
+      );
       
       // Return the created quiz
       const getStmt = db.prepare('SELECT * FROM quizzes WHERE id = ?');

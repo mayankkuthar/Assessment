@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../sqlite'
+
 import {
   Box,
   Card,
@@ -75,49 +75,69 @@ function AuthPage() {
         
         console.log('🚀 Starting signup process...', { email, userName, profile, userRole })
         
-        // Sign up using the supabase client (which handles the API calls)
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              role: userRole,
-              user_name: userName,
-              profile: profile
-            }
-          }
-        })
+        // Sign up using the API directly
+        const response = await fetch('http://localhost:3001/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password,
+            role: userRole,
+            user_name: userName,
+            profile: profile
+          })
+        });
 
-        console.log('📝 Signup response:', { data, error })
+        const result = await response.json();
 
-        if (error) throw error
+        if (result.error) {
+          throw new Error(result.error);
+        }
 
-        if (data.user) {
-          console.log('✅ Signup successful, user created:', data.user)
-          setSuccess('Account created successfully! Redirecting to sign-in in 2 seconds...')
+        if (result.user) {
+          console.log('✅ Signup successful, user created:', result.user);
+          setSuccess('Account created successfully! Redirecting to sign-in in 2 seconds...');
           // Clear form and switch to sign-in tab after successful signup
           setTimeout(() => {
-            console.log('🔄 Switching to sign-in tab...')
-            setTab(0) // Switch to Sign In tab
-            setEmail('')
-            setPassword('')
-            setUserName('')
-            setProfile('')
-            setUserRole('user')
-            setSuccess('')
-          }, 2000) // Wait 2 seconds then switch
+            console.log('🔄 Switching to sign-in tab...');
+            setTab(0); // Switch to Sign In tab
+            setEmail('');
+            setPassword('');
+            setUserName('');
+            setProfile('');
+            setUserRole('user');
+            setSuccess('');
+          }, 2000); // Wait 2 seconds then switch
         } else {
-          console.log('❌ Signup failed - no user data returned')
-          setError('Signup failed - please try again')
+          console.log('❌ Signup failed - no user data returned');
+          setError('Signup failed - please try again');
         }
       } else {
-        // Sign in using the supabase client (which handles the API calls)
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
+        // Sign in using the API directly
+        const response = await fetch('http://localhost:3001/api/auth/signin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password
+          })
+        });
 
-        if (error) throw error
+        const result = await response.json();
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        if (result.user) {
+          // Store user in localStorage and redirect
+          localStorage.setItem('currentUser', JSON.stringify(result.user));
+          window.location.reload(); // Refresh to trigger auth state change
+        }
       }
     } catch (err) {
       setError(err.message)
@@ -132,13 +152,8 @@ function AuthPage() {
     setSuccess('')
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email
-      })
-
-      if (error) throw error
-      setSuccess('Verification email sent again! Please check your inbox.')
+      // Email verification not available in local mode
+      setSuccess('Email verification not available in local mode. Please contact your administrator.')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -157,12 +172,8 @@ function AuthPage() {
     setSuccess('')
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      })
-
-      if (error) throw error
-      setSuccess('Password reset email sent! Please check your inbox and follow the link to reset your password.')
+      // Password reset not available in local mode
+      setSuccess('Password reset not available in local mode. Please contact your administrator.')
       setResetEmailSent(true)
     } catch (err) {
       setError(err.message)

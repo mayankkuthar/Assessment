@@ -11,6 +11,12 @@ class ApiError extends Error {
 
 async function apiCall(endpoint, options = {}) {
   try {
+    console.log('🔍 API call to:', `${API_BASE}${endpoint}`);
+    console.log('🔍 API call options:', options);
+    if (options.body) {
+      console.log('🔍 API call body:', JSON.parse(options.body));
+    }
+    
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
@@ -119,10 +125,15 @@ export const questionApi = {
   },
 
   async updateQuestion(id, updates) {
-    return await apiCall(`/questions/${id}`, {
+    console.log('🔍 API updateQuestion called with:', { id, updates });
+    console.log('🔍 Updates options:', updates.options);
+    console.log('🔍 Updates marks:', updates.marks);
+    const result = await apiCall(`/questions/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    console.log('🔍 API updateQuestion response:', result);
+    return result;
   },
 
   async deleteQuestion(id) {

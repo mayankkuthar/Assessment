@@ -1,6 +1,6 @@
 # Assessment Tool
 
-A modern React-based assessment tool with Supabase PostgreSQL database integration. Create profiles, manage question packets, build quizzes, and track attempts with a beautiful Material-UI interface.
+A modern React-based assessment tool with local JSON storage. Create profiles, manage question packets, build quizzes, and track attempts with a beautiful Material-UI interface.
 
 ## Features
 
@@ -9,14 +9,14 @@ A modern React-based assessment tool with Supabase PostgreSQL database integrati
 - **Quiz Builder**: Drag-and-drop interface to build quizzes from packets
 - **Excel Integration**: Upload Excel files to bulk import data
 - **Quiz Attempts**: Public quiz attempt pages with scoring
-- **Database Persistence**: All data stored in Supabase PostgreSQL
+- **Database Persistence**: All data stored locally with JSON storage
 - **Modern UI**: Material-UI with light/dark mode support
 - **Responsive Design**: Works on desktop and mobile devices
 
 ## Tech Stack
 
 - **Frontend**: React 19, Vite, Material-UI
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Local JSON storage with SQLite backend
 - **State Management**: React Hooks with custom database hook
 - **Routing**: React Router v6
 - **File Processing**: XLSX library for Excel import/export
@@ -31,29 +31,11 @@ cd assessment-tool
 npm install
 ```
 
-### 2. Set Up Supabase
+### 2. Start Development Server
 
-#### Option A: Use Setup Script (Recommended)
-```bash
-npm run setup
-```
-Follow the prompts to enter your Supabase project URL and anon key.
+The application uses local JSON storage, so no external database setup is required.
 
-#### Option B: Manual Setup
-1. Create a `.env` file in the project root
-2. Add your Supabase credentials:
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key_here
-```
-
-### 3. Set Up Database Schema
-
-1. Go to your Supabase dashboard
-2. Navigate to SQL Editor
-3. Copy and run the contents of `database_schema.sql`
-
-### 4. Start Development Server
+### 3. Start Development Server
 
 ```bash
 npm run dev
@@ -114,18 +96,11 @@ src/
 │   └── useDatabase.js
 ├── services/           # Database services
 │   └── database.js
-├── supabase.js         # Supabase client configuration
+├── sqlite.js           # Local storage compatibility layer
 └── App.jsx             # Main application component
 ```
 
-## Environment Variables
 
-Create a `.env` file with:
-
-```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
 
 ## Deployment
 
@@ -153,9 +128,7 @@ MIT License - see LICENSE file for details
 
 ## Support
 
-For detailed setup instructions, see `SUPABASE_SETUP.md`.
-
 For issues and questions:
 - Check the browser console for errors
-- Verify your Supabase configuration
-- Ensure the database schema is properly set up
+- Ensure the local server is running
+- Check that all data files are properly formatted

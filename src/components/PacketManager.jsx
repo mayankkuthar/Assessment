@@ -29,69 +29,98 @@ import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
 
-const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQuestion, updateQuestion, deleteQuestion }) => {
+const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQuestion, updateQuestion, deleteQuestion, onDataChange }) => {
   const [packetName, setPacketName] = useState('');
+  const [packetDescription, setPacketDescription] = useState('');
+  const [scoringLogic, setScoringLogic] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [questionType, setQuestionType] = useState('MCQ');
   const [options, setOptions] = useState([
-    { text: '', marks: 1 }
+    { text: '', marks: 0 }
   ]);
   const [selectedPacket, setSelectedPacket] = useState(null);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [editQuestionText, setEditQuestionText] = useState('');
   const [editQuestionType, setEditQuestionType] = useState('MCQ');
   const [editOptions, setEditOptions] = useState([
-    { text: '', marks: 1 }
+    { text: '', marks: 0 }
   ]);
+  const [editingPacket, setEditingPacket] = useState(null);
+  const [editPacketName, setEditPacketName] = useState('');
+  const [editPacketDescription, setEditPacketDescription] = useState('');
+  const [editScoringLogic, setEditScoringLogic] = useState('');
 
   // Scoring Scale System State
   const [scoringScaleDialog, setScoringScaleDialog] = useState(false);
   const [scoringScale, setScoringScale] = useState([
-    { min: 1, max: 3, label: "Needs Improvement", color: "#ff6b6b", image: "📚" },
-    { min: 4, max: 6, label: "Average", color: "#ffd93d", image: "📊" },
-    { min: 7, max: 9, label: "Good", color: "#6bcf7f", image: "🎯" },
-    { min: 10, max: 12, label: "Excellent", color: "#4ecdc4", image: "🏆" }
+    { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
+    { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
+    { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+    { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
   ]);
-  const [enableScoringScale, setEnableScoringScale] = useState(() => {
-    // Try to get from localStorage, default to false
-    const saved = localStorage.getItem('enableScoringScale');
-    return saved ? JSON.parse(saved) : false;
-  });
+  const [enableScoringScale, setEnableScoringScale] = useState(false);
 
   // Handle question type change
   const handleQuestionTypeChange = (newType) => {
     setQuestionType(newType);
     if (newType === 'MCQ') {
-      setOptions([{ text: '', marks: 1 }]);
+      setOptions([{ text: '', marks: 0 }]);
     } else {
-      setOptions([
-        { text: 'True', marks: 3 },
-        { text: 'False', marks: 2 }
-      ]);
+      // For True/False, preserve existing marks if they exist, otherwise use defaults
+      if (options.length === 2 && options[0].text === 'True' && options[1].text === 'False') {
+        // Keep existing marks if already True/False
+        setOptions(options);
+      } else {
+        // Set default marks for new True/False questions
+        setOptions([
+          { text: 'True', marks: 3 },
+          { text: 'False', marks: 2 }
+        ]);
+      }
     }
   };
 
   // Handle edit question type change
   const handleEditQuestionTypeChange = (newType) => {
+    console.log('🔍 handleEditQuestionTypeChange called with:', newType);
+    console.log('🔍 Current editOptions before change:', editOptions);
+    console.log('🔍 Current editQuestionType:', editQuestionType);
+    
+    // Only change if the type is actually different
+    if (newType === editQuestionType) {
+      console.log('🔍 Question type unchanged, preserving current options');
+      return;
+    }
+    
     setEditQuestionType(newType);
     if (newType === 'MCQ') {
-      setEditOptions([{ text: '', marks: 1 }]);
+      setEditOptions([{ text: '', marks: 0 }]);
     } else {
-      setEditOptions([
-        { text: 'True', marks: 3 },
-        { text: 'False', marks: 2 }
-      ]);
+      // For True/False, preserve existing marks if they exist, otherwise use defaults
+      if (editOptions.length === 2 && editOptions[0].text === 'True' && editOptions[1].text === 'False') {
+        // Keep existing marks if already True/False
+        console.log('🔍 Preserving existing True/False marks:', editOptions);
+        setEditOptions(editOptions);
+      } else {
+        // Set default marks for new True/False questions
+        console.log('🔍 Setting default True/False marks');
+        setEditOptions([
+          { text: 'True', marks: 3 },
+          { text: 'False', marks: 2 }
+        ]);
+      }
     }
+    console.log('🔍 Final editOptions after change:', editOptions);
   };
 
   // Add new option for MCQ
   const addOption = () => {
-    setOptions([...options, { text: '', marks: 1 }]);
+    setOptions([...options, { text: '', marks: 0 }]);
   };
 
   // Add new option for edit MCQ
   const addEditOption = () => {
-    setEditOptions([...editOptions, { text: '', marks: 1 }]);
+    setEditOptions([...editOptions, { text: '', marks: 0 }]);
   };
 
   // Remove option for MCQ
@@ -127,15 +156,57 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   // Update option marks
   const updateOptionMarks = (index, marks) => {
     const newOptions = [...options];
-    newOptions[index].marks = parseInt(marks) || 1;
+    const parsedMarks = parseInt(marks);
+    const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+    console.log(`🔍 updateOptionMarks: index=${index}, input=${marks}, parsed=${parsedMarks}, final=${finalMarks}`);
+    newOptions[index].marks = finalMarks;
     setOptions(newOptions);
+    console.log(`🔍 Updated options:`, newOptions);
   };
 
   // Update edit option marks
   const updateEditOptionMarks = (index, marks) => {
     const newOptions = [...editOptions];
-    newOptions[index].marks = parseInt(marks) || 1;
+    const parsedMarks = parseInt(marks);
+    const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+    console.log(`🔍 updateEditOptionMarks: index=${index}, input=${marks}, parsed=${parsedMarks}, final=${finalMarks}`);
+    console.log(`🔍 Before update - option ${index}:`, newOptions[index]);
+    newOptions[index].marks = finalMarks;
+    console.log(`🔍 After update - option ${index}:`, newOptions[index]);
+    
+    // Update the state
     setEditOptions(newOptions);
+    console.log(`🔍 Updated edit options:`, newOptions);
+    
+    // Store the updated options in a ref to ensure we have the latest values
+    window.lastEditOptions = newOptions;
+    
+    // Force a re-render to ensure state is updated
+    setTimeout(() => {
+      console.log(`🔍 State after timeout - editOptions:`, editOptions);
+      console.log(`🔍 Window stored options:`, window.lastEditOptions);
+    }, 100);
+  };
+
+  // Image upload handler for scoring scale
+  const handleImageUpload = (index, event) => {
+    const file = event.target.files[0];
+    if (file) {
+      console.log(`🖼️ Uploading image for range ${index}:`, file.name, file.type, file.size);
+      
+      // Check if file is PNG or JPEG
+      if (file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/jpg') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const imageData = e.target.result;
+          console.log(`✅ Image ${index} converted to base64, length:`, imageData.length);
+          updateScoringScaleRange(index, 'image', imageData);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert('Please upload only PNG or JPEG images.');
+      }
+    }
   };
 
   // Scoring Scale System Functions
@@ -145,22 +216,34 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
     console.log('Current packet marks:', currentPacketMarks);
     
     if (selectedPacket && currentPacketMarks) {
-      // Auto-generate ranges based on packet min/max marks
-      const minMarks = currentPacketMarks.minMarks;
-      const maxMarks = currentPacketMarks.maxMarks;
-      const range = maxMarks - minMarks;
+      // Check if we already have saved scoring scale data for this packet
+      const packet = packets.find(p => p.id === selectedPacket);
       
-      console.log('Min marks:', minMarks, 'Max marks:', maxMarks, 'Range:', range);
-      
-      const newScale = [
-        { min: minMarks, max: Math.floor(minMarks + range * 0.25), label: "Needs Improvement", color: "#ff6b6b", image: "📚" },
-        { min: Math.floor(minMarks + range * 0.25) + 1, max: Math.floor(minMarks + range * 0.5), label: "Average", color: "#ffd93d", image: "📊" },
-        { min: Math.floor(minMarks + range * 0.5) + 1, max: Math.floor(minMarks + range * 0.75), label: "Good", color: "#6bcf7f", image: "🎯" },
-        { min: Math.floor(minMarks + range * 0.75) + 1, max: maxMarks, label: "Excellent", color: "#4ecdc4", image: "🏆" }
-      ];
-      
-      console.log('New scale:', newScale);
-      setScoringScale(newScale);
+      if (packet && packet.scoringScale && packet.scoringScale.length > 0) {
+        // Use existing saved data
+        console.log('✅ Loading existing scoring scale data:', packet.scoringScale);
+        setScoringScale(packet.scoringScale);
+        setEnableScoringScale(packet.enableScoringScale || false);
+      } else {
+        // Auto-generate ranges only if no existing data
+        const minMarks = currentPacketMarks.minMarks;
+        const maxMarks = currentPacketMarks.maxMarks;
+        const range = maxMarks - minMarks;
+        
+        console.log('Min marks:', minMarks, 'Max marks:', maxMarks, 'Range:', range);
+        
+        const newScale = [
+          { min: minMarks, max: Math.floor(minMarks + range * 0.25), label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
+          { min: Math.floor(minMarks + range * 0.25) + 1, max: Math.floor(minMarks + range * 0.5), label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
+          { min: Math.floor(minMarks + range * 0.5) + 1, max: Math.floor(minMarks + range * 0.75), label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+          { min: Math.floor(minMarks + range * 0.75) + 1, max: maxMarks, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+        ];
+        
+        console.log('🎯 Auto-generated scale ranges:', newScale.map(s => `${s.min}-${s.max}`));
+        console.log('New scale:', newScale);
+        setScoringScale(newScale);
+        setEnableScoringScale(false);
+      }
     }
     setScoringScaleDialog(true);
   };
@@ -170,8 +253,13 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   };
 
   const updateScoringScaleRange = (index, field, value) => {
+    console.log(`🔄 Updating scoring scale range ${index}, field: ${field}, value:`, value);
+    console.log('📊 Current scoring scale before update:', scoringScale);
+    
     const newScale = [...scoringScale];
     newScale[index][field] = field === 'min' || field === 'max' ? parseInt(value) || 0 : value;
+    
+    console.log('📊 New scoring scale after update:', newScale);
     setScoringScale(newScale);
   };
 
@@ -182,25 +270,79 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
     return level || null;
   };
 
-  const saveScoringScale = () => {
-    // Validate ranges
+  const saveScoringScale = async () => {
+    // Validate ranges - only check that min <= max for each range
     let isValid = true;
     for (let i = 0; i < scoringScale.length; i++) {
       if (scoringScale[i].min > scoringScale[i].max) {
         isValid = false;
         break;
       }
-      if (i > 0 && scoringScale[i].min !== scoringScale[i-1].max + 1) {
-        isValid = false;
-        break;
-      }
+      // Remove the strict connection requirement - allow gaps between ranges
     }
     
     if (isValid) {
       setEnableScoringScale(true);
+      
+      // Save scoring scale to the selected packet data
+      if (selectedPacket) {
+        try {
+          console.log('🚀 Attempting to save scoring scale for packet:', selectedPacket);
+          console.log('📊 Scoring scale data to save:', scoringScale);
+          console.log('📊 Scoring scale length:', scoringScale.length);
+          console.log('📊 Each range details:');
+          scoringScale.forEach((range, idx) => {
+            console.log(`  Range ${idx}: min=${range.min}, max=${range.max}, hasImage=${!!range.image}, imageLength=${range.image?.length || 0}`);
+          });
+          
+          // Update the packet with scoring scale data
+          const packetToUpdate = {
+            scoringScale: scoringScale,
+            enableScoringScale: true
+          };
+          
+          console.log('📤 Sending update request with data:', packetToUpdate);
+          
+          // Validate the data structure before sending
+          const isValidData = packetToUpdate.scoringScale.every((range, idx) => {
+            const isValid = range && 
+                          typeof range.min === 'number' && 
+                          typeof range.max === 'number' && 
+                          range.min <= range.max &&
+                          typeof range.label === 'string' &&
+                          typeof range.color === 'string';
+            
+            if (!isValid) {
+              console.error(`❌ Invalid range data at index ${idx}:`, range);
+            }
+            return isValid;
+          });
+          
+          if (!isValidData) {
+            throw new Error('Invalid scoring scale data structure detected');
+          }
+          
+          // Update the packet in the database
+          const result = await updatePacket(selectedPacket, packetToUpdate);
+          console.log('✅ Scoring scale saved successfully. Server response:', result);
+          
+          // Refresh the packets list to show updated data
+          if (onDataChange) {
+            await onDataChange();
+          }
+        } catch (err) {
+          console.error('❌ Failed to save scoring scale to packet:', err);
+          console.error('❌ Error details:', err.message, err.stack);
+          alert('Failed to save scoring scale. Please try again.');
+        }
+      } else {
+        console.error('❌ No packet selected for saving scoring scale');
+        alert('Please select a packet first.');
+      }
+      
       closeScoringScaleDialog();
     } else {
-      alert('Please fix the scoring ranges. Each range should connect properly.');
+      alert('Please fix the scoring ranges. Each range must have min <= max.');
     }
   };
 
@@ -257,6 +399,33 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   // Get current packet marks info
   const currentPacketMarks = selectedPacket ? calculatePacketMarks(selectedPacket) : { minMarks: 0, maxMarks: 0, totalQuestions: 0 };
 
+  // Load scoring scale from packet data when packet is selected
+  useEffect(() => {
+    if (selectedPacket) {
+      const packet = packets.find(p => p.id === selectedPacket);
+      console.log('🔍 Loading scoring scale for packet:', selectedPacket);
+      console.log('📦 Found packet:', packet);
+      console.log('📊 Packet scoring scale:', packet?.scoringScale);
+      
+      if (packet && packet.scoringScale) {
+        setScoringScale(packet.scoringScale);
+        setEnableScoringScale(packet.enableScoringScale || false);
+        console.log('✅ Loaded scoring scale from packet data:', packet.scoringScale);
+        console.log('🖼️ First range image:', packet.scoringScale[0]?.image);
+      } else {
+        // Reset to default scale if no custom scale found
+        setScoringScale([
+          { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
+          { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
+          { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+          { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+        ]);
+        setEnableScoringScale(false);
+        console.log('🔄 Reset to default scoring scale');
+      }
+    }
+  }, [selectedPacket, packets]);
+
   // Recalculate marks when options change during editing
   useEffect(() => {
     if (editingQuestionId && selectedPacket) {
@@ -265,21 +434,59 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
     }
   }, [editOptions, editingQuestionId, selectedPacket]);
 
-  // Save enableScoringScale to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('enableScoringScale', JSON.stringify(enableScoringScale));
-  }, [enableScoringScale]);
+
+
+
 
   const handleAddPacket = async () => {
     if (packetName) {
       try {
-        await addPacket({ name: packetName, description: '' });
+        await addPacket({ 
+          name: packetName, 
+          description: packetDescription,
+          scoringLogic: scoringLogic
+        });
         setPacketName('');
+        setPacketDescription('');
+        setScoringLogic('');
       } catch (error) {
         console.error('Error adding packet:', error);
         alert('Failed to add packet. Please try again.');
       }
     }
+  };
+
+  const startEditPacket = (packet) => {
+    setEditingPacket(packet.id);
+    setEditPacketName(packet.name);
+    setEditPacketDescription(packet.description || '');
+    setEditScoringLogic(packet.scoringLogic || '');
+  };
+
+  const saveEditPacket = async () => {
+    if (editPacketName && editingPacket) {
+      try {
+        await updatePacket(editingPacket, {
+          name: editPacketName,
+          description: editPacketDescription,
+          scoringLogic: editScoringLogic
+        });
+        setEditingPacket(null);
+        setEditPacketName('');
+        setEditPacketDescription('');
+        setEditScoringLogic('');
+      } catch (error) {
+        console.error('Error updating packet:', error);
+        alert('Failed to update packet. Please try again.');
+      }
+    }
+  };
+
+  const cancelEditPacket = () => {
+    setEditingPacket(null);
+    setEditPacketName('');
+    setEditPacketDescription('');
+    setEditScoringLogic('');
   };
 
   const handleDeletePacket = async (id) => {
@@ -306,9 +513,21 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
         marks: options.reduce((sum, opt) => sum + opt.marks, 0) // Total marks for the question
       };
       
+      console.log('🚀 Frontend sending question data:', questionData);
+      console.log('🔍 Options being sent:', options);
+      console.log('🔍 Question type:', questionType);
+      console.log('🔍 Options structure check:');
+      console.log('  - Options is array:', Array.isArray(options));
+      console.log('  - Options length:', options.length);
+      console.log('  - First option:', options[0]);
+      console.log('  - First option has text:', options[0]?.hasOwnProperty('text'));
+      console.log('  - First option has marks:', options[0]?.hasOwnProperty('marks'));
+      console.log('  - First option text:', options[0]?.text);
+      console.log('  - First option marks:', options[0]?.marks);
+      
       await addQuestion(questionData);
       setQuestionText('');
-      setOptions([{ text: '', marks: 1 }]);
+      setOptions([{ text: '', marks: 0 }]);
       
       // Force re-render to update marks calculation
       setSelectedPacket(selectedPacket);
@@ -331,6 +550,12 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   };
 
   const startEditQuestion = (q) => {
+    console.log('🔍 startEditQuestion - Starting edit for question:', q.id);
+    console.log('🔍 startEditQuestion - Question data:', q);
+    console.log('🔍 startEditQuestion - Question options:', q.options);
+    console.log('🔍 startEditQuestion - Question marks:', q.marks);
+    console.log('🔍 startEditQuestion - Question type:', q.question_type);
+    
     setEditingQuestionId(q.id);
     setEditQuestionText(q.question_text || q.text);
     setEditQuestionType(q.question_type === 'mcq' ? 'MCQ' : 'TrueFalse');
@@ -338,34 +563,110 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
     if (q.question_type === 'mcq' && q.options) {
       // Convert options to new format if they're in old format
       if (Array.isArray(q.options) && typeof q.options[0] === 'string') {
+        console.log('🔍 Converting MCQ options from old format');
         setEditOptions(q.options.map((opt, idx) => ({
           text: opt,
-          marks: q.marks || 1
+          marks: q.marks || 0
         })));
       } else {
-        setEditOptions(q.options || [{ text: '', marks: 1 }]);
+        console.log('🔍 Using MCQ options as-is');
+        setEditOptions(q.options || [{ text: '', marks: 0 }]);
       }
-    } else {
-      setEditOptions([
-        { text: 'True', marks: 3 },
-        { text: 'False', marks: 2 }
-      ]);
+    } else if (q.question_type === 'true_false') {
+      // For True/False questions, check if they have individual marks
+      if (q.options && Array.isArray(q.options) && q.options.length === 2) {
+        // Check if options have individual marks
+        const hasIndividualMarks = q.options[0]?.hasOwnProperty('marks') && q.options[1]?.hasOwnProperty('marks');
+        
+        console.log('🔍 True/False options found:', q.options);
+        console.log('🔍 Has individual marks:', hasIndividualMarks);
+        console.log('🔍 Option 0:', q.options[0]);
+        console.log('🔍 Option 1:', q.options[1]);
+        
+        if (hasIndividualMarks) {
+          // Use existing individual marks
+          console.log('🔍 Using existing individual marks:', q.options[0]?.marks, q.options[1]?.marks);
+          const newOptions = [
+            { text: 'True', marks: q.options[0].marks },
+            { text: 'False', marks: q.options[1].marks }
+          ];
+          console.log('🔍 Setting editOptions to:', newOptions);
+          setEditOptions(newOptions);
+          
+          // Also store in window for debugging
+          window.lastEditOptions = newOptions;
+        } else {
+          // Convert from old format (total marks) to individual marks
+          console.log('🔍 Converting from total marks to individual marks');
+          const totalMarks = q.marks || 2;
+          const trueMarks = Math.ceil(totalMarks * 0.6); // 60% for True
+          const falseMarks = totalMarks - trueMarks; // Remaining for False
+          
+          const newOptions = [
+            { text: 'True', marks: trueMarks },
+            { text: 'False', marks: falseMarks }
+          ];
+          console.log('🔍 Setting editOptions to:', newOptions);
+          setEditOptions(newOptions);
+          
+          // Also store in window for debugging
+          window.lastEditOptions = newOptions;
+        }
+      } else {
+        // Default marks for new True/False questions
+        console.log('🔍 Using default marks for new True/False question');
+        const newOptions = [
+          { text: 'True', marks: 3 },
+          { text: 'False', marks: 2 }
+        ];
+        console.log('🔍 Setting editOptions to:', newOptions);
+        setEditOptions(newOptions);
+        
+        // Also store in window for debugging
+        window.lastEditOptions = newOptions;
+      }
     }
+    
+    console.log('🔍 startEditQuestion - Final editOptions set to:', editOptions);
   };
 
   const saveEditQuestion = async (qid) => {
     try {
+      // Log the current state right before creating updates
+      console.log('🔍 saveEditQuestion - Current editOptions state:', editOptions);
+      console.log('🔍 saveEditQuestion - Current editQuestionText:', editQuestionText);
+      console.log('🔍 saveEditQuestion - Current editQuestionType:', editQuestionType);
+      console.log('🔍 saveEditQuestion - Window stored options:', window.lastEditOptions);
+      
+      // Use the stored options if there's a state mismatch
+      const optionsToUse = window.lastEditOptions && window.lastEditOptions.length > 0 ? window.lastEditOptions : editOptions;
+      console.log('🔍 saveEditQuestion - Options to use for save:', optionsToUse);
+      
       const updates = {
         question_text: editQuestionText,
         question_type: editQuestionType === 'MCQ' ? 'mcq' : 'true_false',
-        options: editOptions,
-        marks: editOptions.reduce((sum, opt) => sum + opt.marks, 0) // Total marks for the question
+        options: optionsToUse,
+        marks: optionsToUse.reduce((sum, opt) => sum + opt.marks, 0) // Total marks for the question
       };
+      
+      console.log('🚀 Frontend sending edit data:', updates);
+      console.log('🔍 Edit options being sent:', editOptions);
+      console.log('🔍 Edit question type:', editQuestionType);
+      console.log('🔍 Edit options structure check:');
+      console.log('  - Edit options is array:', Array.isArray(editOptions));
+      console.log('  - Edit options length:', editOptions.length);
+      console.log('  - First edit option:', editOptions[0]);
+      console.log('  - First edit option has text:', editOptions[0]?.hasOwnProperty('text'));
+      console.log('  - First edit option has marks:', editOptions[0]?.hasOwnProperty('marks'));
+      console.log('  - First edit option text:', editOptions[0]?.text);
+      console.log('  - First edit option marks:', editOptions[0]?.marks);
+      console.log('  - Second edit option text:', editOptions[1]?.text);
+      console.log('  - Second edit option marks:', editOptions[1]?.marks);
       
       await updateQuestion(qid, updates);
       setEditingQuestionId(null);
       setEditQuestionText('');
-      setEditOptions([{ text: '', marks: 1 }]);
+      setEditOptions([{ text: '', marks: 0 }]);
       
       // Force re-render to update marks calculation
       setSelectedPacket(selectedPacket);
@@ -391,6 +692,32 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                 variant="outlined"
                 sx={{ mb: 3 }}
                 InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Description"
+                value={packetDescription}
+                onChange={e => setPacketDescription(e.target.value)}
+                size="medium"
+                fullWidth
+                variant="outlined"
+                sx={{ mb: 3 }}
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={2}
+              />
+              <TextField
+                label="Scoring Logic"
+                value={scoringLogic}
+                onChange={e => setScoringLogic(e.target.value)}
+                size="medium"
+                fullWidth
+                variant="outlined"
+                sx={{ mb: 3 }}
+                InputLabelProps={{ shrink: true }}
+                multiline
+                rows={3}
+                placeholder="Enter scoring logic for this packet..."
+                helperText="Describe how this packet should be scored"
               />
               <Button 
                 variant="contained" 
@@ -469,13 +796,20 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                 {packets.map((packet) => (
                   <ListItem
                     key={packet.id}
-                    button
-                    selected={selectedPacket === packet.id}
-                    onClick={() => setSelectedPacket(packet.id)}
+                    button={editingPacket !== packet.id}
+                    selected={selectedPacket === packet.id && editingPacket !== packet.id}
+                    onClick={() => editingPacket !== packet.id && setSelectedPacket(packet.id)}
                     secondaryAction={
-                      <IconButton edge="end" aria-label="delete" onClick={() => handleDeletePacket(packet.id)}>
-                        <DeleteIcon />
-                      </IconButton>
+                      editingPacket !== packet.id ? (
+                        <Box>
+                          <IconButton edge="end" aria-label="edit" onClick={() => startEditPacket(packet)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton edge="end" aria-label="delete" onClick={() => handleDeletePacket(packet.id)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      ) : null
                     }
                     sx={{ 
                       borderRadius: 2, 
@@ -487,54 +821,128 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                       }
                     }}
                   >
-                    <ListItemText 
-                      primary={packet.name} 
-                      secondary={
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            {packet.questions?.length || 0} questions
-                          </Typography>
-                          {packet.questions && packet.questions.length > 0 && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Total: {(() => {
-                                const marks = calculatePacketMarks(packet.id);
-                                if (marks.minMarks === marks.maxMarks) {
-                                  return `${marks.minMarks} marks`;
-                                } else {
-                                  return `${marks.minMarks}-${marks.maxMarks} marks`;
-                                }
-                              })()}
+                    {editingPacket === packet.id ? (
+                      <Box sx={{ width: '100%', p: 2 }}>
+                        <TextField
+                          label="Packet Name"
+                          value={editPacketName}
+                          onChange={e => setEditPacketName(e.target.value)}
+                          size="small"
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mb: 2 }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                          label="Description"
+                          value={editPacketDescription}
+                          onChange={e => setEditPacketDescription(e.target.value)}
+                          size="small"
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mb: 2 }}
+                          InputLabelProps={{ shrink: true }}
+                          multiline
+                          rows={2}
+                        />
+                        <TextField
+                          label="Scoring Logic"
+                          value={editScoringLogic}
+                          onChange={e => setEditScoringLogic(e.target.value)}
+                          size="small"
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mb: 2 }}
+                          InputLabelProps={{ shrink: true }}
+                          multiline
+                          rows={3}
+                          placeholder="Enter scoring logic for this packet..."
+                          helperText="Describe how this packet should be scored"
+                        />
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button 
+                            variant="contained" 
+                            size="small" 
+                            onClick={saveEditPacket}
+                            sx={{ 
+                              fontWeight: 600,
+                              background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
+                              '&:hover': {
+                                background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)'
+                              }
+                            }}
+                          >
+                            Save
+                          </Button>
+                          <Button 
+                            variant="outlined" 
+                            size="small" 
+                            onClick={cancelEditPacket}
+                          >
+                            Cancel
+                          </Button>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <ListItemText 
+                        primary={packet.name} 
+                        secondary={
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              {packet.questions?.length || 0} questions
                             </Typography>
-                          )}
-                          {packet.questions && packet.questions.length > 0 && (
-                            <Box sx={{ 
-                              mt: 1, 
-                              p: 1, 
-                              backgroundColor: 'rgba(76, 175, 80, 0.1)', 
-                              borderRadius: 1,
-                              border: '1px solid rgba(76, 175, 80, 0.3)'
-                            }}>
-                              <Typography variant="caption" sx={{ 
-                                color: 'success.main', 
-                                fontWeight: 600,
-                                display: 'block',
-                                textAlign: 'center'
-                              }}>
-                                {(() => {
+                            {packet.description && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>
+                                {packet.description}
+                              </Typography>
+                            )}
+                            {packet.scoringLogic && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
+                                Scoring: {packet.scoringLogic}
+                              </Typography>
+                            )}
+                            {packet.questions && packet.questions.length > 0 && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Total: {(() => {
                                   const marks = calculatePacketMarks(packet.id);
                                   if (marks.minMarks === marks.maxMarks) {
-                                    return `🎯 ${marks.minMarks} total marks`;
+                                    return `${marks.minMarks} marks`;
                                   } else {
-                                    return `🎯 ${marks.minMarks}-${marks.maxMarks} total marks`;
+                                    return `${marks.minMarks}-${marks.maxMarks} marks`;
                                   }
                                 })()}
                               </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                      }
-                      primaryTypographyProps={{ fontWeight: 500 }}
-                    />
+                            )}
+                            {packet.questions && packet.questions.length > 0 && (
+                              <Box sx={{ 
+                                mt: 1, 
+                                p: 1, 
+                                backgroundColor: 'rgba(76, 175, 80, 0.1)', 
+                                borderRadius: 1,
+                                border: '1px solid rgba(76, 175, 80, 0.3)'
+                              }}>
+                                <Typography variant="caption" sx={{ 
+                                  color: 'success.main', 
+                                  fontWeight: 600,
+                                  display: 'block',
+                                  textAlign: 'center'
+                                }}>
+                                  {(() => {
+                                    const marks = calculatePacketMarks(packet.id);
+                                    if (marks.minMarks === marks.maxMarks) {
+                                      return `🎯 ${marks.minMarks} total marks`;
+                                    } else {
+                                      return `🎯 ${marks.minMarks}-${marks.maxMarks} total marks`;
+                                    }
+                                  })()}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        }
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                    )}
                   </ListItem>
                 ))}
               </List>
@@ -592,18 +1000,30 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                           🎯 Performance Scale:
                         </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           {scoringScale.map((range, index) => (
-                            <Chip
-                              key={index}
-                              label={`${range.image} ${range.label} (${range.min}-${range.max})`}
-                              sx={{
-                                backgroundColor: range.color,
-                                color: 'white',
-                                fontWeight: 600,
-                                fontSize: '0.75rem'
-                              }}
-                            />
+                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip
+                                label={`${range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} ${range.label} (${range.min}-${range.max})`}
+                                sx={{
+                                  backgroundColor: range.color,
+                                  color: 'white',
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem'
+                                }}
+                              />
+                              {range.largeText && (
+                                <Typography 
+                                  variant="caption" 
+                                  sx={{ 
+                                    color: 'text.secondary',
+                                    fontStyle: 'italic'
+                                  }}
+                                >
+                                  "{range.largeText}"
+                                </Typography>
+                              )}
+                            </Box>
                           ))}
                         </Box>
                       </Box>
@@ -676,7 +1096,8 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                             onChange={e => updateOptionMarks(idx, e.target.value)}
                             size="medium"
                             variant="outlined"
-                            InputLabelProps={{ shrink: true, min: 1, max: 100 }}
+                            inputProps={{ min: 0, max: 100 }}
+                            InputLabelProps={{ shrink: true }}
                             sx={{ width: 100 }}
                           />
                           <IconButton
@@ -707,7 +1128,8 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                             onChange={e => updateOptionMarks(idx, e.target.value)}
                             size="medium"
                             variant="outlined"
-                            InputLabelProps={{ shrink: true, min: 1, max: 100 }}
+                            inputProps={{ min: 0, max: 100 }}
+                            InputLabelProps={{ shrink: true }}
                             sx={{ flex: 1 }}
                           />
                           <Typography variant="body2" color="text.secondary">
@@ -816,7 +1238,8 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                                     onChange={e => updateEditOptionMarks(idx, e.target.value)}
                                     size="medium"
                                     variant="outlined"
-                                    InputLabelProps={{ shrink: true, min: 1, max: 100 }}
+                                    inputProps={{ min: 0, max: 100 }}
+                                    InputLabelProps={{ shrink: true }}
                                     sx={{ width: 100 }}
                                   />
                                   <IconButton
@@ -835,7 +1258,12 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                             <Button 
                               variant="contained" 
                               size="medium" 
-                              onClick={() => saveEditQuestion(q.id)}
+                              onClick={() => {
+                                console.log('🔍 Save button clicked for question:', q.id);
+                                console.log('🔍 Current editOptions before save:', editOptions);
+                                console.log('🔍 Window stored options:', window.lastEditOptions);
+                                saveEditQuestion(q.id);
+                              }}
                               sx={{ 
                                 fontWeight: 600,
                                 background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
@@ -852,7 +1280,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                               onClick={() => {
                                 setEditingQuestionId(null);
                                 setEditQuestionText('');
-                                setEditOptions([{ text: '', marks: 1 }]);
+                                setEditOptions([{ text: '', marks: 0 }]);
                               }}
                             >
                               Cancel
@@ -958,7 +1386,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                     </Typography>
                     
                     <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={3}>
+                      <Grid item xs={12} sm={2}>
                         <TextField
                           label="Min Score"
                           type="number"
@@ -968,7 +1396,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           fullWidth
                         />
                       </Grid>
-                      <Grid item xs={12} sm={3}>
+                      <Grid item xs={12} sm={2}>
                         <TextField
                           label="Max Score"
                           type="number"
@@ -978,7 +1406,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           fullWidth
                         />
                       </Grid>
-                      <Grid item xs={12} sm={3}>
+                      <Grid item xs={12} sm={2}>
                         <TextField
                           label="Label"
                           value={range.label}
@@ -997,31 +1425,115 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           inputProps={{ placeholder: '#ff6b6b' }}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={1}>
+                      <Grid item xs={12} sm={2}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                            Image
+                          </Typography>
+                          
+                          {/* Image Preview */}
+                          {range.image && range.image.startsWith('data:image') && (
+                            <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
+                              <Box
+                                sx={{
+                                  width: 60,
+                                  height: 60,
+                                  border: '2px solid #ddd',
+                                  borderRadius: 1,
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  backgroundColor: '#f5f5f5'
+                                }}
+                              >
+                                <img
+                                  src={range.image}
+                                  alt={`Preview for ${range.label}`}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover'
+                                  }}
+                                />
+                              </Box>
+                            </Box>
+                          )}
+                          
+                          <input
+                            accept="image/png,image/jpeg,image/jpg"
+                            type="file"
+                            onChange={(e) => handleImageUpload(index, e)}
+                            style={{ display: 'none' }}
+                            id={`image-upload-${index}`}
+                          />
+                          <label htmlFor={`image-upload-${index}`}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              component="span"
+                              fullWidth
+                              sx={{ minHeight: 40 }}
+                            >
+                              {range.image && range.image.startsWith('data:image') ? 'Change Image' : 'Upload Image'}
+                            </Button>
+                          </label>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                    
+                    {/* Large Text Field */}
+                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                      <Grid item xs={12}>
                         <TextField
-                          label="Image"
-                          value={range.image}
-                          onChange={(e) => updateScoringScaleRange(index, 'image', e.target.value)}
+                          label="Large Text"
+                          value={range.largeText || ''}
+                          onChange={(e) => updateScoringScaleRange(index, 'largeText', e.target.value)}
                           size="small"
                           fullWidth
-                          inputProps={{ placeholder: '📚' }}
+                          multiline
+                          rows={2}
+                          placeholder="Enter motivational text for this performance level..."
+                          helperText="This text will be displayed prominently when students achieve this level"
                         />
                       </Grid>
                     </Grid>
                     
                     {/* Range Preview */}
-                    <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="caption" color="text.secondary">
+                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                         Preview:
                       </Typography>
-                      <Chip
-                        label={`${range.image} ${range.label} (${range.min}-${range.max})`}
-                        sx={{
-                          backgroundColor: range.color,
-                          color: 'white',
-                          fontWeight: 600
-                        }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Chip
+                          label={`${range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} ${range.label} (${range.min}-${range.max})`}
+                          sx={{
+                            backgroundColor: range.color,
+                            color: 'white',
+                            fontWeight: 600
+                          }}
+                        />
+                      </Box>
+                      {range.largeText && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                            Large Text Preview:
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              p: 1, 
+                              backgroundColor: range.color, 
+                              color: 'white', 
+                              borderRadius: 1,
+                              fontWeight: 500,
+                              textAlign: 'center'
+                            }}
+                          >
+                            {range.largeText}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Box>
                 ))}

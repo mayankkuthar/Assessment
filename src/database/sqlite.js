@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS quizzes (
     description TEXT,
     time_limit INTEGER,
     passing_score INTEGER DEFAULT 70,
+    report_header TEXT,
+    report_footer TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

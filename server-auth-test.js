@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES6 module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3001;
@@ -11,7 +16,8 @@ const DATA_FILE = path.join(process.cwd(), 'mock-data.json');
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for base64 images
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 console.log('🚀 Starting auth test server...');
 
@@ -318,6 +324,8 @@ function loadData() {
         total_questions: 16,
         passing_score: 70,
         packet_ids: ['1755719317656', '1755719366320', '1755719404031'],
+        report_header: '',
+        report_footer: '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -536,11 +544,11 @@ app.delete('/api/profiles/:id', (req, res) => {
 app.get('/api/packets', (req, res) => {
   console.log('📦 Get packets');
   
-  // Add questions to each packet
+  // Add questions to each packet and preserve all packet fields including scoringScale
   const packetsWithQuestions = mockData.packets.map(packet => {
     const packetQuestions = mockData.questions.filter(q => q.packet_id === packet.id);
     return {
-      ...packet,
+      ...packet, // This preserves all fields including scoringScale, enableScoringScale
       questions: packetQuestions
     };
   });
@@ -571,21 +579,57 @@ app.put('/api/packets/:id', (req, res) => {
   const packetId = req.params.id;
   const updateData = req.body;
   console.log(`✏️ Update packet ${packetId}:`, updateData);
+  console.log(`📊 Scoring scale data:`, updateData.scoringScale);
+  console.log(`🔧 Enable scoring scale:`, updateData.enableScoringScale);
+  
+  // Debug: Log the current packet before update
+  const currentPacket = mockData.packets.find(p => p.id === packetId);
+  console.log(`🔍 Current packet before update:`, {
+    id: currentPacket?.id,
+    name: currentPacket?.name,
+    description: currentPacket?.description,
+    questionCount: currentPacket?.questions?.length || 0,
+    hasScoringScale: !!currentPacket?.scoringScale
+  });
   
   const packetIndex = mockData.packets.findIndex(p => p.id === packetId);
   if (packetIndex === -1) {
     return res.status(404).json({ error: 'Packet not found' });
   }
   
-  mockData.packets[packetIndex] = {
-    ...mockData.packets[packetIndex],
-    name: updateData.name || mockData.packets[packetIndex].name,
-    description: updateData.description || mockData.packets[packetIndex].description,
+  // Create a safe update that preserves all existing fields
+  const existingPacket = mockData.packets[packetIndex];
+  const updatedPacket = {
+    ...existingPacket, // Preserve ALL existing fields including questions
     updated_at: new Date().toISOString()
   };
   
+  // Only update the fields that are provided in updateData
+  if (updateData.name !== undefined) updatedPacket.name = updateData.name;
+  if (updateData.description !== undefined) updatedPacket.description = updateData.description;
+  if (updateData.scoringScale !== undefined) updatedPacket.scoringScale = updateData.scoringScale;
+  if (updateData.enableScoringScale !== undefined) updatedPacket.enableScoringScale = updateData.enableScoringScale;
+  
+  // Ensure questions are preserved by fetching them from the questions array
+  const packetQuestions = mockData.questions.filter(q => q.packet_id === packetId);
+  updatedPacket.questions = packetQuestions;
+  
+  mockData.packets[packetIndex] = updatedPacket;
+  
   saveData(mockData);
-  res.json(mockData.packets[packetIndex]);
+  
+  // Debug: Log the updated packet after update
+  const finalPacket = mockData.packets[packetIndex];
+  console.log(`✅ Packet updated successfully. New data:`, {
+    id: finalPacket.id,
+    name: finalPacket.name,
+    description: finalPacket.description,
+    questionCount: finalPacket.questions?.length || 0,
+    hasScoringScale: !!finalPacket.scoringScale,
+    scoringScaleLength: finalPacket.scoringScale?.length || 0
+  });
+  
+  res.json(finalPacket);
 });
 
 app.delete('/api/packets/:id', (req, res) => {
@@ -627,6 +671,11 @@ app.post('/api/questions', (req, res) => {
   const newQuestion = req.body;
   const newId = String(Date.now());
   console.log(`➕ Create new question:`, newQuestion);
+  console.log(`🔍 Question type:`, newQuestion.question_type);
+  console.log(`🔍 Options array:`, newQuestion.options);
+  console.log(`🔍 Options length:`, newQuestion.options?.length);
+  console.log(`🔍 Options is array:`, Array.isArray(newQuestion.options));
+  console.log(`🔍 Each option:`, newQuestion.options?.map(opt => ({ text: opt.text, marks: opt.marks, type: typeof opt.marks })));
   
   // Handle both frontend field names and expected format
   const questionText = newQuestion.question_text || newQuestion.question || 'New Question';
@@ -639,19 +688,56 @@ app.post('/api/questions', (req, res) => {
   
   if (newQuestion.options && Array.isArray(newQuestion.options) && newQuestion.options.length > 0) {
     // New format with individual option marks
-    options = newQuestion.options.map(opt => ({
-      text: opt.text || opt,
-      marks: parseInt(opt.marks) || 1
-    }));
-    totalMarks = options.reduce((sum, opt) => sum + opt.marks, 0);
+    console.log('🔍 Processing options with marks:', newQuestion.options.map(opt => ({ text: opt.text, marks: opt.marks, type: typeof opt.marks })));
+    console.log('🔍 First option structure:', newQuestion.options[0]);
+    console.log('🔍 Has text property:', newQuestion.options[0]?.hasOwnProperty('text'));
+    console.log('🔍 Has marks property:', newQuestion.options[0]?.hasOwnProperty('marks'));
+    
+    // Additional validation to ensure options have the correct structure
+    const hasValidStructure = newQuestion.options.every(opt => 
+      opt && typeof opt === 'object' && 
+      opt.hasOwnProperty('text') && 
+      opt.hasOwnProperty('marks')
+    );
+    
+    console.log('🔍 Options have valid structure:', hasValidStructure);
+    
+    if (hasValidStructure) {
+      options = newQuestion.options.map(opt => {
+        const parsedMarks = parseInt(opt.marks);
+        const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+        console.log(`🔍 Option "${opt.text}": original=${opt.marks}, parsed=${parsedMarks}, final=${finalMarks}`);
+        return {
+          text: opt.text || opt,
+          marks: finalMarks
+        };
+      });
+      totalMarks = options.reduce((sum, opt) => sum + opt.marks, 0);
+      console.log('🔍 Final options:', options);
+      console.log('🔍 Total marks calculated:', totalMarks);
+    } else {
+      console.log('🔍 Options structure invalid, falling back to old format');
+      // Fall back to old format
+      if (questionType === 'mcq' || questionType === 'multiple_choice') {
+        options = ['Option A', 'Option B', 'Option C', 'Option D'];
+      } else if (questionType === 'true_false') {
+        options = ['True', 'False'];
+      }
+      totalMarks = newQuestion.marks || 0;
+    }
   } else {
+    console.log('🔍 Falling back to old format - options not recognized');
+    console.log('🔍 Options received:', newQuestion.options);
+    console.log('🔍 Options type:', typeof newQuestion.options);
+    console.log('🔍 Options is array:', Array.isArray(newQuestion.options));
+    console.log('🔍 Options length:', newQuestion.options?.length);
     // Fallback to old format
     if (questionType === 'mcq' || questionType === 'multiple_choice') {
       options = ['Option A', 'Option B', 'Option C', 'Option D'];
     } else if (questionType === 'true_false') {
       options = ['True', 'False'];
     }
-    totalMarks = newQuestion.marks || 1;
+    totalMarks = newQuestion.marks || 0;
   }
   
   const question = {
@@ -677,11 +763,35 @@ app.put('/api/questions/:id', (req, res) => {
   const questionId = req.params.id;
   const updateData = req.body;
   console.log(`✏️ Update question ${questionId}:`, updateData);
+  console.log(`🔍 Question type:`, updateData.question_type);
+  console.log(`🔍 Options array:`, updateData.options);
+  console.log(`🔍 Options length:`, updateData.options?.length);
+  console.log(`🔍 Options is array:`, Array.isArray(updateData.options));
+  console.log(`🔍 Each option:`, updateData.options?.map(opt => ({ text: opt.text, marks: opt.marks, type: typeof opt.marks })));
   
   // Handle both frontend field names and expected format
   const questionText = updateData.question_text || updateData.question || 'Updated Question';
   const questionType = updateData.question_type || updateData.type || 'multiple_choice';
   const packetId = updateData.packet_id || null;
+  
+  // Debug: Check all available question IDs
+  console.log(`🔍 Available question IDs:`, mockData.questions.map(q => q.id));
+  console.log(`🔍 Looking for question ID:`, questionId);
+  console.log(`🔍 Question ID type:`, typeof questionId);
+  
+  // Find the question index first
+  const questionIndex = mockData.questions.findIndex(q => {
+    console.log(`🔍 Comparing ${q.id} (${typeof q.id}) with ${questionId} (${typeof questionId})`);
+    return q.id === questionId;
+  });
+  
+  console.log(`🔍 Question index found:`, questionIndex);
+  
+  if (questionIndex === -1) {
+    console.log(`❌ Question not found with ID: ${questionId}`);
+    console.log(`❌ Available IDs:`, mockData.questions.map(q => q.id));
+    return res.status(404).json({ error: 'Question not found' });
+  }
   
   // Handle options with individual marks
   let options = [];
@@ -689,22 +799,57 @@ app.put('/api/questions/:id', (req, res) => {
   
   if (updateData.options && Array.isArray(updateData.options) && updateData.options.length > 0) {
     // New format with individual option marks
-    options = updateData.options.map(opt => ({
-      text: opt.text || opt,
-      marks: parseInt(opt.marks) || 1
-    }));
-    totalMarks = options.reduce((sum, opt) => sum + opt.marks, 0);
+    console.log('🔍 Processing update options with marks:', updateData.options.map(opt => ({ text: opt.text, marks: opt.marks, type: typeof opt.marks })));
+    console.log('🔍 First update option structure:', updateData.options[0]);
+    console.log('🔍 Has text property:', updateData.options[0]?.hasOwnProperty('text'));
+    console.log('🔍 Has marks property:', updateData.options[0]?.hasOwnProperty('marks'));
+    
+    // Additional validation to ensure options have the correct structure
+    const hasValidStructure = updateData.options.every(opt => 
+      opt && typeof opt === 'object' && 
+      opt.hasOwnProperty('text') && 
+      opt.hasOwnProperty('marks')
+    );
+    
+    console.log('🔍 Update options have valid structure:', hasValidStructure);
+    
+    if (hasValidStructure) {
+      options = updateData.options.map(opt => {
+        const parsedMarks = parseInt(opt.marks);
+        const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+        console.log(`🔍 Update option "${opt.text}": original=${opt.marks}, parsed=${parsedMarks}, final=${finalMarks}`);
+        return {
+          text: opt.text || opt,
+          marks: finalMarks
+        };
+      });
+      totalMarks = options.reduce((sum, opt) => sum + opt.marks, 0);
+      console.log('🔍 Final update options:', options);
+      console.log('🔍 Total update marks calculated:', totalMarks);
+    } else {
+      console.log('🔍 Update options structure invalid, falling back to old format');
+      // Fall back to old format
+      if (questionType === 'mcq' || questionType === 'multiple_choice') {
+        options = ['Option A', 'Option B', 'Option C', 'Option D'];
+      } else if (questionType === 'true_false') {
+        options = ['True', 'False'];
+      }
+      totalMarks = updateData.marks || mockData.questions[questionIndex]?.marks || 0;
+    }
   } else {
+    console.log('🔍 Falling back to old format for update - options not recognized');
+    console.log('🔍 Update options received:', updateData.options);
+    console.log('🔍 Update options type:', typeof updateData.options);
+    console.log('🔍 Update options is array:', Array.isArray(updateData.options));
+    console.log('🔍 Update options length:', updateData.options?.length);
     // Fallback to old format
     if (questionType === 'mcq' || questionType === 'multiple_choice') {
       options = ['Option A', 'Option B', 'Option C', 'Option D'];
     } else if (questionType === 'true_false') {
       options = ['True', 'False'];
     }
-    totalMarks = updateData.marks || mockData.questions[questionIndex]?.marks || 1;
+    totalMarks = updateData.marks || mockData.questions[questionIndex]?.marks || 0;
   }
-  
-  const questionIndex = mockData.questions.findIndex(q => q.id === questionId);
   if (questionIndex === -1) {
     return res.status(404).json({ error: 'Question not found' });
   }
@@ -774,6 +919,8 @@ app.post('/api/quizzes', (req, res) => {
     time_limit: newQuiz.time_limit || 30,
     total_questions: newQuiz.total_questions || 0,
     passing_score: newQuiz.passing_score || 70,
+    report_header: newQuiz.report_header || '',
+    report_footer: newQuiz.report_footer || '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -801,6 +948,8 @@ app.put('/api/quizzes/:id', (req, res) => {
     time_limit: updateData.time_limit || mockData.quizzes[quizIndex].time_limit,
     total_questions: updateData.total_questions || mockData.quizzes[quizIndex].total_questions,
     passing_score: updateData.passing_score || mockData.quizzes[quizIndex].passing_score,
+    report_header: updateData.report_header !== undefined ? updateData.report_header : mockData.quizzes[quizIndex].report_header,
+    report_footer: updateData.report_footer !== undefined ? updateData.report_footer : mockData.quizzes[quizIndex].report_footer,
     updated_at: new Date().toISOString()
   };
   
@@ -1198,6 +1347,176 @@ app.get('/api/users/:userId/assigned-quizzes', (req, res) => {
   
   res.json(enrichedAssignments);
 });
+
+// PDF Templates API
+app.get('/api/pdf-templates/:quizId', (req, res) => {
+  const { quizId } = req.params;
+  console.log(`📄 Get PDF template for quiz ${quizId}`);
+  
+  try {
+    // Check if a saved template exists for this quiz
+    const templateFilePath = path.join(__dirname, 'data', `pdf-template-${quizId}.json`);
+    
+    if (fs.existsSync(templateFilePath)) {
+      const savedTemplate = JSON.parse(fs.readFileSync(templateFilePath, 'utf8'));
+      console.log('✅ Loaded saved PDF template for quiz:', quizId);
+      res.json({ template: savedTemplate });
+    } else {
+      // Return default template wrapped in the expected format
+      const defaultTemplate = getDefaultPDFTemplate();
+      console.log('📋 Returning default PDF template for quiz:', quizId);
+      res.json({ template: defaultTemplate });
+    }
+  } catch (error) {
+    console.error('Error getting PDF template:', error);
+    res.status(500).json({ error: 'Failed to get PDF template' });
+  }
+});
+
+app.put('/api/pdf-templates/:quizId', (req, res) => {
+  const { quizId } = req.params;
+  const template = req.body;
+  console.log(`💾 Save PDF template for quiz ${quizId}`);
+  
+  try {
+    // Ensure the data directory exists
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // Save template to file
+    const templateFilePath = path.join(dataDir, `pdf-template-${quizId}.json`);
+    fs.writeFileSync(templateFilePath, JSON.stringify(template, null, 2));
+    
+    console.log('✅ PDF template saved successfully to:', templateFilePath);
+    res.json({ message: 'PDF template saved successfully' });
+  } catch (error) {
+    console.error('Error saving PDF template:', error);
+    res.status(500).json({ error: 'Failed to save PDF template' });
+  }
+});
+
+// Helper function to get default PDF template
+function getDefaultPDFTemplate() {
+  return {
+    header: { 
+      enabled: true, 
+      backgroundColor: '#2563eb', 
+      textColor: '#ffffff',
+      title: 'Assessment Performance Report',
+      subtitle: 'Comprehensive Analysis Report',
+      logoPosition: 'left',
+      showDate: true,
+      dateFormat: 'MMM DD, YYYY'
+    },
+    userInfo: { 
+      enabled: true, 
+      order: 1,
+      backgroundColor: '#f8fafc',
+      borderColor: '#e5e7eb',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20,
+      showFields: {
+        name: true,
+        email: true,
+        completionDate: true,
+        completionTime: true,
+        duration: true,
+        attempts: true
+      }
+    },
+    overallScore: { 
+      enabled: true, 
+      order: 2,
+      backgroundColor: '#f8fafc',
+      borderColor: '#e5e7eb',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20
+    },
+    charts: { 
+      enabled: true, 
+      order: 3,
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e7eb',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20,
+      layout: 'grid',
+      gridColumns: 2
+    },
+    sectionAnalysis: { 
+      enabled: true, 
+      order: 4,
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e7eb',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20
+    },
+    performanceInsights: { 
+      enabled: true, 
+      order: 5,
+      backgroundColor: '#f0f9ff',
+      borderColor: '#0ea5e9',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20
+    },
+    recommendations: { 
+      enabled: true, 
+      order: 6,
+      backgroundColor: '#fef3c7',
+      borderColor: '#f59e0b',
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20
+    },
+    footer: { 
+      enabled: true, 
+      order: 7,
+      backgroundColor: '#f8fafc',
+      borderColor: '#e5e7eb',
+      padding: 20,
+      marginTop: 30
+    },
+    page: {
+      size: 'A4',
+      orientation: 'portrait',
+      margins: { top: 30, bottom: 30, left: 30, right: 30 },
+      backgroundColor: '#ffffff',
+      showPageNumbers: true,
+      pageNumberPosition: 'bottom-center'
+    },
+    typography: {
+      primaryFont: 'Helvetica',
+      secondaryFont: 'Arial',
+      fontSizes: { h1: 28, h2: 24, h3: 20, h4: 18, h5: 16, body: 12, small: 10 }
+    },
+    colors: {
+      primary: '#2563eb',
+      secondary: '#6b7280',
+      success: '#10b981',
+      warning: '#f59e0b',
+      danger: '#ef4444',
+      info: '#06b6d4',
+      light: '#f8fafc',
+      dark: '#111827',
+      white: '#ffffff',
+      black: '#000000'
+    },
+    watermark: {
+      enabled: false,
+      text: 'CONFIDENTIAL',
+      color: 'rgba(0, 0, 0, 0.1)',
+      fontSize: 48,
+      rotation: -45,
+      position: 'center'
+    }
+  };
+}
 
 // 404 handler
 app.use((req, res) => {

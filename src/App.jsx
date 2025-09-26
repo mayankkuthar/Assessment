@@ -38,14 +38,16 @@ import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
 import QuizAttempt from './components/QuizAttempt'
 import { useDatabase } from './hooks/useDatabase'
-import { testConnection } from './test-connection'
+
 import AssessmentResults from './components/AssessmentResults'
 import AssessmentReport from './components/AssessmentReport'
+import ReportViewer from './components/ReportViewer'
 import AuthPage from './components/AuthPage'
 import UserDashboard from './components/UserDashboard'
 import AdminDashboard from './components/AdminDashboard'
 import PasswordReset from './components/PasswordReset'
-import { supabase } from './sqlite'
+import PDFTemplateConfig from './components/PDFTemplateConfig'
+
 
 const drawerWidth = 220
 
@@ -58,6 +60,7 @@ const adminNavItems = [
   { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon /> },
   { label: 'Assessment Results', icon: <AssessmentIcon /> },
   { label: 'Assessment Report', icon: <AssessmentIcon /> },
+  { label: 'PDF Templates', icon: <ShareIcon /> },
 ]
 
 // User navigation items
@@ -104,25 +107,11 @@ function App() {
   const [darkMode, setDarkMode] = useState(false)
   const [tab, setTab] = useState(0)
   const [howToOpen, setHowToOpen] = useState(false)
-  const [connectionTest, setConnectionTest] = useState(null)
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
   // Get navigation items based on user type
   const navItems = isAdmin ? adminNavItems : userNavItems
-
-  // Test connection on mount
-  useEffect(() => {
-    const test = async () => {
-      try {
-        const result = await testConnection()
-        setConnectionTest(result)
-      } catch (err) {
-        setConnectionTest({ success: false, error: err.message })
-      }
-    }
-    test()
-  }, [])
 
   // Sync darkMode with body class
   useEffect(() => {
@@ -133,27 +122,19 @@ function App() {
     }
   }, [darkMode])
 
-  // Auth state management
+  // Auth state management - using local storage
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      console.log('🔍 Initial user check:', user);
-      setUser(user)
-      if (user) {
-        checkUserRole(user)
+    // Check for existing user in localStorage
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setUser(user);
+        checkUserRole(user);
+      } catch (err) {
+        console.error('Error parsing stored user:', err);
+        localStorage.removeItem('currentUser');
       }
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change:', event, session);
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        console.log('👤 User object in auth listener:', session.user);
-        await checkUserRole(session.user)
-      } else {
-        setIsAdmin(false)
-      }
-    })
-    return () => {
-      listener?.subscription.unsubscribe()
     }
   }, [])
 
@@ -376,8 +357,7 @@ function App() {
             <Typography sx={{ mb: 2 }}>{error}</Typography>
             {error.includes('Database connection failed') && (
               <Typography variant="body2" color="text.secondary">
-                The app is now running in fallback mode with limited features. 
-                To enable full database functionality, please configure your Supabase credentials.
+                The app is now running with local JSON storage. All features are available offline.
               </Typography>
             )}
           </Alert>
@@ -404,6 +384,7 @@ function App() {
       )}
       <Routes>
         <Route path="/attempt/:quizId" element={<QuizAttempt />} />
+        <Route path="/report/:quizId/:attemptId" element={<ReportViewer />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="*" element={
           <Box sx={{ display: 'flex' }}>
@@ -458,7 +439,11 @@ function App() {
                   <IconButton color="inherit" onClick={() => setDarkMode((prev) => !prev)}>
                     {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
                   </IconButton>
-                  <Button color="inherit" onClick={async () => { await supabase.auth.signOut(); }}>Logout</Button>
+                  <Button color="inherit" onClick={() => {
+                    localStorage.removeItem('currentUser');
+                    setUser(null);
+                    setIsAdmin(false);
+                  }}>Logout</Button>
                 </Toolbar>
               </AppBar>
               <Toolbar />
@@ -486,6 +471,7 @@ function App() {
                         addQuestion={addQuestion}
                         updateQuestion={updateQuestion}
                         deleteQuestion={deleteQuestion}
+                        onDataChange={loadData}
                       />
                     )}
                     {tab === 3 && (
@@ -565,6 +551,7 @@ function App() {
                     )}
                     {tab === 5 && <AssessmentResults />}
                     {tab === 6 && <AssessmentReport />}
+                    {tab === 7 && <PDFTemplateConfig />}
                   </>
                 ) : (
                   // User Mode
@@ -615,6 +602,7 @@ function App() {
                     <li><b>Assigned Quizzes:</b> View and manage quiz assignments.</li>
                     <li><b>Assessment Results:</b> View detailed results and attempt records for all quizzes.</li>
                     <li><b>Assessment Report:</b> Generate and download PDF reports for individual quiz submissions with detailed analysis.</li>
+                    <li><b>PDF Templates:</b> Configure PDF report templates with custom styling, colors, and layout options.</li>
                     <li><b>Upload Excel:</b> Bulk import data from Excel files.</li>
                   </ol>
                 ) : (

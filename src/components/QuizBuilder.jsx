@@ -17,11 +17,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import MenuItem from '@mui/material/MenuItem';
 import QuizAssignmentGraph from './QuizAssignmentGraph';
+import RichTextEditor from './RichTextEditor';
 
 const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, deleteQuiz, addPacketsToQuiz, removePacketsFromQuiz, assignQuiz, removeQuizAssignment, quizAssignments, onDataChange, getQuizPackets }) => {
   const [selectedProfile, setSelectedProfile] = useState('');
   const [quizPackets, setQuizPackets] = useState([]);
   const [quizName, setQuizName] = useState('');
+  const [reportHeader, setReportHeader] = useState('');
+  const [reportFooter, setReportFooter] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -57,7 +60,9 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           name: quizName,
           description: '',
           time_limit: null,
-          passing_score: 70
+          passing_score: 70,
+          report_header: reportHeader,
+          report_footer: reportFooter
         });
 
         // Get current packets for this quiz to remove them
@@ -80,7 +85,9 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           name: quizName,
           description: '',
           time_limit: null,
-          passing_score: 70
+          passing_score: 70,
+          report_header: reportHeader,
+          report_footer: reportFooter
         });
 
         // Add packets to the quiz
@@ -100,6 +107,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
 
       // Reset form
       setQuizName('');
+      setReportHeader('');
+      setReportFooter('');
       setQuizPackets([]);
       setSelectedProfile('');
       setEditingQuiz(null);
@@ -114,6 +123,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
     try {
       setEditingQuiz(quiz);
       setQuizName(quiz.name);
+      setReportHeader(quiz.report_header || '');
+      setReportFooter(quiz.report_footer || '');
       setSelectedProfile(quiz.profileId || '');
       
       // Load existing packets for this quiz
@@ -129,6 +140,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
 
   const cancelEdit = () => {
     setQuizName('');
+    setReportHeader('');
+    setReportFooter('');
     setQuizPackets([]);
     setSelectedProfile('');
     setEditingQuiz(null);
@@ -162,6 +175,20 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                 variant="outlined"
                 sx={{ mb: 3 }}
                 InputLabelProps={{ shrink: true }}
+              />
+              <RichTextEditor
+                label="Report Header"
+                value={reportHeader}
+                onChange={setReportHeader}
+                placeholder="Enter header text that will appear before Performance Overview in the report..."
+                height={150}
+              />
+              <RichTextEditor
+                label="Report Footer"
+                value={reportFooter}
+                onChange={setReportFooter}
+                placeholder="Enter footer text that will appear after Achievement Summary in the report..."
+                height={150}
               />
               {!isEditing && (
                 <TextField

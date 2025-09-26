@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabase'
+
 import {
   Box,
   Card,
@@ -32,16 +32,8 @@ function PasswordReset() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Check if user has a valid session (from reset link)
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setError('Invalid or expired reset link. Please request a new password reset.')
-        return
-      }
-      setSession(session)
-    }
-    checkSession()
+    // Password reset not available in local mode
+    setError('Password reset not available in local mode. Please contact your administrator.')
   }, [])
 
   const handlePasswordReset = async (e) => {
@@ -61,18 +53,8 @@ function PasswordReset() {
     setError('')
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      })
-
-      if (error) throw error
-
-      setSuccess('Password updated successfully! Redirecting to login...')
-      
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        navigate('/')
-      }, 2000)
+      // Password update not available in local mode
+      setSuccess('Password update not available in local mode. Please contact your administrator.')
     } catch (err) {
       setError(err.message)
     } finally {

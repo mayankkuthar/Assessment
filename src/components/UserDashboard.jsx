@@ -27,7 +27,7 @@ import {
   Email as EmailIcon
 } from '@mui/icons-material'
 import { useDatabase } from '../hooks/useDatabase'
-import { supabase } from '../sqlite'
+
 
 const UserDashboard = () => {
   const [user, setUser] = useState(null)
@@ -49,13 +49,14 @@ const UserDashboard = () => {
         setLoading(true)
         setError(null)
 
-        // Get current user
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        if (!currentUser) {
+        // Get current user from localStorage
+        const storedUser = localStorage.getItem('currentUser')
+        if (!storedUser) {
           setError('No user found. Please log in.')
           return
         }
 
+        const currentUser = JSON.parse(storedUser)
         setUser(currentUser)
 
         // Load user-specific data

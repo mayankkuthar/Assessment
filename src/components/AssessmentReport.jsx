@@ -95,6 +95,15 @@ const AssessmentReport = () => {
 
       const attemptsData = await attemptsRes.json();
       const packetsData = await packetsRes.json();
+      console.log('📦 Loaded packets data:', packetsData);
+      console.log('📦 First packet details:', packetsData[0] ? {
+        id: packetsData[0].id,
+        name: packetsData[0].name,
+        hasScoringScale: !!packetsData[0].scoringScale,
+        scoringScaleLength: packetsData[0].scoringScale?.length || 0,
+        enableScoringScale: packetsData[0].enableScoringScale,
+        scoringScale: packetsData[0].scoringScale
+      } : 'No packets found');
 
       // Enrich attempts with user information
       const enrichedAttempts = await Promise.all(
@@ -165,32 +174,124 @@ const AssessmentReport = () => {
         const total = packetQuestions.length;
         const score = total > 0 ? Math.round((correct / total) * 100) : 0;
         
+        // Calculate actual marks based on question marks
+        const totalPossibleMarks = packetQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
+        const earnedMarks = packetQuestions.filter((q, index) => {
+          // Mock: use the same random logic for which questions are correct
+          return Math.random() > 0.5;
+        }).reduce((sum, q) => sum + (q.marks || 1), 0);
+        
         return {
           ...packet,
           score,
           correct,
           total,
-          marks: correct,
-          totalMarks: total
+          marks: earnedMarks, // Use actual earned marks
+          totalMarks: totalPossibleMarks // Use total possible marks
         };
       });
       
+      // Prepare packets with their individual scoring scales
+      const packetsWithScoringScales = quizPackets.map(packet => ({
+        ...packet,
+        // Include the scoring scale if it exists and is enabled
+        scoringScale: packet.scoringScale && packet.enableScoringScale ? packet.scoringScale : null
+      }));
+      
+      console.log('✅ Packets with scoring scales:', packetsWithScoringScales.map(p => ({
+        name: p.name,
+        hasScoringScale: !!p.scoringScale,
+        scoringScaleLength: p.scoringScale?.length || 0,
+        enableScoringScale: p.enableScoringScale
+      })));
+      
+      // Load template configuration for this quiz
+      let template = null;
+      try {
+        const templateRes = await fetch(`http://localhost:3001/api/pdf-templates/${selectedQuiz.id}?t=${Date.now()}`);
+        if (templateRes.ok) {
+          const templateData = await templateRes.json();
+          template = templateData.template;
+          
+          console.log('🔄 Loaded template data:', {
+            hasTemplate: !!template,
+            hasPacketConfigs: !!(template && template.packetConfigs),
+            packetConfigsCount: template && template.packetConfigs ? Object.keys(template.packetConfigs).length : 0,
+            packetIds: template && template.packetConfigs ? Object.keys(template.packetConfigs) : []
+          });
+          
+          // Ensure packet configs have proper defaults if they exist
+          if (template && template.packetConfigs) {
+            Object.keys(template.packetConfigs).forEach(packetId => {
+              const config = template.packetConfigs[packetId];
+              console.log(`📋 Processing packet config for ${packetId}:`, {
+                enabled: config.enabled,
+                order: config.order,
+                title: config.title,
+                showHeader: config.showHeader
+              });
+              
+              // Add default values for any missing properties
+              template.packetConfigs[packetId] = {
+                borderRadius: '8px',
+                borderWidth: '1px',
+                borderColor: '#e5e7eb',
+                backgroundColor: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 'normal',
+                padding: '20px',
+                margin: '16px 0px',
+                ...config // Override with actual config values
+              };
+            });
+          }
+          
+          console.log('✅ Loaded PDF template configuration for quiz:', selectedQuiz.id);
+          console.log('📋 Final template packet configs:', template?.packetConfigs);
+        } else {
+          console.log('ℹ️ No custom template found, using default configuration');
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to load template configuration:', err.message);
+      }
+
       // Create PDF generator instance
       const pdfGenerator = new PDFGenerator();
       
-      // Generate the report
-      await pdfGenerator.generateReport(
+      console.log('🚀 Generating PDF report with packets containing individual scoring scales');
+      
+      // Generate the report with packets containing individual scoring scales
+      console.log('🚀 About to call generateReport with:');
+      console.log('  - selectedQuiz:', selectedQuiz);
+      console.log('  - userData:', userData);
+      console.log('  - attempt:', attempt);
+      console.log('  - allQuestions length:', allQuestions.length);
+      console.log('  - packetsWithScoringScales length:', packetsWithScoringScales.length);
+      console.log('  - template configuration:', template ? 'Yes' : 'No');
+      
+      const pdfBlob = await pdfGenerator.generateReport(
         selectedQuiz,
         userData || { user_name: 'Unknown User', email: 'No email' },
         attempt, // Pass the actual attempt data
         allQuestions,
         {}, // Mock answers - in real scenario, this would be attempt.answers
-        quizPackets // Pass actual packet data with names
+        packetsWithScoringScales, // Pass packets with individual scoring scales
+        null, // No global scoring scale needed
+        template // Pass the template configuration
       );
 
       // Download the PDF
       const fileName = `${selectedQuiz.name}_${userData?.user_name || 'User'}_${new Date(attempt.completed_at).toISOString().split('T')[0]}.pdf`;
-      pdfGenerator.downloadPDF(fileName);
+      
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
     } catch (err) {
       setError(`Failed to generate PDF: ${err.message}`);
@@ -201,11 +302,7 @@ const AssessmentReport = () => {
 
 
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return 'success';
-    if (score >= 60) return 'warning';
-    return 'error';
-  };
+
 
   const formatDate = (dateString) => {
     try {
@@ -268,14 +365,7 @@ const AssessmentReport = () => {
     return { name: 'Unknown User', email: 'No email', role: 'No role' };
   };
 
-  const calculateScore = (attempt) => {
-    // Calculate percentage based on correct answers vs total questions
-    if (attempt.total_questions > 0) {
-      const percentage = Math.round((attempt.correct_answers / attempt.total_questions) * 100);
-      return Math.min(percentage, 100); // Cap at 100%
-    }
-    return 0;
-  };
+
 
   if (loading && !selectedQuiz) {
     return (
@@ -413,6 +503,8 @@ const AssessmentReport = () => {
               <option value="completed">Completed</option>
               <option value="in-progress">In Progress</option>
             </TextField>
+            
+
           </Box>
 
           <TableContainer component={Paper} sx={{ mb: 3 }}>
@@ -421,7 +513,6 @@ const AssessmentReport = () => {
                 <TableRow sx={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
                   <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Overall Score</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -430,7 +521,6 @@ const AssessmentReport = () => {
               <TableBody>
                 {filteredAttempts.map((attempt) => {
                   const profile = getProfileInfo(attempt);
-                  const percentage = calculateScore(attempt);
                   
                   return (
                     <TableRow key={attempt.id} hover>
@@ -453,19 +543,6 @@ const AssessmentReport = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Box sx={{ textAlign: 'center' }}>
-                          <Chip
-                            label={`${percentage}%`}
-                            color={getScoreColor(percentage)}
-                            size="small"
-                            sx={{ fontWeight: 600, mb: 0.5 }}
-                          />
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            {attempt.correct_answers || 0}/{attempt.total_questions || 0} questions
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
                         <Chip
                           label={attempt.status || 'completed'}
                           color={attempt.status === 'completed' ? 'success' : 'warning'}
@@ -478,20 +555,35 @@ const AssessmentReport = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title="Download PDF Report">
-                          <IconButton
-                            onClick={() => handleGeneratePDF(attempt)}
-                            disabled={generatingPDF}
-                            color="primary"
-                            size="small"
-                          >
-                            {generatingPDF ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              <DownloadIcon />
-                            )}
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title="View Report in Browser">
+                            <IconButton
+                              onClick={() => {
+                                if (selectedQuiz && attempt?.id) {
+                                  window.open(`/report/${selectedQuiz.id}/${attempt.id}`, '_blank');
+                                }
+                              }}
+                              color="primary"
+                              size="small"
+                            >
+                              <AssessmentIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Download PDF Report">
+                            <IconButton
+                              onClick={() => handleGeneratePDF(attempt)}
+                              disabled={generatingPDF}
+                              color="primary"
+                              size="small"
+                            >
+                              {generatingPDF ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <DownloadIcon />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );

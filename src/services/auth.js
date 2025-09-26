@@ -1,6 +1,6 @@
 import { userService } from './sqlite-database.js';
 
-// Auth service to replace Supabase auth
+// Local authentication service
 export const authService = {
   // Current user session stored in memory
   currentUser: null,
@@ -149,7 +149,7 @@ export const authService = {
   }
 };
 
-// Authentication hook similar to Supabase's useAuth
+// Authentication hook for local auth system
 export function useAuth() {
   const [user, setUser] = React.useState(authService.getUser());
   const [loading, setLoading] = React.useState(true);
