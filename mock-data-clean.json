@@ -4,31 +4,36 @@
       "id": "1",
       "email": "admin@assessment.local",
       "password": "admin123",
-      "role": "admin"
+      "role": "admin",
+      "organization": "HappiMynd"
     },
     {
       "id": "2",
       "email": "user@assessment.local",
       "password": "user123",
-      "role": "user"
+      "role": "user",
+      "organization": "Individual"
     },
     {
       "id": "1755700689751",
       "email": "user1@happimynd.com",
       "password": "user1",
-      "role": "user"
+      "role": "user",
+      "organization": "HappiMynd"
     },
     {
       "id": "1755703513401",
       "email": "user1@assessment.local",
       "password": "user1",
-      "role": "user"
+      "role": "user",
+      "organization": "Individual"
     },
     {
       "id": "1755714231112",
       "email": "mayank@happimynd.com",
       "password": "user1",
-      "role": "user"
+      "role": "user",
+      "organization": "HappiMynd"
     },
     {
       "id": "1755715659272",
@@ -36,7 +41,8 @@
       "password": "1234",
       "role": "user",
       "user_name": "YUY",
-      "profile": "student"
+      "profile": "student",
+      "organization": "HappiMynd"
     }
   ],
   "profiles": [

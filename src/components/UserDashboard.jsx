@@ -24,9 +24,11 @@ import {
   TrendingUp as TrendingUpIcon,
   Assignment as AssignmentIcon,
   Person as PersonIcon,
-  Email as EmailIcon
+  Email as EmailIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material'
 import { useDatabase } from '../hooks/useDatabase'
+import { useNavigate } from 'react-router-dom'
 
 
 const UserDashboard = () => {
@@ -34,6 +36,7 @@ const UserDashboard = () => {
   const [assignedQuizzes, setAssignedQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const navigate = useNavigate()
 
   const {
     userQuizAttempts,
@@ -487,12 +490,20 @@ const UserDashboard = () => {
                            </Box>
                         </Box>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                            Completed
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDate(attempt.completed_at || attempt.created_at)}
-                          </Typography>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
+                            sx={{ 
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              '&:hover': {
+                                background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                              }
+                            }}
+                          >
+                            View Report
+                          </Button>
                         </Box>
                       </Box>
                     </Paper>

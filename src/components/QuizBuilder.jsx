@@ -382,9 +382,9 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                       secondary={
                         <Box>
                           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Type: {question.question_type === 'mcq' ? 'Multiple Choice' : 'True/False'} | Packet: {question.packetName}
+                            Type: {(question.question_type === 'mcq' || question.type === 'mcq') ? 'Multiple Choice' : 'True/False'} | Packet: {question.packetName}
                           </Typography>
-                          {question.question_type === 'mcq' && question.options && (
+                          {(question.question_type === 'mcq' || question.type === 'mcq') && question.options && (
                             <Box>
                               {question.options.map((option, optIndex) => (
                                 <Typography key={optIndex} variant="body2" sx={{ ml: 2 }}>

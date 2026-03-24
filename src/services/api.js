@@ -1,5 +1,5 @@
 // API service to replace direct SQLite calls in the browser
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
+const API_BASE = 'http://65.1.6.81:3001/api';
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -11,12 +11,6 @@ class ApiError extends Error {
 
 async function apiCall(endpoint, options = {}) {
   try {
-    console.log('🔍 API call to:', `${API_BASE}${endpoint}`);
-    console.log('🔍 API call options:', options);
-    if (options.body) {
-      console.log('🔍 API call body:', JSON.parse(options.body));
-    }
-    
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
@@ -125,15 +119,10 @@ export const questionApi = {
   },
 
   async updateQuestion(id, updates) {
-    console.log('🔍 API updateQuestion called with:', { id, updates });
-    console.log('🔍 Updates options:', updates.options);
-    console.log('🔍 Updates marks:', updates.marks);
-    const result = await apiCall(`/questions/${id}`, {
+    return await apiCall(`/questions/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-    console.log('🔍 API updateQuestion response:', result);
-    return result;
   },
 
   async deleteQuestion(id) {

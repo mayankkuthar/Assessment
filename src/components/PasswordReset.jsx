@@ -104,8 +104,21 @@ function PasswordReset() {
       >
         <Card sx={{ maxWidth: 400, width: '100%' }}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h4" align="center" sx={{ mb: 3, fontWeight: 'bold' }}>
-              Reset Password
+            {/* HappiMynd Logo */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <img 
+                src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+                alt="HappiMynd Logo"
+                style={{
+                  height: '60px',
+                  width: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            </Box>
+            
+            <Typography variant="h4" align="center" sx={{ mb: 3, fontWeight: 'bold', overflow: 'visible' }}>
+              Forgot Password
             </Typography>
 
             {error && (
@@ -180,4 +193,4 @@ function PasswordReset() {
   )
 }
 
-export default PasswordReset 
+export default PasswordReset

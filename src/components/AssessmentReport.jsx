@@ -57,8 +57,8 @@ const AssessmentReport = () => {
 
       // Load all data in parallel
       const [quizzesRes, profilesRes] = await Promise.all([
-        fetch('http://localhost:3001/api/quizzes'),
-        fetch('http://localhost:3001/api/profiles')
+        fetch('http://65.1.6.81:3001/api/quizzes'),
+        fetch('http://65.1.6.81:3001/api/profiles')
       ]);
 
       if (!quizzesRes.ok || !profilesRes.ok) {
@@ -85,8 +85,8 @@ const AssessmentReport = () => {
 
       // Load quiz attempts and packets for the selected quiz
       const [attemptsRes, packetsRes] = await Promise.all([
-        fetch(`http://localhost:3001/api/quiz-attempts?quiz_id=${quiz.id}`),
-        fetch(`http://localhost:3001/api/quiz-packets/${quiz.id}`)
+        fetch(`http://65.1.6.81:3001/api/quiz-attempts?quiz_id=${quiz.id}`),
+        fetch(`http://65.1.6.81:3001/api/quiz-packets/${quiz.id}`)
       ]);
 
       if (!attemptsRes.ok || !packetsRes.ok) {
@@ -110,7 +110,7 @@ const AssessmentReport = () => {
         attemptsData.map(async (attempt) => {
           try {
             // Fetch user data for each attempt
-            const userRes = await fetch(`http://localhost:3001/api/users/${attempt.user_id}`);
+            const userRes = await fetch(`http://65.1.6.81:3001/api/users/${attempt.user_id}`);
             if (userRes.ok) {
               const userData = await userRes.json();
               return {
@@ -144,7 +144,7 @@ const AssessmentReport = () => {
       let userData = attempt.userData;
       if (!userData && attempt.user_id) {
         try {
-          const userRes = await fetch(`http://localhost:3001/api/users/${attempt.user_id}`);
+          const userRes = await fetch(`http://65.1.6.81:3001/api/users/${attempt.user_id}`);
           if (userRes.ok) {
             userData = await userRes.json();
           }
@@ -156,7 +156,7 @@ const AssessmentReport = () => {
       // Get questions for all packets in this quiz
       const allQuestions = [];
       for (const packet of quizPackets) {
-        const questionsRes = await fetch(`http://localhost:3001/api/questions?packet_id=${packet.id}`);
+        const questionsRes = await fetch(`http://65.1.6.81:3001/api/questions?packet_id=${packet.id}`);
         if (questionsRes.ok) {
           const questions = await questionsRes.json();
           allQuestions.push(...questions);
@@ -208,7 +208,7 @@ const AssessmentReport = () => {
       // Load template configuration for this quiz
       let template = null;
       try {
-        const templateRes = await fetch(`http://localhost:3001/api/pdf-templates/${selectedQuiz.id}?t=${Date.now()}`);
+        const templateRes = await fetch(`http://65.1.6.81:3001/api/pdf-templates/${selectedQuiz.id}?t=${Date.now()}`);
         if (templateRes.ok) {
           const templateData = await templateRes.json();
           template = templateData.template;
@@ -335,7 +335,8 @@ const AssessmentReport = () => {
       return {
         name: attempt.user.user_name || attempt.user.email || 'Unknown User',
         email: attempt.user.email || 'No email',
-        role: attempt.user.profile || 'No role'
+        role: attempt.user.profile || 'No role',
+        organization: attempt.user.organization || 'Not specified' // Added organization field
       };
     }
     
@@ -346,7 +347,8 @@ const AssessmentReport = () => {
         return {
           name: profile.name || 'Unknown User',
           email: profile.email || 'No email',
-          role: profile.role || 'No role'
+          role: profile.role || 'No role',
+          organization: attempt.userData.organization || 'Not specified' // Added organization field
         };
       }
     }
@@ -357,12 +359,13 @@ const AssessmentReport = () => {
       return {
         name: profile.name || 'Unknown User',
         email: profile.email || 'No email',
-        role: profile.role || 'No role'
+        role: profile.role || 'No role',
+        organization: 'Not specified' // Added organization field
       };
     }
     
     // Final fallback
-    return { name: 'Unknown User', email: 'No email', role: 'No role' };
+    return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Not specified' };
   };
 
 
@@ -513,6 +516,7 @@ const AssessmentReport = () => {
                 <TableRow sx={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
                   <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Organization</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -539,6 +543,14 @@ const AssessmentReport = () => {
                           label={profile.role} 
                           size="small" 
                           color="primary" 
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={attempt.user?.organization || 'Not specified'} 
+                          size="small" 
+                          color={attempt.user?.organization === 'HappiMynd' ? 'primary' : 'secondary'}
                           variant="outlined"
                         />
                       </TableCell>

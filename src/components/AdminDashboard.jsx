@@ -115,7 +115,7 @@ const AdminDashboard = () => {
       return {
         totalAttempts: 0,
         completedAttempts: 0,
-        averageScore: 0,
+        totalMarksSum: 0,
         totalUsers: 0,
         completionRate: 0
       }
@@ -123,14 +123,14 @@ const AdminDashboard = () => {
 
     const totalAttempts = allQuizAttempts.length
     const completedAttempts = allQuizAttempts.filter(attempt => attempt.completed_at).length
-    const averageScore = allQuizAttempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0) / totalAttempts
+    const totalMarksSum = allQuizAttempts.reduce((sum, attempt) => sum + (attempt.total_marks || 0), 0)
     const uniqueUsers = new Set(allQuizAttempts.map(attempt => attempt.user_id).filter(Boolean)).size
     const completionRate = (completedAttempts / totalAttempts) * 100
 
     return {
       totalAttempts,
       completedAttempts,
-      averageScore: Math.round(averageScore * 100) / 100,
+      totalMarksSum,
       totalUsers: uniqueUsers,
       completionRate: Math.round(completionRate * 100) / 100
     }
@@ -371,14 +371,14 @@ const AdminDashboard = () => {
                     fontSize: { xs: '1.8rem', sm: '2.2rem' },
                     mb: 0.5
                   }}>
-                    {stats.averageScore}%
+                    {stats.totalMarksSum}
                   </Typography>
                   <Typography variant="body1" sx={{ 
                     color: 'text.secondary',
                     fontWeight: 600,
                     fontSize: { xs: '0.85rem', sm: '0.95rem' }
                   }}>
-                    Avg Score
+                    Total Marks
                   </Typography>
                 </Box>
                 <Box sx={{
@@ -467,7 +467,7 @@ const AdminDashboard = () => {
                     fontSize: { xs: '1.8rem', sm: '2.2rem' },
                     mb: 0.5
                   }}>
-                    {stats.completionRate}%
+                    {stats.completedAttempts}/{stats.totalAttempts}
                   </Typography>
                   <Typography variant="body1" sx={{ 
                     color: 'text.secondary',

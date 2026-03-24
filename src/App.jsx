@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
+import { copyToClipboard, showClipboardFeedback } from './utils/clipboard'
 import ProfileManager from './components/ProfileManager'
 import PacketManager from './components/PacketManager'
 import QuizBuilder from './components/QuizBuilder'
@@ -33,6 +34,7 @@ import ShareIcon from '@mui/icons-material/Share'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import HomeIcon from '@mui/icons-material/Home'
 import HistoryIcon from '@mui/icons-material/History'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
@@ -70,6 +72,8 @@ const userNavItems = [
 ]
 
 function App() {
+  const navigate = useNavigate()
+  
   // Database state
   const {
     profiles,
@@ -520,9 +524,10 @@ function App() {
                                           <Tooltip title="Copy shareable link">
                                             <IconButton
                                               color="primary"
-                                              onClick={() => {
-                                                navigator.clipboard.writeText(`${window.location.origin}/attempt/${quiz.id}`)
-                                                alert('Link copied!')
+                                              onClick={async () => {
+                                                const link = `${window.location.origin}/attempt/${quiz.id}`
+                                                const success = await copyToClipboard(link)
+                                                showClipboardFeedback(success, 'Quiz link copied to clipboard!')
                                               }}
                                               edge="end"
                                               sx={{ ml: 1 }}
@@ -566,10 +571,18 @@ function App() {
                           <Grid container spacing={2}>
                             {userQuizAttempts.map((attempt) => (
                               <Grid item xs={12} sm={6} md={4} key={attempt.id}>
-                                <Card>
+                                <Card sx={{ 
+                                  transition: 'all 0.3s ease',
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: 3
+                                  }
+                                }}>
                                   <CardContent>
-                                    <Typography variant="h6">{attempt.quiz_name}</Typography>
-                                    <Typography color="text.secondary">
+                                    <Typography variant="h6" sx={{ mb: 1 }}>
+                                      {attempt.quiz_name}
+                                    </Typography>
+                                    <Typography color="text.secondary" sx={{ mb: 2 }}>
                                       Completed: {new Date(attempt.completed_at).toLocaleString('en-US', {
                                         year: 'numeric',
                                         month: 'short',
@@ -578,6 +591,23 @@ function App() {
                                         minute: '2-digit'
                                       })}
                                     </Typography>
+                                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                      Score: {attempt.score}% ({attempt.correct_answers}/{attempt.total_questions})
+                                    </Typography>
+                                    <Button
+                                      variant="contained"
+                                      startIcon={<VisibilityIcon />}
+                                      onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
+                                      fullWidth
+                                      sx={{ 
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        '&:hover': {
+                                          background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                                        }
+                                      }}
+                                    >
+                                      View Report
+                                    </Button>
                                   </CardContent>
                                 </Card>
                               </Grid>

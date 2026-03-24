@@ -396,7 +396,7 @@ app.post('/api/auth/signin', (req, res) => {
 });
 
 app.post('/api/auth/signup', (req, res) => {
-  const { email, password, role = 'user', user_name, profile } = req.body;
+  const { email, password, role = 'user', user_name, profile, organization } = req.body;
   console.log(`📝 Sign up attempt: ${email} as ${role}`);
   
   // Check if user already exists
@@ -427,7 +427,8 @@ app.post('/api/auth/signup', (req, res) => {
     password,
     role,
     user_name: user_name || email.split('@')[0],
-    profile: profile // Store the profile name for reference
+    profile: profile, // Store the profile name for reference
+    organization: organization // Store the organization for reference
   };
   mockData.users.push(newUser);
   
@@ -655,16 +656,43 @@ app.delete('/api/packets/:id', (req, res) => {
 app.get('/api/questions', (req, res) => {
   console.log('❓ Get questions');
   
-  const { packet_id } = req.query;
+  const { packet_id, quiz_id } = req.query;
   
-  if (packet_id) {
+  let filteredQuestions = [];
+  
+  if (quiz_id) {
+    // Filter questions by quiz_id
+    // First, get packet IDs associated with this quiz
+    const quiz = mockData.quizzes.find(q => q.id === quiz_id);
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    
+    const packetIds = quiz.packet_ids || [];
+    filteredQuestions = mockData.questions.filter(q => packetIds.includes(q.packet_id));
+  } else if (packet_id) {
     // Filter questions by packet_id
-    const filteredQuestions = mockData.questions.filter(q => q.packet_id === packet_id);
-    res.json(filteredQuestions);
+    filteredQuestions = mockData.questions.filter(q => q.packet_id === packet_id);
   } else {
     // Return all questions
-    res.json(mockData.questions);
+    filteredQuestions = mockData.questions;
   }
+  
+  // Enrich questions with packet name information
+  const enrichedQuestions = filteredQuestions.map(question => {
+    if (question.packet_id) {
+      const packet = mockData.packets.find(p => p.id === question.packet_id);
+      if (packet) {
+        return {
+          ...question,
+          packet_name: packet.name
+        };
+      }
+    }
+    return question;
+  });
+  
+  res.json(enrichedQuestions);
 });
 
 app.post('/api/questions', (req, res) => {
@@ -991,16 +1019,16 @@ app.get('/api/quiz-packets/:quizId', (req, res) => {
   const packetIds = quiz.packet_ids || [];
   const packets = mockData.packets.filter(p => packetIds.includes(p.id));
   
-  // Add question count to each packet
-  const packetsWithQuestionCount = packets.map(packet => {
-    const questionCount = mockData.questions.filter(q => q.packet_id === packet.id).length;
+  // Add questions to each packet (similar to the /api/packets endpoint)
+  const packetsWithQuestions = packets.map(packet => {
+    const packetQuestions = mockData.questions.filter(q => q.packet_id === packet.id);
     return {
       ...packet,
-      questionCount
+      questions: packetQuestions
     };
   });
   
-  res.json(packetsWithQuestionCount);
+  res.json(packetsWithQuestions);
 });
 
 app.post('/api/quiz-packets/:quizId', (req, res) => {

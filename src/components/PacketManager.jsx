@@ -1293,7 +1293,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           secondary={
                             <Box>
                               <Typography variant="body2" color="text.secondary">
-                                Type: {q.question_type === 'mcq' ? 'MCQ' : 'True/False'}
+                                Type: {(q.question_type === 'mcq' || q.type === 'mcq') ? 'MCQ' : 'True/False'}
                               </Typography>
                               {q.options && Array.isArray(q.options) && q.options.length > 0 && (
                                 <Typography variant="caption" color="text.secondary">

@@ -15,3 +15,6 @@ ALTER TABLE quizzes ADD COLUMN report_footer TEXT;
 
 
 
+
+
+

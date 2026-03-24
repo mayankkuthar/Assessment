@@ -19,3 +19,6 @@ UPDATE quizzes SET report_footer = '' WHERE report_footer IS NULL;
 
 
 
+
+
+

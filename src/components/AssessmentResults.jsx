@@ -51,13 +51,13 @@ const AssessmentResults = () => {
     
     try {
       // First get the quiz packets to know what columns to show
-      const packetsResponse = await fetch(`http://localhost:3001/api/quiz-packets/${quizId}`);
+      const packetsResponse = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`);
       if (packetsResponse.ok) {
         const quizPacketsData = await packetsResponse.json();
         setQuizPackets(quizPacketsData);
       }
 
-      const response = await fetch(`http://localhost:3001/api/quiz-attempts`);
+      const response = await fetch(`http://65.1.6.81:3001/api/quiz-attempts`);
       if (!response.ok) {
         throw new Error('Failed to fetch quiz attempts');
       }
@@ -74,7 +74,7 @@ const AssessmentResults = () => {
             // Fetch actual user data for each attempt
             let userData = null;
             if (attempt.user_id) {
-              const userResponse = await fetch(`http://localhost:3001/api/users/${attempt.user_id}`);
+              const userResponse = await fetch(`http://65.1.6.81:3001/api/users/${attempt.user_id}`);
               if (userResponse.ok) {
                 userData = await userResponse.json();
               }
@@ -333,7 +333,7 @@ const AssessmentResults = () => {
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   <strong>Completion Rate:</strong> {
                     quizAttempts.length > 0
-                      ? `${Math.round((quizAttempts.filter(a => a.status === 'completed').length / quizAttempts.length) * 100)}%`
+                      ? `${quizAttempts.filter(a => a.status === 'completed').length}/${quizAttempts.length}`
                       : 'No attempts'
                   }
                 </Typography>
@@ -368,10 +368,11 @@ const AssessmentResults = () => {
             <Table>
               <TableHead>
                 <TableRow sx={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-                                     <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
-                   <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
-                   <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                   <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Organization</TableCell> {/* Added Organization column */}
+                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
                   {/* Dynamic packet columns */}
                   {quizPackets.map(packet => (
                     <TableCell key={packet.id} sx={{ fontWeight: 600, minWidth: 120 }}>
@@ -396,18 +397,26 @@ const AssessmentResults = () => {
                           </Typography>
                         </Box>
                       </TableCell>
-                                             <TableCell>
-                         <Box>
-                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                             {attempt.profile?.name || 'Unknown Profile'}
-                           </Typography>
-                           <Typography variant="caption" color="text.secondary">
-                             {attempt.profile?.role || 'No role'}
-                           </Typography>
-                         </Box>
-                       </TableCell>
-
-                       <TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {attempt.profile?.name || 'Unknown Profile'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {attempt.profile?.role || 'No role'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      {/* Added Organization cell */}
+                      <TableCell>
+                        <Chip 
+                          label={attempt.user?.organization || 'Not specified'} 
+                          size="small" 
+                          color={attempt.user?.organization === 'HappiMynd' ? 'primary' : 'secondary'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Chip
                           label={attempt.status || 'Unknown'}
                           color={attempt.status === 'completed' ? 'success' : 'warning'}
@@ -426,19 +435,19 @@ const AssessmentResults = () => {
                         return (
                           <TableCell key={packet.id}>
                             <Box sx={{ textAlign: 'center' }}>
-                                                                                            <Chip
-                                 label={`${packetScore.performanceLevel.image} ${packetScore.performanceLevel.label}`}
-                                 sx={{
-                                   backgroundColor: packetScore.performanceLevel.color,
-                                   color: 'white',
-                                   fontWeight: 'bold',
-                                   mb: 0.5
-                                 }}
-                                 size="small"
-                               />
-                               <Typography variant="caption" color="text.secondary" display="block">
-                                 {packetScore.questions} questions
-                               </Typography>
+                              <Chip
+                                label={`${packetScore.performanceLevel.image} ${packetScore.performanceLevel.label}`}
+                                sx={{
+                                  backgroundColor: packetScore.performanceLevel.color,
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  mb: 0.5
+                                }}
+                                size="small"
+                              />
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                {packetScore.questions} questions
+                              </Typography>
                             </Box>
                           </TableCell>
                         );

@@ -18,6 +18,7 @@ import {
 import {
   Share as ShareIcon
 } from '@mui/icons-material'
+import { copyToClipboard, showClipboardFeedback } from '../utils/clipboard'
 import ProfileManager from './ProfileManager'
 import PacketManager from './PacketManager'
 import QuizBuilder from './QuizBuilder'
@@ -181,9 +182,10 @@ const AppContent = ({
                             <Tooltip title="Copy shareable link">
                               <IconButton
                                 color="primary"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`${window.location.origin}/attempt/${quiz.id}`)
-                                  alert('Link copied!')
+                                onClick={async () => {
+                                  const link = `${window.location.origin}/attempt/${quiz.id}`
+                                  const success = await copyToClipboard(link)
+                                  showClipboardFeedback(success, 'Quiz link copied to clipboard!')
                                 }}
                                 edge="end"
                                 sx={{ ml: 1 }}

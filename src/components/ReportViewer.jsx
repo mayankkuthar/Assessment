@@ -20,6 +20,7 @@ import {
   useTheme,
   alpha
 } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PrintIcon from '@mui/icons-material/Print';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -34,8 +35,8 @@ const defaultTemplate = {
     enabled: true,
     backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     textColor: '#ffffff',
-    title: 'Assessment Performance Report',
-    subtitle: 'Comprehensive Analysis Report',
+    title: 'Emotional Intelligence Report',
+    subtitle: 'You can book a guidance session with our expert',
     showDate: true,
     dateFormat: 'MMM DD, YYYY'
   },
@@ -205,9 +206,9 @@ const ModernBarChart = ({ data, height = 200 }) => {
 };
 
 // Performance Ring Component
-const PerformanceRing = ({ level, size = 120 }) => {
+const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
   const circumference = 2 * Math.PI * 45;
-  const percentage = ((level?.rank || 1) / 4) * 100;
+  const percentage = totalMarks > 0 ? (marks / totalMarks) * 100 : 0;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   
   return (
@@ -237,11 +238,16 @@ const PerformanceRing = ({ level, size = 120 }) => {
         />
       </svg>
       <Box sx={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography sx={{ fontSize: '24px', mb: 0.5 }}>
-          {level?.icon || '📊'}
-        </Typography>
+        <Avatar src={level?.image && level.image.startsWith('data:image') ? level.image : '📊'} sx={{
+                        bgcolor: level?.color || '#6b7280',
+                        width: 30,
+                        height: 30,
+                        mr: 0,
+                        fontSize: '24px',
+                        boxShadow: `0 4px 20px ${alpha(level?.color || '#6b7280', 0.3)}`
+                      }}></Avatar>
         <Typography variant="caption" sx={{ fontWeight: 700, color: level?.color }}>
-          {Math.round(percentage)}%
+          {marks || 0}/{totalMarks || 0}
         </Typography>
       </Box>
     </Box>
@@ -249,10 +255,10 @@ const PerformanceRing = ({ level, size = 120 }) => {
 };
 
 // Radar (Spider) Chart Component
-const RadarChart = ({ scores, size = 320 }) => {
+const RadarChart = ({ scores, size = 660 }) => {
   const theme = useTheme();
   const center = size / 2;
-  const radius = Math.max(60, center - 40);
+  const radius = Math.max(120, center - 80);  // Increased base radius for larger chart
   const itemCount = scores.length;
   const angleStep = (Math.PI * 2) / Math.max(1, itemCount);
 
@@ -314,7 +320,7 @@ const RadarChart = ({ scores, size = 320 }) => {
 
   return (
     <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={660} height={360} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={center} cy={center} r={radius} fill={alpha(theme.palette.primary.main, 0.03)} stroke={alpha(theme.palette.text.primary, 0.15)} />
         {gridPolygons}
         {axes}
@@ -352,10 +358,10 @@ const ReportViewer = () => {
 
         // Load quiz, attempts, packets, and template in parallel
         const [quizRes, attemptsRes, packetsRes, templateRes] = await Promise.all([
-          fetch(`http://localhost:3001/api/quizzes/${quizId}`),
-          fetch('http://localhost:3001/api/quiz-attempts'),
-          fetch(`http://localhost:3001/api/quiz-packets/${quizId}`),
-          fetch(`http://localhost:3001/api/pdf-templates/${quizId}`).catch(() => null)
+          fetch(`http://65.1.6.81:3001/api/quizzes/${quizId}`),
+          fetch('http://65.1.6.81:3001/api/quiz-attempts'),
+          fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`),
+          fetch(`http://65.1.6.81:3001/api/pdf-templates/${quizId}`).catch(() => null)
         ]);
 
         if (!quizRes.ok || !attemptsRes.ok || !packetsRes.ok) {
@@ -379,7 +385,7 @@ const ReportViewer = () => {
         let userData = null;
         if (foundAttempt.user_id) {
           try {
-            const userRes = await fetch(`http://localhost:3001/api/users/${foundAttempt.user_id}`);
+            const userRes = await fetch(`http://65.1.6.81:3001/api/users/${foundAttempt.user_id}`);
             if (userRes.ok) {
               userData = await userRes.json();
             }
@@ -406,10 +412,52 @@ const ReportViewer = () => {
     const scores = [];
     if (!attempt || packets.length === 0) return scores;
     const marksMap = attempt.packet_marks || {};
+    
+    // Debug logging
+    console.log('ReportViewer - Attempt packet_marks:', marksMap);
+    console.log('ReportViewer - Packets:', packets);
+    
     for (const packet of packets) {
-      const key = packet.name;
-      const m = marksMap[key];
+      // Try multiple ways to find the packet marks
+      // First try packet name as key
+      let m = marksMap[packet.name];
+      console.log(`Checking packet: ${packet.name} (${packet.id}) - Name match:`, m);
+      
+      // If not found, try packet ID as key
+      if (!m && packet.id) {
+        m = marksMap[packet.id];
+        console.log(`Checking packet: ${packet.name} (${packet.id}) - ID match:`, m);
+      }
+      
+      // If still not found, try to find by matching any key that contains the packet name
+      if (!m) {
+        const keys = Object.keys(marksMap);
+        const matchingKey = keys.find(key => 
+          key.toLowerCase().includes(packet.name.toLowerCase()) ||
+          packet.name.toLowerCase().includes(key.toLowerCase())
+        );
+        if (matchingKey) {
+          m = marksMap[matchingKey];
+          console.log(`Checking packet: ${packet.name} (${packet.id}) - Fuzzy match (${matchingKey}):`, m);
+        }
+      }
+      
       const marks = m?.marks || 0;
+      let totalMarks = m?.total || 0;
+      
+      console.log(`Final marks for ${packet.name}: marks=${marks}, total=${totalMarks}`);
+      
+      // If totalMarks is 0, try to calculate it from packet data
+      if (totalMarks === 0 && packet.questions && Array.isArray(packet.questions)) {
+        totalMarks = packet.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
+      }
+      
+      // If still 0, try to get from packet's maxMarks or calculate from scoring scale
+      if (totalMarks === 0 && packet.scoringScale && Array.isArray(packet.scoringScale)) {
+        const maxRange = packet.scoringScale.reduce((max, range) => Math.max(max, range.max), 0);
+        totalMarks = maxRange;
+      }
+      
       const scale = (packet && packet.enableScoringScale && Array.isArray(packet.scoringScale) && packet.scoringScale.length > 0)
         ? packet.scoringScale
         : FALLBACK_SCALE;
@@ -421,9 +469,12 @@ const ReportViewer = () => {
         name: packet.name,
         level: { ...level, rank },
         rank,
-        scaleLength: scale.length
+        scaleLength: scale.length,
+        marks: marks,
+        totalMarks: totalMarks
       });
     }
+    console.log('ReportViewer - Final scores:', scores);
     return scores;
   }, [attempt, packets]);
 
@@ -459,10 +510,10 @@ const ReportViewer = () => {
         <Button 
           variant="outlined" 
           startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/')}
           size="large"
         >
-          Back
+          Back to Dashboard
         </Button>
       </Box>
     );
@@ -490,9 +541,9 @@ const ReportViewer = () => {
           border: '1px solid rgba(255, 255, 255, 0.2)'
         }}
       >
-        <Tooltip title="Back">
+        <Tooltip title="Back to Dashboard">
           <IconButton 
-            onClick={() => navigate(-1)} 
+            onClick={() => navigate('/')} 
             sx={{ 
               mr: 2,
               backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -502,12 +553,20 @@ const ReportViewer = () => {
             <ArrowBackIcon />
           </IconButton>
         </Tooltip>
-        <Typography variant="h4" sx={{ flex: 1, fontWeight: 800, color: 'text.primary' }}>
-          Performance Report
-        </Typography>
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img 
+            src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+            alt="HappiMynd Logo"
+            style={{
+              height: '80px',
+              width: 'auto',
+              objectFit: 'contain'
+            }}
+          />
+        </Box>
         <Button 
           variant="contained" 
-          startIcon={<PrintIcon />} 
+          startIcon={<DownloadIcon />} 
           onClick={() => window.print()}
           sx={{
             borderRadius: 2,
@@ -517,7 +576,7 @@ const ReportViewer = () => {
             boxShadow: '0 4px 20px rgba(102, 126, 234, 0.3)'
           }}
         >
-          Export Report
+          Download Report
         </Button>
       </Paper>
 
@@ -545,7 +604,7 @@ const ReportViewer = () => {
             <Typography variant="h3" sx={{ fontWeight: 900, mb: 1, textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
               {template.header.title || 'Assessment Report'}
             </Typography>
-            <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
+            <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: '1.4rem' }}>
               {template.header.subtitle || quiz?.name}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.8, mt: 2 }}>
@@ -634,19 +693,19 @@ const ReportViewer = () => {
                 lineHeight: 1.8,
                 fontSize: '1.1rem',
                 color: 'text.primary',
-                textAlign: 'left',
+                textAlign: 'Justify',
                 '& h1, & h2, & h3, & h4, & h5, & h6': {
                   fontWeight: 600,
                   marginBottom: '0.5rem',
                   marginTop: '1rem',
-                  textAlign: 'left'
+                  textAlign: 'Justify'
                 },
                 '& h1': { fontSize: '1.5rem' },
                 '& h2': { fontSize: '1.3rem' },
                 '& h3': { fontSize: '1.2rem' },
-                '& p': { marginBottom: '0.75rem', textAlign: 'left' },
-                '& ul, & ol': { marginBottom: '0.75rem', paddingLeft: '1.5rem', textAlign: 'left' },
-                '& li': { marginBottom: '0.25rem', textAlign: 'left' },
+                '& p': { marginBottom: '0.75rem', textAlign: 'Justify' },
+                '& ul, & ol': { marginBottom: '0.75rem', paddingLeft: '1.5rem', textAlign: 'Justify' },
+                '& li': { marginBottom: '0.25rem', textAlign: 'Justify' },
                 '& strong': { fontWeight: 600 },
                 '& em': { fontStyle: 'italic' },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
@@ -682,8 +741,8 @@ const ReportViewer = () => {
         </Card>
       )}
 
-      {/* Performance Overview */}
-      {packetScores.length > 0 && (
+      {/* Performance Overview - COMMENTED OUT */}
+      {/* {packetScores.length > 0 && (
         <Card sx={{ 
           mb: 4, 
           borderRadius: 4,
@@ -698,8 +757,8 @@ const ReportViewer = () => {
               Performance Overview
             </Typography>
             
-            <Grid container spacing={4}>
-              {/* Strengths */}
+            <Grid container spacing={4}> 
+              
               <Grid item xs={12} md={6}>
                 <Paper 
                   elevation={0} 
@@ -758,7 +817,7 @@ const ReportViewer = () => {
                 </Paper>
               </Grid>
 
-              {/* Focus Areas */}
+              
               <Grid item xs={12} md={6}>
                 <Paper 
                   elevation={0} 
@@ -820,7 +879,7 @@ const ReportViewer = () => {
             </Grid>
           </CardContent>
         </Card>
-      )}
+      )}*/}
 
       {/* Modern Charts Section */}
       {template?.charts?.enabled && packetScores.length > 0 && (
@@ -834,10 +893,10 @@ const ReportViewer = () => {
         }}>
           <CardContent sx={{ p: 4 }}>
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              📊 Performance Visualization
+              📊 EQ Score Card
             </Typography>
             
-            <Grid container spacing={4}>
+            <Grid container spacing={4} style={{ justifyContent: 'center' }}>
               {/* Overall Performance Rings - full width */}
               <Grid item xs={12}>
                 <Paper 
@@ -851,12 +910,12 @@ const ReportViewer = () => {
                   }}
                 >
                   <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                    Overall Performance
+                    Parameter Wise Scores
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' }, gap: 3 }}>
                     {packetScores.map(score => (
                       <Box key={score.id} sx={{ textAlign: 'center' }}>
-                        <PerformanceRing level={score.level} />
+                        <PerformanceRing level={score.level} marks={score.marks} totalMarks={score.totalMarks} />
                         <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
                           {score.name}
                         </Typography>
@@ -872,11 +931,36 @@ const ReportViewer = () => {
                         />
                       </Box>
                     ))}
+                    <Box sx={{ textAlign: 'center' }}>
+                      <PerformanceRing 
+                        level={{
+                          label: 'Total',
+                          color: '#1976d2' // or compute based on performance %
+                        }} 
+                        marks={packetScores.reduce((acc, p) => acc + p.marks, 0)} 
+                        totalMarks={packetScores.reduce((acc, p) => acc + p.totalMarks, 0)} 
+                      />
+                      
+                      <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
+                        Total Score
+                      </Typography>
+                      
+                      <Chip 
+                        size="small" 
+                        label="Overall" 
+                        sx={{ 
+                          mt: 0.5,
+                          backgroundColor: '#1976d2',
+                          color: 'white',
+                          fontWeight: 600
+                        }} 
+                      />
+                    </Box>
                   </Box>
                 </Paper>
               </Grid>
               {/* Radar Chart */}
-              <Grid item xs={12}>
+              {/*<Grid item xs={12}>
                 <Paper 
                   elevation={0} 
                   sx={{ 
@@ -889,9 +973,11 @@ const ReportViewer = () => {
                   <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
                     Packet Performance Radar
                   </Typography>
-                  <RadarChart scores={packetScores} size={360} />
+                  <Box sx={{ width: '100%', maxWidth: 660, mx: 'auto' }}>
+                    <RadarChart scores={packetScores} size={360} />
+                  </Box>
                 </Paper>
-              </Grid>
+              </Grid>*/}
             </Grid>
           </CardContent>
         </Card>
@@ -965,7 +1051,8 @@ const ReportViewer = () => {
                       whiteSpace: 'pre-wrap',
                       lineHeight: 1.6,
                       color: 'text.secondary',
-                      fontStyle: 'italic'
+                      fontStyle: 'italic',
+                      textAlign: 'justify'
                     }}>
                       {p.level?.largeText || 'No detailed description available for this level.'}
                     </Typography>
@@ -980,7 +1067,7 @@ const ReportViewer = () => {
       )}
 
       {/* Achievement Summary */}
-      <Card sx={{ 
+      {/*<Card sx={{ 
         mb: 4, 
         borderRadius: 4,
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1070,7 +1157,7 @@ const ReportViewer = () => {
                   📈
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {Math.round(packetScores.reduce((acc, p) => acc + (p.rank / p.scaleLength), 0) / packetScores.length * 100)}%
+                  {packetScores.reduce((acc, p) => acc + p.marks, 0)}/{packetScores.reduce((acc, p) => acc + p.totalMarks, 0)}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
                   Overall Performance
@@ -1079,7 +1166,7 @@ const ReportViewer = () => {
             </Grid>
           </Grid>
         </CardContent>
-      </Card>
+      </Card>*/}
 
       {/* Custom Footer Text */}
       {quiz?.report_footer && (
@@ -1089,7 +1176,7 @@ const ReportViewer = () => {
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
         }}>
           <CardContent sx={{ p: 4 }}>
             <Box 
@@ -1114,14 +1201,14 @@ const ReportViewer = () => {
                 '& em': { fontStyle: 'italic' },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
                 '& table': { 
-                  textAlign: 'left',
+                  textAlign: 'justify',
                   width: '100%',
                   borderCollapse: 'collapse',
                   margin: '1rem 0',
                   border: '1px solid #e0e0e0'
                 },
                 '& th, & td': { 
-                  textAlign: 'left',
+                  textAlign: 'justify',
                   padding: '12px 16px',
                   border: '1px solid #e0e0e0',
                   verticalAlign: 'top'
@@ -1132,7 +1219,7 @@ const ReportViewer = () => {
                   fontSize: '0.9rem'
                 },
                 '& td': {
-                  fontSize: '0.9rem'
+                  fontSize: '0.8rem'
                 },
                 '& tr:nth-of-type(even)': {
                   backgroundColor: '#fafafa'
