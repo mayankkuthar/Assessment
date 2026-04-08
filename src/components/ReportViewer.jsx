@@ -6,7 +6,6 @@ import {
   CardContent,
   Typography,
   Grid,
-  Chip,
   Button,
   CircularProgress,
   Alert,
@@ -29,6 +28,8 @@ import StarIcon from '@mui/icons-material/Star';
 import TargetIcon from '@mui/icons-material/GpsFixed';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const defaultTemplate = {
   header: {
@@ -71,39 +72,39 @@ const defaultTemplate = {
 };
 
 const FALLBACK_SCALE = [
-  { 
-    min: 0, max: 2, 
-    label: 'Needs Improvement', 
-    color: '#ef4444', 
+  {
+    min: 0, max: 2,
+    label: 'Needs Improvement',
+    color: '#ef4444',
     lightColor: '#fef2f2',
-    image: '📚', 
+    image: '📚',
     largeText: "Keep practicing! You're making progress. Focus on building fundamental skills.",
     icon: '📚'
   },
-  { 
-    min: 3, max: 5, 
-    label: 'Developing', 
-    color: '#f59e0b', 
+  {
+    min: 3, max: 5,
+    label: 'Developing',
+    color: '#f59e0b',
     lightColor: '#fffbeb',
-    image: '📊', 
+    image: '📊',
     largeText: "Good effort! You're on the right track. Continue building on your foundation.",
     icon: '📊'
   },
-  { 
-    min: 6, max: 8, 
-    label: 'Proficient', 
-    color: '#10b981', 
+  {
+    min: 6, max: 8,
+    label: 'Proficient',
+    color: '#10b981',
     lightColor: '#f0fdf4',
-    image: '🎯', 
+    image: '🎯',
     largeText: "Well done! You're showing strong understanding and solid skills.",
     icon: '🎯'
   },
-  { 
-    min: 9, max: 12, 
-    label: 'Excellent', 
-    color: '#8b5cf6', 
+  {
+    min: 9, max: 12,
+    label: 'Excellent',
+    color: '#8b5cf6',
     lightColor: '#faf5ff',
-    image: '🏆', 
+    image: '🏆',
     largeText: "Outstanding! You've mastered this material with exceptional performance!",
     icon: '🏆'
   }
@@ -114,9 +115,9 @@ function formatDate(dateString) {
     if (!dateString) return 'N/A';
     const d = new Date(dateString);
     if (Number.isNaN(d.getTime())) return 'N/A';
-    return d.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -136,7 +137,7 @@ function getPerformanceLevel(marks, packetName) {
         if (level) return level;
       }
     }
-  } catch {}
+  } catch { }
 
   return FALLBACK_SCALE.find(range => marks >= range.min && marks <= range.max) || FALLBACK_SCALE[0];
 }
@@ -145,7 +146,7 @@ function getPerformanceLevel(marks, packetName) {
 const ModernBarChart = ({ data, height = 200 }) => {
   const theme = useTheme();
   const maxRank = Math.max(...data.map(d => d.rank));
-  
+
   return (
     <Box sx={{ height, display: 'flex', alignItems: 'flex-end', gap: 2, px: 2 }}>
       {data.map((item, index) => {
@@ -186,11 +187,11 @@ const ModernBarChart = ({ data, height = 200 }) => {
                 </Typography>
               </Box>
             </Box>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mt: 1, 
-                textAlign: 'center', 
+            <Typography
+              variant="caption"
+              sx={{
+                mt: 1,
+                textAlign: 'center',
                 fontWeight: 600,
                 fontSize: '0.75rem',
                 color: 'text.secondary'
@@ -210,21 +211,21 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
   const circumference = 2 * Math.PI * 45;
   const percentage = totalMarks > 0 ? (marks / totalMarks) * 100 : 0;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
-  
+
   return (
     <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle
-          cx={size/2}
-          cy={size/2}
+          cx={size / 2}
+          cy={size / 2}
           r="45"
           stroke="#e5e7eb"
           strokeWidth="8"
           fill="transparent"
         />
         <circle
-          cx={size/2}
-          cy={size/2}
+          cx={size / 2}
+          cy={size / 2}
           r="45"
           stroke={level?.color || '#3b82f6'}
           strokeWidth="8"
@@ -239,13 +240,13 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
       </svg>
       <Box sx={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Avatar src={level?.image && level.image.startsWith('data:image') ? level.image : '📊'} sx={{
-                        bgcolor: level?.color || '#6b7280',
-                        width: 30,
-                        height: 30,
-                        mr: 0,
-                        fontSize: '24px',
-                        boxShadow: `0 4px 20px ${alpha(level?.color || '#6b7280', 0.3)}`
-                      }}></Avatar>
+          bgcolor: level?.color || '#6b7280',
+          width: 30,
+          height: 30,
+          mr: 0,
+          fontSize: '24px',
+          boxShadow: `0 4px 20px ${alpha(level?.color || '#6b7280', 0.3)}`
+        }}></Avatar>
         <Typography variant="caption" sx={{ fontWeight: 700, color: level?.color }}>
           {marks || 0}/{totalMarks || 0}
         </Typography>
@@ -389,7 +390,7 @@ const ReportViewer = () => {
             if (userRes.ok) {
               userData = await userRes.json();
             }
-          } catch {}
+          } catch { }
         }
 
         if (cancelled) return;
@@ -412,27 +413,27 @@ const ReportViewer = () => {
     const scores = [];
     if (!attempt || packets.length === 0) return scores;
     const marksMap = attempt.packet_marks || {};
-    
+
     // Debug logging
     console.log('ReportViewer - Attempt packet_marks:', marksMap);
     console.log('ReportViewer - Packets:', packets);
-    
+
     for (const packet of packets) {
       // Try multiple ways to find the packet marks
       // First try packet name as key
       let m = marksMap[packet.name];
       console.log(`Checking packet: ${packet.name} (${packet.id}) - Name match:`, m);
-      
+
       // If not found, try packet ID as key
       if (!m && packet.id) {
         m = marksMap[packet.id];
         console.log(`Checking packet: ${packet.name} (${packet.id}) - ID match:`, m);
       }
-      
+
       // If still not found, try to find by matching any key that contains the packet name
       if (!m) {
         const keys = Object.keys(marksMap);
-        const matchingKey = keys.find(key => 
+        const matchingKey = keys.find(key =>
           key.toLowerCase().includes(packet.name.toLowerCase()) ||
           packet.name.toLowerCase().includes(key.toLowerCase())
         );
@@ -441,23 +442,23 @@ const ReportViewer = () => {
           console.log(`Checking packet: ${packet.name} (${packet.id}) - Fuzzy match (${matchingKey}):`, m);
         }
       }
-      
+
       const marks = m?.marks || 0;
       let totalMarks = m?.total || 0;
-      
+
       console.log(`Final marks for ${packet.name}: marks=${marks}, total=${totalMarks}`);
-      
+
       // If totalMarks is 0, try to calculate it from packet data
       if (totalMarks === 0 && packet.questions && Array.isArray(packet.questions)) {
         totalMarks = packet.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
       }
-      
+
       // If still 0, try to get from packet's maxMarks or calculate from scoring scale
       if (totalMarks === 0 && packet.scoringScale && Array.isArray(packet.scoringScale)) {
         const maxRange = packet.scoringScale.reduce((max, range) => Math.max(max, range.max), 0);
         totalMarks = maxRange;
       }
-      
+
       const scale = (packet && packet.enableScoringScale && Array.isArray(packet.scoringScale) && packet.scoringScale.length > 0)
         ? packet.scoringScale
         : FALLBACK_SCALE;
@@ -478,13 +479,105 @@ const ReportViewer = () => {
     return scores;
   }, [attempt, packets]);
 
+  const handleDownloadPDF = async () => {
+    try {
+      // ── 2-second delay to let everything render properly ──
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Target the report container
+      const element = document.getElementById('report-container');
+
+      if (!element) {
+        console.error('Report container element not found');
+        alert('Error: Could not find report content to download');
+        return;
+      }
+
+      // Pre-process: Replace external images with local versions before capturing
+      const allImages = element.querySelectorAll('img');
+      allImages.forEach(img => {
+        if (img.src && img.src.includes('happimynd.com')) {
+          console.log('Pre-processing external image:', img.src);
+          
+          if (img.src.includes('happimynd_logo.png')) {
+            img.src = '/happimynd_logo.png';
+          } else if (img.src.includes('play_store.png')) {
+            img.src = '/play_store.png';
+          } else if (img.src.includes('app_store.png')) {
+            img.src = '/app_store.png';
+          }
+        }
+      });
+
+      // Small delay to let images reload
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: true,  // Enable logging to see CORS issues
+        backgroundColor: '#ffffff',
+        allowTaint: false,  // Changed to false for better security
+        foreignObjectRendering: false,
+        imageTimeout: 15000, // 15 second timeout for images
+        onclone: (clonedDoc) => {
+          // Handle external images - replace with local versions
+          clonedDoc.querySelectorAll('img').forEach(img => {
+            if (img.src && img.src.includes('happimynd.com')) {
+              console.log('Found external image:', img.src);
+              
+              // Replace external happimynd images with local versions
+              if (img.src.includes('happimynd_logo.png')) {
+                img.src = '/happimynd_logo.png';
+                console.log('Replaced logo with local version');
+              } else if (img.src.includes('play_store.png')) {
+                img.src = '/play_store.png';
+                console.log('Replaced play_store with local version');
+              } else if (img.src.includes('app_store.png')) {
+                img.src = '/app_store.png';
+                console.log('Replaced app_store with local version');
+              } else {
+                // For other external images, try to add crossorigin
+                img.setAttribute('crossorigin', 'anonymous');
+                console.log('Added crossorigin to:', img.src);
+              }
+            }
+          });
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [canvas.width / 2, canvas.height / 2], // match element dimensions
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
+      pdf.save('report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      
+      // Check if it's a CORS-related error
+      const isCorsError = error.message?.includes('CORS') || 
+                         error.message?.includes('tainted') ||
+                         error.message?.includes('SecurityError');
+      
+      if (isCorsError) {
+        alert('Error generating PDF: External images could not be loaded due to security restrictions.\n\nSolutions:\n1. Download the images locally to the public folder\n2. Or try again - sometimes it works on retry\n\nThe PDF may still be generated but without external images.');
+      } else {
+        alert('Error generating PDF: ' + error.message);
+      }
+    }
+  };
+
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
+      <Box sx={{
+        display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center', 
-        justifyContent: 'center', 
+        alignItems: 'center',
+        justifyContent: 'center',
         height: '60vh',
         gap: 2
       }}>
@@ -497,9 +590,9 @@ const ReportViewer = () => {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', p: 3 }}>
-        <Alert 
-          severity="error" 
-          sx={{ 
+        <Alert
+          severity="error"
+          sx={{
             mb: 2,
             borderRadius: 2,
             '& .MuiAlert-message': { fontSize: '1.1rem' }
@@ -507,9 +600,9 @@ const ReportViewer = () => {
         >
           {error}
         </Alert>
-        <Button 
-          variant="outlined" 
-          startIcon={<ArrowBackIcon />} 
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/')}
           size="large"
         >
@@ -520,19 +613,19 @@ const ReportViewer = () => {
   }
 
   return (
-    <Box sx={{ 
-      maxWidth: 1200, 
-      mx: 'auto', 
+    <Box id="report-container" sx={{
+      maxWidth: 1200,
+      mx: 'auto',
       p: 3,
       background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       minHeight: '100vh'
     }}>
       {/* Header */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
           mb: 3,
           p: 2,
           borderRadius: 3,
@@ -542,9 +635,9 @@ const ReportViewer = () => {
         }}
       >
         <Tooltip title="Back to Dashboard">
-          <IconButton 
-            onClick={() => navigate('/')} 
-            sx={{ 
+          <IconButton
+            onClick={() => navigate('/')}
+            sx={{
               mr: 2,
               backgroundColor: alpha(theme.palette.primary.main, 0.1),
               '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.2) }
@@ -554,8 +647,8 @@ const ReportViewer = () => {
           </IconButton>
         </Tooltip>
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <img 
-            src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+          <img
+            src="/happimynd_logo.png"
             alt="HappiMynd Logo"
             style={{
               height: '80px',
@@ -564,10 +657,10 @@ const ReportViewer = () => {
             }}
           />
         </Box>
-        <Button 
-          variant="contained" 
-          startIcon={<DownloadIcon />} 
-          onClick={() => window.print()}
+        <Button
+          variant="contained"
+          startIcon={<DownloadIcon />}
+          onClick={handleDownloadPDF}
           sx={{
             borderRadius: 2,
             px: 3,
@@ -582,8 +675,8 @@ const ReportViewer = () => {
 
       {/* Main Header Card */}
       {template?.header?.enabled && (
-        <Card sx={{ 
-          mb: 4, 
+        <Card sx={{
+          mb: 4,
           background: template.header.backgroundColor,
           color: template.header.textColor,
           borderRadius: 4,
@@ -616,8 +709,8 @@ const ReportViewer = () => {
 
       {/* User Info Card */}
       {template?.userInfo?.enabled && (
-        <Card sx={{ 
-          mb: 4, 
+        <Card sx={{
+          mb: 4,
           borderRadius: 4,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
@@ -679,8 +772,8 @@ const ReportViewer = () => {
 
       {/* Custom Header Text */}
       {quiz?.report_header && (
-        <Card sx={{ 
-          mb: 4, 
+        <Card sx={{
+          mb: 4,
           borderRadius: 4,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
@@ -688,8 +781,8 @@ const ReportViewer = () => {
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
         }}>
           <CardContent sx={{ p: 4 }}>
-            <Box 
-              sx={{ 
+            <Box
+              sx={{
                 lineHeight: 1.8,
                 fontSize: '1.1rem',
                 color: 'text.primary',
@@ -709,14 +802,14 @@ const ReportViewer = () => {
                 '& strong': { fontWeight: 600 },
                 '& em': { fontStyle: 'italic' },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
-                '& table': { 
+                '& table': {
                   textAlign: 'left',
                   width: '100%',
                   borderCollapse: 'collapse',
                   margin: '1rem 0',
                   border: '1px solid #e0e0e0'
                 },
-                '& th, & td': { 
+                '& th, & td': {
                   textAlign: 'left',
                   padding: '12px 16px',
                   border: '1px solid #e0e0e0',
@@ -791,15 +884,22 @@ const ReportViewer = () => {
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                               {s.name}
                             </Typography>
-                            <Chip 
-                              size="small" 
-                              label={s.level?.label || 'Level'} 
+                            <Box 
                               sx={{ 
+                                display: 'inline-block',
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: 16,
                                 backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                fontWeight: 600
+                                color: '#ffffff',
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                lineHeight: 1.5,
+                                textAlign: 'center'
                               }} 
-                            />
+                            >
+                              {s.level?.label || 'Level'}
+                            </Box>
                           </Box>
                         </Box>
                       ))}
@@ -851,15 +951,22 @@ const ReportViewer = () => {
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                               {s.name}
                             </Typography>
-                            <Chip 
-                              size="small" 
-                              label={s.level?.label || 'Level'} 
+                            <Box 
                               sx={{ 
+                                display: 'inline-block',
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: 16,
                                 backgroundColor: 'rgba(139, 69, 19, 0.2)',
                                 color: '#8b4513',
-                                fontWeight: 600
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                lineHeight: 1.5,
+                                textAlign: 'center'
                               }} 
-                            />
+                            >
+                              {s.level?.label || 'Level'}
+                            </Box>
                           </Box>
                         </Box>
                       ))}
@@ -881,10 +988,10 @@ const ReportViewer = () => {
         </Card>
       )}*/}
 
-      {/* Modern Charts Section */}
-      {template?.charts?.enabled && packetScores.length > 0 && (
-        <Card sx={{ 
-          mb: 4, 
+      {/* Modern Charts Section - EQ Score Card (Hide for Personality Quizzes) */}
+      {template?.charts?.enabled && packetScores.length > 0 && !quiz?.name?.toLowerCase().includes('personality') && (
+        <Card sx={{
+          mb: 4,
           borderRadius: 4,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
@@ -895,14 +1002,14 @@ const ReportViewer = () => {
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
               📊 EQ Score Card
             </Typography>
-            
+
             <Grid container spacing={4} style={{ justifyContent: 'center' }}>
               {/* Overall Performance Rings - full width */}
               <Grid item xs={12}>
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 3, 
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
                     borderRadius: 3,
                     border: '1px solid #e5e7eb',
                     background: '#ffffff',
@@ -919,42 +1026,56 @@ const ReportViewer = () => {
                         <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
                           {score.name}
                         </Typography>
-                        <Chip 
-                          size="small" 
-                          label={score.level?.label} 
-                          sx={{ 
+                        <Box
+                          sx={{
                             mt: 0.5,
+                            display: 'inline-block',
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: 16,
                             backgroundColor: score.level?.color,
-                            color: 'white',
-                            fontWeight: 600
-                          }} 
-                        />
+                            color: '#ffffff',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            lineHeight: 1.5,
+                            textAlign: 'center'
+                          }}
+                        >
+                          {score.level?.label}
+                        </Box>
                       </Box>
                     ))}
                     <Box sx={{ textAlign: 'center' }}>
-                      <PerformanceRing 
+                      <PerformanceRing
                         level={{
                           label: 'Total',
                           color: '#1976d2' // or compute based on performance %
-                        }} 
-                        marks={packetScores.reduce((acc, p) => acc + p.marks, 0)} 
-                        totalMarks={packetScores.reduce((acc, p) => acc + p.totalMarks, 0)} 
+                        }}
+                        marks={packetScores.reduce((acc, p) => acc + p.marks, 0)}
+                        totalMarks={packetScores.reduce((acc, p) => acc + p.totalMarks, 0)}
                       />
-                      
+
                       <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
                         Total Score
                       </Typography>
-                      
-                      <Chip 
-                        size="small" 
-                        label="Overall" 
-                        sx={{ 
+
+                      <Box
+                        sx={{
                           mt: 0.5,
+                          display: 'inline-block',
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: 16,
                           backgroundColor: '#1976d2',
-                          color: 'white',
-                          fontWeight: 600
-                        }} 
-                      />
+                          color: '#ffffff',
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.5,
+                          textAlign: 'center'
+                        }}
+                      >
+                        Overall
+                      </Box>
                     </Box>
                   </Box>
                 </Paper>
@@ -983,10 +1104,161 @@ const ReportViewer = () => {
         </Card>
       )}
 
-      {/* Detailed Section Analysis */}
-      {template?.sectionAnalysis?.enabled && (
-        <Card sx={{ 
-          mb: 4, 
+      {/* Personality Analysis - For Personality Quizzes */}
+      {template?.sectionAnalysis?.enabled && packetScores.length > 0 && (() => {
+        // Check if this appears to be a personality quiz by looking for known personality types
+        const personalityTypes = [
+          'Paranoid', 'Dissocial', 'Impulsive', 'Borderline',
+          'Histrionic', 'Anankastic', 'Anxious', 'Dependent'
+        ];
+
+        const isPersonalityQuiz = packetScores.some(p =>
+          personalityTypes.some(type =>
+            p.name.toLowerCase().includes(type.toLowerCase())
+          )
+        );
+
+        if (!isPersonalityQuiz) return null;
+
+        // Sort packets by score (marks) descending and get top 2
+        const sortedPackets = [...packetScores].sort((a, b) => b.marks - a.marks);
+        const primaryPersonality = sortedPackets.length > 0 ? sortedPackets[0] : null;
+        const secondaryPersonality = sortedPackets.length > 1 ? sortedPackets[1] : null;
+
+        // Personality descriptions mapping
+        const personalityDescriptions = {
+          "Paranoid": "You seem to be a considerate and thoughtful person who tends to give a lot of love and attention to people around. You might be expecting the same treatment in return. However, it might not be possible for everyone to be available for you all the time. Sometimes, it might hurt and you tend to start keeping a distance from such people. You have a great eye for details and tasks which need vigilance can be assigned to you confidently. In fact, you can take up some serious and mundane tasks with a lot of ease and relieve others from the pain of micromanagement when you are around. These traits in you can make some people perceive that it is hard to communicate with you. However, you might be protecting some key tasks or saving yourself from getting hurt.",
+
+          "Dissocial": "You seem to have a higher purpose in life and are open to taking risks to achieve it. You are someone who can step out of your comfort zone for any cause and lead by example. Your hard work and drive are inspiring for others and can help even the most difficult projects succeed. You can take decisions and stand by them. However, this open and revolutionary behavior may not always conform to societal norms and may create challenges. Your close ones might feel that you are ignoring their emotional needs, so be mindful of that.",
+
+          "Impulsive": "You have the ability to take steps in life that others cannot, but be careful not to be rash. People may see you as courageous and a path breaker, but they may also take advantage of this trait. Acting swiftly helps you seize opportunities, but you may also be sensitive to criticism and struggle with stressful situations. This can lead to vulnerability and, at times, troubling thoughts or emotional instability. You may face challenges in relationships due to intense emotions. Practicing calmness and mindfulness is advised.",
+
+          "Borderline": "You can be creative and intense in your approach. You may be selective about your needs and wants, which can sometimes lead to confusion and delayed decision-making. It seems like you are exploring your identity, which may create uncertainty. Your relationships may be deep and intense, but partners may not always meet your emotional expectations. This can lead to feelings of emptiness or disconnection. Repetitive behavioral patterns may create adjustment issues. Being more informed and confident in your choices can help.",
+
+          "Histrionic": "You might be an emotional and expressive person, which may make others perceive you as attention-seeking. You are confident and capable of creating a vision for others. Your ability to focus on the bigger picture helps you lead and align people toward a shared purpose. Your communication skills and presence can give you an advantage in group settings.",
+
+          "Anankastic": "You prefer following routines and may not appreciate frequent changes. Meeting timelines suits you well and makes you competitive and hardworking. You appear to be ambitious and constantly strive to improve yourself and outperform others.",
+
+          "Anxious": "You have a friendly and welcoming personality. You tend to seek advice from friends and family before making important decisions. Your considerate nature makes you likable and popular. You may prefer to follow guidance and avoid questioning authority, often going with the flow.",
+
+          "Dependent": "You feel responsible and have hidden ambitions. You work hard in areas you are passionate about and pay close attention to detail. Perfectionism is one of your strengths, but it may also cause you to spend excessive time refining even small tasks. You may sometimes feel you are not meeting your own expectations and doubt your work quality. This need for perfection can impact your relationships, as everything else may take a back seat."
+        };
+
+        const getPersonalityDescription = (packetName) => {
+          if (!packetName) return null;
+
+          // Try exact match first
+          if (personalityDescriptions[packetName]) {
+            return personalityDescriptions[packetName];
+          }
+
+          // Try case-insensitive match
+          const lowerPacketName = packetName.toLowerCase();
+          const matchedKey = Object.keys(personalityDescriptions).find(key =>
+            key.toLowerCase() === lowerPacketName
+          );
+
+          if (matchedKey) {
+            return personalityDescriptions[matchedKey];
+          }
+
+          // Try partial match
+          const partialMatch = Object.keys(personalityDescriptions).find(key =>
+            lowerPacketName.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerPacketName)
+          );
+
+          if (partialMatch) {
+            return personalityDescriptions[partialMatch];
+          }
+
+          return null;
+        };
+
+        const primaryDescription = primaryPersonality ? getPersonalityDescription(primaryPersonality.name) : null;
+        const secondaryDescription = secondaryPersonality ? getPersonalityDescription(secondaryPersonality.name) : null;
+
+        return (
+          <Card sx={{
+            mb: 4,
+            borderRadius: 4,
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+          }}>
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                🎭 Personality Analysis
+              </Typography>
+
+              {/* Primary Personality */}
+              {primaryPersonality && (
+                <Box sx={{ mb: 4 }}>
+
+                  {primaryDescription && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        borderRadius: 2,
+                        backgroundColor: '#fafafa',
+                        border: '1px solid #e5e7eb'
+                      }}
+                    >
+                      <Typography variant="body2" sx={{
+                        lineHeight: 1.8,
+                        color: 'text.primary',
+                        textAlign: 'justify',
+                        fontSize: '0.95rem'
+                      }}>
+                        {primaryDescription}
+                      </Typography>
+                    </Paper>
+                  )}
+                </Box>
+              )}
+
+              {/* Secondary Personality */}
+              {secondaryPersonality && (
+                <Box>
+
+                  {secondaryDescription && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        borderRadius: 2,
+                        backgroundColor: '#fafafa',
+                        border: '1px solid #e5e7eb'
+                      }}
+                    >
+                      <Typography variant="body2" sx={{
+                        lineHeight: 1.8,
+                        color: 'text.primary',
+                        textAlign: 'justify',
+                        fontSize: '0.95rem'
+                      }}>
+                        {secondaryDescription}
+                      </Typography>
+                    </Paper>
+                  )}
+                </Box>
+              )}
+
+              {!primaryPersonality && !secondaryPersonality && (
+                <Alert severity="info">
+                  Personality analysis requires at least one completed section.
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Detailed Section Analysis (Hide for Personality Quizzes) */}
+      {template?.sectionAnalysis?.enabled && !quiz?.name?.toLowerCase().includes('personality') && (
+        <Card sx={{
+          mb: 4,
           borderRadius: 4,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
@@ -997,7 +1269,7 @@ const ReportViewer = () => {
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
               🔍 Detailed Analysis
             </Typography>
-            
+
             <Grid container spacing={3}>
               {packetScores.map(p => (
                 <Grid item xs={12} md={6} key={p.id}>
@@ -1030,15 +1302,22 @@ const ReportViewer = () => {
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                           {p.name}
                         </Typography>
-                        <Chip
-                          label={p.level?.label || 'Level'}
+                        <Box
                           sx={{
+                            display: 'inline-block',
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: 16,
                             backgroundColor: p.level?.color || '#6b7280',
-                            color: 'white',
+                            color: '#ffffff',
                             fontWeight: 700,
-                            fontSize: '0.75rem'
+                            fontSize: '0.75rem',
+                            lineHeight: 1.5,
+                            textAlign: 'center'
                           }}
-                        />
+                        >
+                          {p.level?.label || 'Level'}
+                        </Box>
                       </Box>
                     </Box>
 
@@ -1047,7 +1326,7 @@ const ReportViewer = () => {
                     {/* Removed progress bar per request */}
 
                     {/* Insights Text */}
-                    <Typography variant="body2" sx={{ 
+                    <Typography variant="body2" sx={{
                       whiteSpace: 'pre-wrap',
                       lineHeight: 1.6,
                       color: 'text.secondary',
@@ -1170,8 +1449,8 @@ const ReportViewer = () => {
 
       {/* Custom Footer Text */}
       {quiz?.report_footer && (
-        <Card sx={{ 
-          mb: 4, 
+        <Card sx={{
+          mb: 4,
           borderRadius: 4,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(10px)',
@@ -1179,8 +1458,8 @@ const ReportViewer = () => {
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
         }}>
           <CardContent sx={{ p: 4 }}>
-            <Box 
-              sx={{ 
+            <Box
+              sx={{
                 lineHeight: 1.8,
                 fontSize: '1.1rem',
                 color: 'text.primary',
@@ -1200,14 +1479,14 @@ const ReportViewer = () => {
                 '& strong': { fontWeight: 600 },
                 '& em': { fontStyle: 'italic' },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
-                '& table': { 
+                '& table': {
                   textAlign: 'justify',
                   width: '100%',
                   borderCollapse: 'collapse',
                   margin: '1rem 0',
                   border: '1px solid #e0e0e0'
                 },
-                '& th, & td': { 
+                '& th, & td': {
                   textAlign: 'justify',
                   padding: '12px 16px',
                   border: '1px solid #e0e0e0',
@@ -1233,10 +1512,10 @@ const ReportViewer = () => {
       )}
 
       {/* Footer */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          p: 3, 
+        sx={{
+          p: 3,
           textAlign: 'center',
           borderRadius: 3,
           background: 'rgba(255, 255, 255, 0.9)',
@@ -1245,7 +1524,7 @@ const ReportViewer = () => {
         }}
       >
         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-          Report generated on {formatDate(new Date().toISOString())} • 
+          Report generated on {formatDate(new Date().toISOString())} •
           Keep up the excellent work and continue learning! 🚀
         </Typography>
       </Paper>

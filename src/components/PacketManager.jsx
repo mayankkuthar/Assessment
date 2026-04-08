@@ -232,12 +232,37 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
         
         console.log('Min marks:', minMarks, 'Max marks:', maxMarks, 'Range:', range);
         
-        const newScale = [
-          { min: minMarks, max: Math.floor(minMarks + range * 0.25), label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
-          { min: Math.floor(minMarks + range * 0.25) + 1, max: Math.floor(minMarks + range * 0.5), label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
-          { min: Math.floor(minMarks + range * 0.5) + 1, max: Math.floor(minMarks + range * 0.75), label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
-          { min: Math.floor(minMarks + range * 0.75) + 1, max: maxMarks, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
-        ];
+        // Check if packet uses decimal marks
+        const isDecimal = minMarks % 1 !== 0 || maxMarks % 1 !== 0;
+        
+        // Default to 4 ranges, but can be modified by user
+        const numRanges = 4;
+        const step = range / numRanges;
+        
+        const newScale = Array.from({ length: numRanges }, (_, i) => {
+          const isLast = i === numRanges - 1;
+          // Use parseFloat and toFixed for decimal precision
+          const calculatedMin = i === 0 ? minMarks : parseFloat((minMarks + step * i + 0.1).toFixed(2));
+          const calculatedMax = isLast ? maxMarks : parseFloat((minMarks + step * (i + 1)).toFixed(2));
+          
+          return {
+            min: calculatedMin,
+            max: calculatedMax,
+            label: i === 0 ? "Needs Improvement" : 
+                   i === 1 ? "Average" : 
+                   i === 2 ? "Good" : "Excellent",
+            color: i === 0 ? "#ff6b6b" : 
+                   i === 1 ? "#ffd93d" : 
+                   i === 2 ? "#6bcf7f" : "#4ecdc4",
+            image: i === 0 ? "📚" : 
+                   i === 1 ? "📊" : 
+                   i === 2 ? "🎯" : "🏆",
+            largeText: i === 0 ? "Keep practicing! You're making progress." :
+                       i === 1 ? "Good effort! You're on the right track." :
+                       i === 2 ? "Well done! You're showing strong understanding." :
+                       "Outstanding! You've mastered this material!"
+          };
+        });
         
         console.log('🎯 Auto-generated scale ranges:', newScale.map(s => `${s.min}-${s.max}`));
         console.log('New scale:', newScale);
@@ -252,12 +277,68 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
     setScoringScaleDialog(false);
   };
 
+  // Add a new range to the scoring scale
+  const addScoringRange = () => {
+    const lastRange = scoringScale[scoringScale.length - 1];
+    // Support decimal increments - use 0.5 or 1 as step based on packet marks
+    const isDecimal = currentPacketMarks?.maxMarks % 1 !== 0 || currentPacketMarks?.minMarks % 1 !== 0;
+    const step = isDecimal ? 0.5 : 2;
+    
+    const newMin = lastRange ? parseFloat((lastRange.max + 0.1).toFixed(2)) : 0;
+    const newMax = lastRange ? Math.min(parseFloat((newMin + step).toFixed(2)), currentPacketMarks?.maxMarks || newMin + step) : (isDecimal ? 0.5 : 2);
+    
+    const newRange = {
+      min: newMin,
+      max: newMax,
+      label: `Level ${scoringScale.length + 1}`,
+      color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+      image: "⭐",
+      largeText: `Great job at level ${scoringScale.length + 1}!`
+    };
+    
+    setScoringScale([...scoringScale, newRange]);
+  };
+
+  // Remove a range from the scoring scale
+  const removeScoringRange = (indexToRemove) => {
+    if (scoringScale.length <= 2) {
+      alert('You must have at least 2 performance levels.');
+      return;
+    }
+    
+    const newScale = scoringScale.filter((_, index) => index !== indexToRemove);
+    
+    // Rebalance the ranges after removal - support decimals
+    const rebalancedScale = newScale.map((range, index) => {
+      if (index === 0) {
+        return { ...range, min: currentPacketMarks?.minMarks || 0 };
+      } else {
+        // Use small increment for decimals to avoid gaps
+        const prevMax = newScale[index - 1].max;
+        const newMin = parseFloat((prevMax + 0.1).toFixed(2));
+        return { ...range, min: newMin };
+      }
+    });
+    
+    // Ensure the last range ends at maxMarks
+    if (rebalancedScale.length > 0) {
+      const lastIndex = rebalancedScale.length - 1;
+      rebalancedScale[lastIndex] = {
+        ...rebalancedScale[lastIndex],
+        max: currentPacketMarks?.maxMarks || rebalancedScale[lastIndex].max
+      };
+    }
+    
+    setScoringScale(rebalancedScale);
+  };
+
   const updateScoringScaleRange = (index, field, value) => {
     console.log(`🔄 Updating scoring scale range ${index}, field: ${field}, value:`, value);
     console.log('📊 Current scoring scale before update:', scoringScale);
     
     const newScale = [...scoringScale];
-    newScale[index][field] = field === 'min' || field === 'max' ? parseInt(value) || 0 : value;
+    // Use parseFloat instead of parseInt to support decimal ranges
+    newScale[index][field] = field === 'min' || field === 'max' ? parseFloat(value) || 0 : value;
     
     console.log('📊 New scoring scale after update:', newScale);
     setScoringScale(newScale);
@@ -1379,9 +1460,47 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                   Debug: Scoring scale has {scoringScale.length} items
                 </Typography>
                 
+                {/* Add Range Button */}
+                <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<span style={{ fontSize: '1.2rem' }}>➕</span>}
+                    onClick={addScoringRange}
+                    sx={{ 
+                      fontWeight: 600,
+                      background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
+                      color: '#000',
+                      '&:hover': {
+                        background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)'
+                      }
+                    }}
+                  >
+                    Add Performance Level
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                    💡 Click to add more ranges (6, 8, or any number you need)
+                  </Typography>
+                </Box>
+                
                 {scoringScale.map((range, index) => (
-                  <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid rgba(0,0,0,0.1)', borderRadius: 1 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid rgba(0,0,0,0.1)', borderRadius: 1, position: 'relative' }}>
+                    {/* Remove Button */}
+                    <IconButton
+                      size="small"
+                      onClick={() => removeScoringRange(index)}
+                      disabled={scoringScale.length <= 2}
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        color: scoringScale.length <= 2 ? 'text.disabled' : '#ff4444'
+                      }}
+                    >
+                      <RemoveIcon />
+                    </IconButton>
+                    
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, pr: 4 }}>
                       Level {index + 1}: {range.label}
                     </Typography>
                     
@@ -1394,6 +1513,11 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           onChange={(e) => updateScoringScaleRange(index, 'min', e.target.value)}
                           size="small"
                           fullWidth
+                          inputProps={{ 
+                            step: "0.1",
+                            placeholder: "e.g., 0.5 or 3.75"
+                          }}
+                          helperText="Supports decimals (e.g., 0.5, 3.75)"
                         />
                       </Grid>
                       <Grid item xs={12} sm={2}>
@@ -1404,6 +1528,11 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                           onChange={(e) => updateScoringScaleRange(index, 'max', e.target.value)}
                           size="small"
                           fullWidth
+                          inputProps={{ 
+                            step: "0.1",
+                            placeholder: "e.g., 5.5 or 10.25"
+                          }}
+                          helperText="Supports decimals (e.g., 5.5, 10.25)"
                         />
                       </Grid>
                       <Grid item xs={12} sm={2}>
@@ -1539,7 +1668,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                 ))}
                 
                 <Alert severity="info" sx={{ mt: 2 }}>
-                  💡 Make sure each range connects properly (e.g., if Level 1 ends at 5, Level 2 should start at 6)
+                  💡 <strong>Flexible Scoring Scale:</strong> You can add as many performance levels as needed (6, 8, or more). 
+                  Make sure ranges connect properly without gaps. The system will automatically adjust min/max values when you add or remove levels.
+                  <br />
+                  ✨ <strong>Decimal Support:</strong> Score ranges now support decimal values (e.g., 0.5-3.75, 3.76-7.5) for precise grading!
                 </Alert>
               </Box>
             )}
