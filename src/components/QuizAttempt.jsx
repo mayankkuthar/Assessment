@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Box,
   Card,
@@ -816,6 +818,23 @@ const QuizAttempt = () => {
                       }}
                     />
                   </Box>
+                  {quiz?.start_instructions ? (
+                    <Box sx={{ 
+                      width: '100%',
+                      maxWidth: '850px',
+                      textAlign: 'left',
+                      mb: 1.5,
+                      px: { xs: 0.5, md: 1 },
+                      '& p': { fontSize: { xs: '0.7rem', md: '0.8rem' }, lineHeight: 1.5, mb: 0.5 },
+                      '& ul, & ol': { pl: 2.5, mb: 0.5 },
+                      '& li': { fontSize: { xs: '0.7rem', md: '0.8rem' }, lineHeight: 1.5, mb: 0.3 },
+                      '& h1, & h2, & h3, & h4, & h5, & h6': { color: 'primary.main', fontWeight: 700, mb: 0.5, mt: 1 },
+                      '& strong': { fontWeight: 700 }
+                    }}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
+                    </Box>
+                  ) : (
+                    <>
                   <Typography variant="h5" sx={{ 
                     fontWeight: 700,
                     mb: 0.8,
@@ -892,6 +911,8 @@ const QuizAttempt = () => {
                       • Your responses will be kept 100% confidential
                     </Typography>
                   </Box>
+                    </>
+                  )}
 
                   <Button
                     variant="contained"

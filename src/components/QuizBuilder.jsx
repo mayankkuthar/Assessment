@@ -25,6 +25,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
   const [quizName, setQuizName] = useState('');
   const [reportHeader, setReportHeader] = useState('');
   const [reportFooter, setReportFooter] = useState('');
+  const [startInstructions, setStartInstructions] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,7 +63,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           time_limit: null,
           passing_score: 70,
           report_header: reportHeader,
-          report_footer: reportFooter
+          report_footer: reportFooter,
+          start_instructions: startInstructions
         });
 
         // Get current packets for this quiz to remove them
@@ -87,7 +89,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           time_limit: null,
           passing_score: 70,
           report_header: reportHeader,
-          report_footer: reportFooter
+          report_footer: reportFooter,
+          start_instructions: startInstructions
         });
 
         // Add packets to the quiz
@@ -109,6 +112,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       setQuizName('');
       setReportHeader('');
       setReportFooter('');
+      setStartInstructions('');
       setQuizPackets([]);
       setSelectedProfile('');
       setEditingQuiz(null);
@@ -125,6 +129,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       setQuizName(quiz.name);
       setReportHeader(quiz.report_header || '');
       setReportFooter(quiz.report_footer || '');
+      setStartInstructions(quiz.start_instructions || '');
       setSelectedProfile(quiz.profileId || '');
       
       // Load existing packets for this quiz
@@ -142,6 +147,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
     setQuizName('');
     setReportHeader('');
     setReportFooter('');
+    setStartInstructions('');
     setQuizPackets([]);
     setSelectedProfile('');
     setEditingQuiz(null);
@@ -188,6 +194,13 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                 value={reportFooter}
                 onChange={setReportFooter}
                 placeholder="Enter footer text that will appear after Achievement Summary in the report..."
+                height={150}
+              />
+              <RichTextEditor
+                label="Start Instructions"
+                value={startInstructions}
+                onChange={setStartInstructions}
+                placeholder="Enter instructions shown before quiz starts (supports markdown)..."
                 height={150}
               />
               {!isEditing && (
