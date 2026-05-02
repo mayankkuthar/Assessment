@@ -368,9 +368,11 @@ function AuthPage() {
                         required
                       >
                         <MenuItem value="HappiMynd">HappiMynd</MenuItem>
+                        <MenuItem value="BSE">BSE</MenuItem>
                         <MenuItem value="Individual">Individual</MenuItem>
                         <MenuItem value="PCI">PCI</MenuItem>
                         <MenuItem value="Sparsh Hospital">Sparsh Hospital</MenuItem>
+                        <MenuItem value="Chintels">Chintels</MenuItem>
                       </Select>
                     </FormControl>
                   </>
