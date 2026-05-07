@@ -949,6 +949,7 @@ app.post('/api/quizzes', (req, res) => {
     passing_score: newQuiz.passing_score || 70,
     report_header: newQuiz.report_header || '',
     report_footer: newQuiz.report_footer || '',
+    quiz_header: newQuiz.quiz_header || '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -978,6 +979,7 @@ app.put('/api/quizzes/:id', (req, res) => {
     passing_score: updateData.passing_score || mockData.quizzes[quizIndex].passing_score,
     report_header: updateData.report_header !== undefined ? updateData.report_header : mockData.quizzes[quizIndex].report_header,
     report_footer: updateData.report_footer !== undefined ? updateData.report_footer : mockData.quizzes[quizIndex].report_footer,
+    quiz_header: updateData.quiz_header !== undefined ? updateData.quiz_header : mockData.quizzes[quizIndex].quiz_header,
     updated_at: new Date().toISOString()
   };
   

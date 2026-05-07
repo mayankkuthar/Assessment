@@ -23,6 +23,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
   const [selectedProfile, setSelectedProfile] = useState('');
   const [quizPackets, setQuizPackets] = useState([]);
   const [quizName, setQuizName] = useState('');
+  const [quizHeader, setQuizHeader] = useState('');
   const [reportHeader, setReportHeader] = useState('');
   const [reportFooter, setReportFooter] = useState('');
   const [showPreview, setShowPreview] = useState(false);
@@ -61,6 +62,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           description: '',
           time_limit: null,
           passing_score: 70,
+          quiz_header: quizHeader,
           report_header: reportHeader,
           report_footer: reportFooter
         });
@@ -86,6 +88,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           description: '',
           time_limit: null,
           passing_score: 70,
+          quiz_header: quizHeader,
           report_header: reportHeader,
           report_footer: reportFooter
         });
@@ -107,6 +110,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
 
       // Reset form
       setQuizName('');
+      setQuizHeader('');
       setReportHeader('');
       setReportFooter('');
       setQuizPackets([]);
@@ -123,6 +127,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
     try {
       setEditingQuiz(quiz);
       setQuizName(quiz.name);
+      setQuizHeader(quiz.quiz_header || '');
       setReportHeader(quiz.report_header || '');
       setReportFooter(quiz.report_footer || '');
       setSelectedProfile(quiz.profileId || '');
@@ -140,6 +145,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
 
   const cancelEdit = () => {
     setQuizName('');
+    setQuizHeader('');
     setReportHeader('');
     setReportFooter('');
     setQuizPackets([]);
@@ -175,6 +181,13 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                 variant="outlined"
                 sx={{ mb: 3 }}
                 InputLabelProps={{ shrink: true }}
+              />
+              <RichTextEditor
+                label="Quiz Start Page Content"
+                value={quizHeader}
+                onChange={setQuizHeader}
+                placeholder="Enter the 'Why should you take this quiz?' text shown to users before they start the quiz..."
+                height={150}
               />
               <RichTextEditor
                 label="Report Header"

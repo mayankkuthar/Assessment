@@ -825,34 +825,42 @@ const QuizAttempt = () => {
                     Why should I take this assessment?
                   </Typography>
                   
-                  <Box sx={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.4,
+                  <Box sx={{
                     mb: 1,
                     maxWidth: '850px',
                     width: '100%',
                     textAlign: 'justify',
                     px: { xs: 0.5, md: 1 }
                   }}>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4, textDecoration: 'underline' }}>
-                      The better you understand your emotions, the better you live, connect and grow!!
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4, }}>
-                      Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
-                    </Typography>
+                    {quiz?.quiz_header ? (
+                      <Typography
+                        variant="body2"
+                        component="div"
+                        sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}
+                        dangerouslySetInnerHTML={{ __html: quiz.quiz_header }}
+                      />
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
+                          Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
+                          From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
+                          That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
+                          This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4, textDecoration: 'underline' }}>
+                          The better you understand your emotions, the better you live, connect and grow!!
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4 }}>
+                          Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
 
                   <Typography variant="h6" sx={{ 
