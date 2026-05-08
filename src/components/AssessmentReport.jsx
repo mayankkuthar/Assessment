@@ -581,20 +581,6 @@ const AssessmentReport = () => {
                               <AssessmentIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Download PDF Report">
-                            <IconButton
-                              onClick={() => handleGeneratePDF(attempt)}
-                              disabled={generatingPDF}
-                              color="primary"
-                              size="small"
-                            >
-                              {generatingPDF ? (
-                                <CircularProgress size={20} />
-                              ) : (
-                                <DownloadIcon />
-                              )}
-                            </IconButton>
-                          </Tooltip>
                         </Box>
                       </TableCell>
                     </TableRow>
