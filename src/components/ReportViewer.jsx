@@ -17,7 +17,12 @@ import {
   LinearProgress,
   Stack,
   useTheme,
-  alpha
+  alpha,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -349,6 +354,44 @@ const ReportViewer = () => {
   const [user, setUser] = useState(null);
   const [packets, setPackets] = useState([]);
   const [template, setTemplate] = useState(defaultTemplate);
+  const [selectedPacketId, setSelectedPacketId] = useState('all');
+  const isSpecialReport = useMemo(() => {
+    const name = quiz?.name?.toLowerCase() || '';
+    return (
+      name.includes('happieq') || 
+      name.includes('happi eq') ||
+      name.includes('happiness quotient') ||
+      name.includes('emotional intelligence assessment') ||
+      name.includes('happilife') ||
+      name.includes('happi assess ei') ||
+      name.includes('personality')
+    );
+  }, [quiz]);
+
+  const isShortAssessment = useMemo(() => {
+    if (!quiz) return false;
+    const quizName = quiz.name?.toLowerCase() || '';
+    const packetNames = packets.map(p => p.name?.toLowerCase() || '');
+    
+    const themes = [
+      'sleep', 'anger', 'body image', 'work life', 'bullying', 
+      'natal', 'postpartum', 'stress', 'worry', 'conflict',
+      'relationship', 'esteem', 'confidence', 'motivation', 
+      'loss', 'loneliness', 'anxiety', 'happiness', 'satisfaction', 
+      'trauma', 'emotion', 'low'
+    ];
+    
+    const matchesQuiz = themes.some(theme => quizName.includes(theme));
+    const matchesPackets = packetNames.some(pName => 
+      themes.some(theme => pName.includes(theme))
+    );
+    
+    return matchesQuiz || matchesPackets;
+  }, [quiz, packets]);
+
+  const showShortReportFeatures = useMemo(() => {
+    return isShortAssessment && !isSpecialReport;
+  }, [isShortAssessment, isSpecialReport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -478,6 +521,11 @@ const ReportViewer = () => {
     console.log('ReportViewer - Final scores:', scores);
     return scores;
   }, [attempt, packets]);
+
+  const filteredPacketScores = useMemo(() => {
+    if (selectedPacketId === 'all') return packetScores;
+    return packetScores.filter(s => s.id === selectedPacketId);
+  }, [packetScores, selectedPacketId]);
 
   const handleDownloadPDF = async () => {
     try {
@@ -791,7 +839,7 @@ const ReportViewer = () => {
                   fontWeight: 600,
                   marginBottom: '0.5rem',
                   marginTop: '1rem',
-                  textAlign: 'Justify'
+                  textAlign: 'left'
                 },
                 '& h1': { fontSize: '1.5rem' },
                 '& h2': { fontSize: '1.3rem' },
@@ -834,162 +882,8 @@ const ReportViewer = () => {
         </Card>
       )}
 
-      {/* Performance Overview - COMMENTED OUT */}
-      {/* {packetScores.length > 0 && (
-        <Card sx={{ 
-          mb: 4, 
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <TrendingUpIcon color="primary" />
-              Performance Overview
-            </Typography>
-            
-            <Grid container spacing={4}> 
-              
-              <Grid item xs={12} md={6}>
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 3, 
-                    borderRadius: 3,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                >
-                  <Box sx={{ position: 'relative', zIndex: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <StarIcon />
-                      Top Strengths
-                    </Typography>
-                    <Stack spacing={2}>
-                      {packetScores.sort((a, b) => b.rank - a.rank).slice(0, 2).map(s => (
-                        <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Avatar sx={{ 
-                            bgcolor: 'rgba(255, 255, 255, 0.2)', 
-                            width: 40, 
-                            height: 40,
-                            fontSize: '20px'
-                          }}>
-                            {s.level?.icon || '⭐'}
-                          </Avatar>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {s.name}
-                            </Typography>
-                            <Box 
-                              sx={{ 
-                                display: 'inline-block',
-                                px: 1.5,
-                                py: 0.5,
-                                borderRadius: 16,
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                color: '#ffffff',
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                                lineHeight: 1.5,
-                                textAlign: 'center'
-                              }} 
-                            >
-                              {s.level?.label || 'Level'}
-                            </Box>
-                          </Box>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Box>
-                  <Box sx={{ 
-                    position: 'absolute',
-                    top: -20,
-                    right: -20,
-                    opacity: 0.1,
-                    fontSize: '120px'
-                  }}>
-                    🏆
-                  </Box>
-                </Paper>
-              </Grid>
-
-              
-              <Grid item xs={12} md={6}>
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 3, 
-                    borderRadius: 3,
-                    background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-                    color: '#8b4513',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                >
-                  <Box sx={{ position: 'relative', zIndex: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <TargetIcon />
-                      Focus Areas
-                    </Typography>
-                    <Stack spacing={2}>
-                      {packetScores.sort((a, b) => a.rank - b.rank).slice(0, 2).map(s => (
-                        <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Avatar sx={{ 
-                            bgcolor: 'rgba(139, 69, 19, 0.2)', 
-                            width: 40, 
-                            height: 40,
-                            fontSize: '20px',
-                            color: '#8b4513'
-                          }}>
-                            {s.level?.icon || '🎯'}
-                          </Avatar>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {s.name}
-                            </Typography>
-                            <Box 
-                              sx={{ 
-                                display: 'inline-block',
-                                px: 1.5,
-                                py: 0.5,
-                                borderRadius: 16,
-                                backgroundColor: 'rgba(139, 69, 19, 0.2)',
-                                color: '#8b4513',
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                                lineHeight: 1.5,
-                                textAlign: 'center'
-                              }} 
-                            >
-                              {s.level?.label || 'Level'}
-                            </Box>
-                          </Box>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Box>
-                  <Box sx={{ 
-                    position: 'absolute',
-                    top: -20,
-                    right: -20,
-                    opacity: 0.1,
-                    fontSize: '120px'
-                  }}>
-                    🎯
-                  </Box>
-                </Paper>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}*/}
-
-      {/* Modern Charts Section - EQ Score Card (Hide for Personality Quizzes) */}
-      {template?.charts?.enabled && packetScores.length > 0 && !quiz?.name?.toLowerCase().includes('personality') && (
+      {/* Modern Charts Section */}
+      {template?.charts?.enabled && packetScores.length > 0 && !isSpecialReport && !showShortReportFeatures && (
         <Card sx={{
           mb: 4,
           borderRadius: 4,
@@ -999,9 +893,25 @@ const ReportViewer = () => {
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
         }}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              📊 EQ Score Card
-            </Typography>
+            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                📊 Score Card
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>View Section</InputLabel>
+                <Select
+                  value={selectedPacketId}
+                  label="View Section"
+                  onChange={(e) => setSelectedPacketId(e.target.value)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value="all">All Sections</MenuItem>
+                  {packets.map(p => (
+                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
 
             <Grid container spacing={4} style={{ justifyContent: 'center' }}>
               {/* Overall Performance Rings - full width */}
@@ -1019,86 +929,73 @@ const ReportViewer = () => {
                   <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
                     Parameter Wise Scores
                   </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' }, gap: 3 }}>
-                    {packetScores.map(score => (
-                      <Box key={score.id} sx={{ textAlign: 'center' }}>
-                        <PerformanceRing level={score.level} marks={score.marks} totalMarks={score.totalMarks} />
-                        <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
-                          {score.name}
-                        </Typography>
-                        <Box
-                          sx={{
-                            mt: 0.5,
-                            display: 'inline-block',
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 16,
-                            backgroundColor: score.level?.color,
-                            color: '#ffffff',
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.5,
-                            textAlign: 'center'
-                          }}
-                        >
-                          {score.level?.label}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {filteredPacketScores.map(score => (
+                      <Box key={score.id}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                            {score.name}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={score.level?.label}
+                            sx={{
+                              backgroundColor: score.level?.color,
+                              color: 'white',
+                              fontWeight: 700,
+                              px: 1
+                            }}
+                          />
+                        </Box>
+                        <Box sx={{
+                          height: 12,
+                          width: '100%',
+                          bgcolor: alpha(score.level?.color || '#eee', 0.1),
+                          borderRadius: 6,
+                          overflow: 'hidden',
+                          border: '1px solid',
+                          borderColor: alpha(score.level?.color || '#eee', 0.2)
+                        }}>
+                          <Box sx={{
+                            height: '100%',
+                            width: `${Math.max(5, (score.marks / score.totalMarks) * 100)}%`,
+                            bgcolor: score.level?.color || '#ccc',
+                            borderRadius: 6,
+                            boxShadow: `0 0 10px ${alpha(score.level?.color || '#000', 0.3)}`
+                          }} />
                         </Box>
                       </Box>
                     ))}
-                    <Box sx={{ textAlign: 'center' }}>
-                      <PerformanceRing
-                        level={{
-                          label: 'Total',
-                          color: '#1976d2' // or compute based on performance %
-                        }}
-                        marks={packetScores.reduce((acc, p) => acc + p.marks, 0)}
-                        totalMarks={packetScores.reduce((acc, p) => acc + p.totalMarks, 0)}
-                      />
 
-                      <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 600 }}>
-                        Total Score
-                      </Typography>
-
-                      <Box
-                        sx={{
-                          mt: 0.5,
-                          display: 'inline-block',
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 16,
-                          backgroundColor: '#1976d2',
-                          color: '#ffffff',
-                          fontWeight: 600,
-                          fontSize: '0.75rem',
-                          lineHeight: 1.5,
-                          textAlign: 'center'
-                        }}
-                      >
-                        Overall
+                    {selectedPacketId === 'all' && filteredPacketScores.length > 1 && (
+                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed #e5e7eb' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                            Overall Performance
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                            {Math.round((packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100)}%
+                          </Typography>
+                        </Box>
+                        <Box sx={{
+                          height: 8,
+                          width: '100%',
+                          bgcolor: '#f1f5f9',
+                          borderRadius: 4,
+                          overflow: 'hidden'
+                        }}>
+                          <Box sx={{
+                            height: '100%',
+                            width: `${(packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100}%`,
+                            bgcolor: 'primary.main',
+                            borderRadius: 4
+                          }} />
+                        </Box>
                       </Box>
-                    </Box>
+                    )}
                   </Box>
                 </Paper>
               </Grid>
-              {/* Radar Chart */}
-              {/*<Grid item xs={12}>
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 3, 
-                    borderRadius: 3,
-                    border: '1px solid #e5e7eb',
-                    background: '#ffffff'
-                  }}
-                >
-                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                    Packet Performance Radar
-                  </Typography>
-                  <Box sx={{ width: '100%', maxWidth: 660, mx: 'auto' }}>
-                    <RadarChart scores={packetScores} size={360} />
-                  </Box>
-                </Paper>
-              </Grid>*/}
             </Grid>
           </CardContent>
         </Card>
@@ -1194,7 +1091,6 @@ const ReportViewer = () => {
               {/* Primary Personality */}
               {primaryPersonality && (
                 <Box sx={{ mb: 4 }}>
-
                   {primaryDescription && (
                     <Paper
                       elevation={0}
@@ -1221,7 +1117,6 @@ const ReportViewer = () => {
               {/* Secondary Personality */}
               {secondaryPersonality && (
                 <Box>
-
                   {secondaryDescription && (
                     <Paper
                       elevation={0}
@@ -1267,12 +1162,12 @@ const ReportViewer = () => {
         }}>
           <CardContent sx={{ p: 4 }}>
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              🔍 Detailed Analysis
+              🔍 Analysis
             </Typography>
 
             <Grid container spacing={3}>
-              {packetScores.map(p => (
-                <Grid item xs={12} md={6} key={p.id}>
+              {filteredPacketScores.map(p => (
+                <Grid item xs={12} md={showShortReportFeatures && filteredPacketScores.length === 1 ? 12 : 6} key={p.id}>
                   <Paper
                     elevation={0}
                     sx={{
@@ -1302,28 +1197,62 @@ const ReportViewer = () => {
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                           {p.name}
                         </Typography>
-                        <Box
-                          sx={{
-                            display: 'inline-block',
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 16,
-                            backgroundColor: p.level?.color || '#6b7280',
-                            color: '#ffffff',
-                            fontWeight: 700,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.5,
-                            textAlign: 'center'
-                          }}
-                        >
-                          {p.level?.label || 'Level'}
-                        </Box>
+                        {!showShortReportFeatures && (
+                          <Chip
+                            label={p.level?.label || 'Level'}
+                            sx={{
+                              backgroundColor: p.level?.color || '#6b7280',
+                              color: 'white',
+                              fontWeight: 700,
+                              fontSize: '0.75rem'
+                            }}
+                          />
+                        )}
                       </Box>
                     </Box>
 
-                    <Divider sx={{ mb: 2 }} />
+                    {showShortReportFeatures && (
+                      <Box sx={{ mb: 3 }}>
+                        <Box sx={{
+                          height: 32,
+                          width: '100%',
+                          bgcolor: alpha(p.level?.color || '#eee', 0.1),
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          border: '1px solid',
+                          borderColor: alpha(p.level?.color || '#eee', 0.2),
+                          position: 'relative',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Box sx={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            height: '100%',
+                            width: `${Math.max(10, (p.marks / p.totalMarks) * 100)}%`,
+                            bgcolor: p.level?.color || '#ccc',
+                            transition: 'width 1s ease-in-out',
+                            boxShadow: `0 0 20px ${alpha(p.level?.color || '#000', 0.2)}`
+                          }} />
+                          <Typography variant="subtitle2" sx={{
+                            position: 'relative',
+                            zIndex: 1,
+                            fontWeight: 800,
+                            color: (p.marks / p.totalMarks) > 0.4 ? 'white' : 'text.primary',
+                            textTransform: 'uppercase',
+                            letterSpacing: 1,
+                            textShadow: (p.marks / p.totalMarks) > 0.4 ? '0 1px 2px rgba(0,0,0,0.4)' : 'none'
+                          }}>
+                            {p.level?.label}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
 
-                    {/* Removed progress bar per request */}
+                    <Divider sx={{ mb: 2 }} />
 
                     {/* Insights Text */}
                     <Typography variant="body2" sx={{
@@ -1335,8 +1264,6 @@ const ReportViewer = () => {
                     }}>
                       {p.level?.largeText || 'No detailed description available for this level.'}
                     </Typography>
-
-                    {/* Removed rank and levels per request */}
                   </Paper>
                 </Grid>
               ))}
@@ -1344,108 +1271,6 @@ const ReportViewer = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Achievement Summary */}
-      {/*<Card sx={{ 
-        mb: 4, 
-        borderRadius: 4,
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <Box sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.05"%3E%3Cpath d="M30 30c0-11.046-8.954-20-20-20s-20 8.954-20 20 8.954 20 20 20 20-8.954 20-20zm20 0c0-11.046-8.954-20-20-20s-20 8.954-20 20 8.954 20 20 20 20-8.954 20-20z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-          opacity: 0.1
-        }} />
-        <CardContent sx={{ p: 4, position: 'relative', zIndex: 1 }}>
-          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-            🏆 Achievement Summary
-          </Typography>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mx: 'auto',
-                  mb: 2,
-                  fontSize: '36px'
-                }}>
-                  🎯
-                </Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {packetScores.length}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Sections Completed
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mx: 'auto',
-                  mb: 2,
-                  fontSize: '36px'
-                }}>
-                  ⭐
-                </Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {packetScores.filter(p => p.rank >= 3).length}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Strong Performances
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mx: 'auto',
-                  mb: 2,
-                  fontSize: '36px'
-                }}>
-                  📈
-                </Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {packetScores.reduce((acc, p) => acc + p.marks, 0)}/{packetScores.reduce((acc, p) => acc + p.totalMarks, 0)}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Overall Performance
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>*/}
 
       {/* Custom Footer Text */}
       {quiz?.report_footer && (
@@ -1507,6 +1332,89 @@ const ReportViewer = () => {
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_footer}</ReactMarkdown>
             </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Next Steps Section */}
+      {showShortReportFeatures && (
+        <Card sx={{
+          mb: 4,
+          borderRadius: 4,
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+              🎯 Next Steps
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
+              Congratulations on completing your self assessment and going through the summary. Now that you know how you are doing on this aspect of life, we are sure you have gained a comprehensive understanding of what steps to be taken up next.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 3, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
+              If you are keen on making the most out of your summary, an assisted session by our emotional wellbeing expert will
+              guide you in minutely scrutinizing and interpreting your performance on this parameter, what implications the scores carry, and
+              guiding you on the necessary next steps that can set you sailing on a holistic wellness journey.
+            </Typography>
+
+            <Typography variant="body1" sx={{ mb: 4, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
+              Once aware of your needs, you can choose from our unique range of accessible, actionable & transformative services available over a fully
+              digital human assisted platform while ensuring utmost confidentiality.
+            </Typography>
+
+            <Divider sx={{ mb: 4 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1, color: 'primary.main', textAlign: 'left' }}>
+              🤝 Support Services:
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              {[
+                { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
+                { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
+                { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
+                { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
+                { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
+              ].map((service) => (
+                <Grid item xs={12} key={service.name}>
+                  <Typography variant="body2" sx={{ lineHeight: 1.6, textAlign: 'justify' }}>
+                    <strong>{service.name}</strong> {service.desc}
+                  </Typography>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Box sx={{ p: 3, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3, mb: 4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1, textAlign: 'left' }}>
+                📞 Contact Details
+              </Typography>
+              <Typography variant="body1" sx={{ textAlign: 'left' }}>
+                For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>9110599581</strong> or visit our website at <a href="https://www.happimynd.com" target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'none', fontWeight: 600 }}>www.happimynd.com</a> to explore more.
+              </Typography>
+            </Box>
+
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', textAlign: 'left' }}>
+              ⚠️ Disclaimer :
+            </Typography>
+
+            <Typography variant="caption" sx={{ display: 'block', mb: 2, textAlign: 'justify', lineHeight: 1.6, color: 'text.secondary' }}>
+              <strong>A.</strong> If the services are availed by a person who belongs/works with a company/organization which are enrolled with the services for its employees or has a tie up with HappiMynd, the services/tools available to the users are subject to the following terms:
+              <br />1. The user can avail only those services which the affiliated company has subscribed/purchased for its employees.
+              <br />2. If the user is willing to avail services which are not covered/subscribed/purchased by the affiliated company, then the user can make an individual/personal purchase of the required services.
+              <br />3. The services available and their prices for an individual user can be found on the dashboard of the HappiMynd app or website itself.
+            </Typography>
+
+            <Typography variant="caption" sx={{ display: 'block', textAlign: 'justify', lineHeight: 1.6, color: 'text.secondary' }}>
+              <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for medical advice. The statements used in HappiLIFE awareness tool are inspired by ICD-10 (WHO) & DSM-5® guidelines. If you are having difficult thoughts or going through rough times, consider calling the below listed helpline numbers:
+              <br />• National Emergency No. - 112
+              <br />• Women Helpline - 1091
+              <br />• Senior Citizen Helpline - 14567
+              <br />• Suicide Prevention - 9820466726 (AASRA)
+            </Typography>
           </CardContent>
         </Card>
       )}
