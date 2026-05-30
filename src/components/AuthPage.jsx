@@ -1,29 +1,6 @@
 import { useState, useEffect } from 'react'
 
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  Tabs,
-  Tab,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  CircularProgress
-} from '@mui/material'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
 
-const theme = createTheme({
-  palette: {
-    primary: { main: '#1976d2' },
-    secondary: { main: '#dc004e' },
-  },
-})
 
 function AuthPage() {
   const [tab, setTab] = useState(0)
@@ -210,215 +187,191 @@ function AuthPage() {
     }
   };
 
+  const handleTabChange = (newValue) => {
+    setTab(newValue);
+    if (newValue !== tab) {
+      setEmail('');
+      setPassword('');
+      setUserName('');
+      setProfile('');
+      setOrganization('');
+      setError('');
+      setSuccess('');
+      setShowResend(false);
+      setResetEmailSent(false);
+    }
+  };
+
   return (
-    <ThemeProvider theme={theme}>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          p: 2
-        }}
-      >
-        <Card sx={{ maxWidth: 400, width: '100%' }}>
-          <CardContent sx={{ p: 4 }}>
-            {/* HappiMynd Logo */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-              <img 
-                src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
-                alt="HappiMynd Logo"
-                style={{
-                  height: '60px',
-                  width: 'auto',
-                  objectFit: 'contain'
-                }}
+    <div className="auth-layout">
+      <div className="auth-card">
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
+          <img 
+            src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+            alt="HappiMynd Logo"
+            style={{ height: '60px', width: 'auto', objectFit: 'contain' }}
+          />
+        </div>
+        
+        <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-6)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-fg)' }}>
+          Assessment Tool
+        </h2>
+        
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 'var(--space-6)', gap: 'var(--space-2)' }}>
+          <button 
+            style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 0 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 0 ? 700 : 500, color: tab === 0 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
+            onClick={() => handleTabChange(0)}
+          >
+            Login
+          </button>
+          <button 
+            style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 1 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 1 ? 700 : 500, color: tab === 1 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
+            onClick={() => handleTabChange(1)}
+          >
+            Sign Up
+          </button>
+          <button 
+            style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 2 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 2 ? 700 : 500, color: tab === 2 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
+            onClick={() => handleTabChange(2)}
+          >
+            Forgot Password
+          </button>
+        </div>
+        
+        {/* Forgot Password Tab */}
+        {tab === 2 ? (
+          <form onSubmit={(e) => { 
+            e.preventDefault(); 
+            setLoading(true);
+            setError('');
+            setSuccess('');
+            setResetEmailSent(true);
+            setLoading(false);
+          }}>
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                className="form-input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
               />
-            </Box>
+            </div>
             
-            <Typography variant="h4" align="center" sx={{ mb: 3, fontWeight: 'bold' }}>
-              Assessment Tool
-            </Typography>
+            {error && <div className="alert alert--error">{error}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #34d399', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
             
-            <Tabs value={tab} onChange={(e, newValue) => {
-              setTab(newValue)
-              // Reset form fields when switching tabs
-              if (newValue !== tab) {
-                setEmail('')
-                setPassword('')
-                setUserName('')
-                setProfile('')
-                setOrganization('') // Reset organization field
-                setError('')
-                setSuccess('')
-                setShowResend(false)
-                setResetEmailSent(false)
-              }
-            }} sx={{ mb: 3 }}>
-              <Tab label="Login" />
-              <Tab label="Sign Up" />
-              <Tab label="Forgot Password" sx={{ textTransform: 'none' }} />
-            </Tabs>
-            
-            {/* Forgot Password Tab */}
-            {tab === 2 ? (
-              <Box component="form" onSubmit={(e) => { 
-                e.preventDefault(); 
-                setLoading(true);
-                setError('');
-                setSuccess('');
-                setResetEmailSent(true);
-                setLoading(false);
-              }}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  sx={{ mb: 2 }}
-                  required
-                />
-                
-                {error && (
-                  <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-                )}
-                
-                {success && (
-                  <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>
-                )}
-                
-                {resetEmailSent && (
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Check your email!</strong> We've sent a password reset link to {email}. 
-                      Click the link in the email to reset your password.
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
-            ) : (
-              // Login / Sign Up Tabs
-              <Box component="form" onSubmit={(e) => { e.preventDefault(); handleAuth(tab === 1); }}>
-                {/* Error and Success Alerts */}
-                {error && (
-                  <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-                )}
-                
-                {success && (
-                  <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>
-                )}
-                
-                {tab === 1 && (
-                  <TextField
-                    fullWidth
-                    label="User Name"
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    sx={{ mb: 2 }}
-                    required
-                  />
-                )}
-                
-                <TextField
-                  fullWidth
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  sx={{ mb: 2 }}
-                  required
-                />
-                
-                {tab === 1 && (
-                  <>
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel>Profile</InputLabel>
-                      <Select
-                        value={profile}
-                        label="Profile"
-                        onChange={(e) => setProfile(e.target.value)}
-                        required
-                        disabled={loadingProfiles}
-                      >
-                        {loadingProfiles ? (
-                          <MenuItem disabled>
-                            <CircularProgress size={20} sx={{ mr: 1 }} />
-                            Loading profiles...
-                          </MenuItem>
-                        ) : (
-                          profiles.map((profileItem) => (
-                            <MenuItem key={profileItem.id} value={profileItem.name}>
-                              {profileItem.name}
-                            </MenuItem>
-                          ))
-                        )}
-                      </Select>
-                    </FormControl>
-
-                    {/* Organization Dropdown */}
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel>Organization</InputLabel>
-                      <Select
-                        value={organization}
-                        label="Organization"
-                        onChange={(e) => setOrganization(e.target.value)}
-                        required
-                      >
-                        <MenuItem value="HappiMynd">HappiMynd</MenuItem>
-                        <MenuItem value="Individual">Individual</MenuItem>
-                        <MenuItem value="PCI">PCI</MenuItem>
-                        <MenuItem value="Sparsh Hospital">Sparsh Hospital</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </>
-                )}
-                
-                <TextField
-                  fullWidth
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  sx={{ mb: 2 }}
-                  required
-                />
-
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                  disabled={loading || (tab === 1 && (!userName.trim() || !email.trim() || !profile || !password.trim() || !organization))}
-                  sx={{ mb: 2 }}
-                >
-                  {loading ? (
-                    <>
-                      <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} />
-                      {tab === 1 ? 'Signing Up...' : 'Logging In...'}
-                    </>
-                  ) : (
-                    tab === 0 ? 'Login' : 'Sign Up'
-                  )}
-                </Button>
-
-                {tab === 1 && (
-                  <Alert severity="info">
-                    <Typography variant="body2">
-                      <strong>Note:</strong> Your profile selection enables us to guide you better in the expert sessions. 
-                      Make sure to select the correct profile that matches your role.
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
+            {resetEmailSent && (
+              <div className="alert" style={{ backgroundColor: '#e0f2fe', color: '#075985', border: '1px solid #bae6fd', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+                <strong>Check your email!</strong> We've sent a password reset link to {email}. Click the link in the email to reset your password.
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </Box>
-    </ThemeProvider>
-  )
+
+            <button type="submit" className="btn btn--primary" style={{ width: '100%' }}>Reset Password</button>
+          </form>
+        ) : (
+          // Login / Sign Up Tabs
+          <form onSubmit={(e) => { e.preventDefault(); handleAuth(tab === 1); }}>
+            {error && <div className="alert alert--error">{error}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #34d399', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
+            
+            {tab === 1 && (
+              <div className="form-group">
+                <label className="form-label">User Name</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+            
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                className="form-input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            
+            {tab === 1 && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Profile</label>
+                  <select
+                    className="form-input"
+                    value={profile}
+                    onChange={(e) => setProfile(e.target.value)}
+                    required
+                    disabled={loadingProfiles}
+                  >
+                    <option value="" disabled>Select a profile</option>
+                    {loadingProfiles ? (
+                      <option disabled>Loading profiles...</option>
+                    ) : (
+                      profiles.map((profileItem) => (
+                        <option key={profileItem.id} value={profileItem.name}>
+                          {profileItem.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Organization</label>
+                  <select
+                    className="form-input"
+                    value={organization}
+                    onChange={(e) => setOrganization(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>Select an organization</option>
+                    <option value="HappiMynd">HappiMynd</option>
+                    <option value="Individual">Individual</option>
+                    <option value="PCI">PCI</option>
+                    <option value="Sparsh Hospital">Sparsh Hospital</option>
+                  </select>
+                </div>
+              </>
+            )}
+            
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                className="form-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn--primary"
+              style={{ width: '100%', marginBottom: 'var(--space-4)' }}
+              disabled={loading || (tab === 1 && (!userName.trim() || !email.trim() || !profile || !password.trim() || !organization))}
+            >
+              {loading ? (tab === 1 ? 'Signing Up...' : 'Logging In...') : (tab === 0 ? 'Login' : 'Sign Up')}
+            </button>
+
+            {tab === 1 && (
+              <div className="alert" style={{ backgroundColor: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+                <strong>Note:</strong> Your profile selection enables us to guide you better in the expert sessions. Make sure to select the correct profile that matches your role.
+              </div>
+            )}
+          </form>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default AuthPage

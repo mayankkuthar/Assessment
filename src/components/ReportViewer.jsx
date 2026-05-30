@@ -1,29 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
-  Button,
-  CircularProgress,
-  Alert,
-  Divider,
-  IconButton,
-  Tooltip,
-  Avatar,
-  Paper,
-  LinearProgress,
-  Stack,
-  useTheme,
-  alpha,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip
-} from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PrintIcon from '@mui/icons-material/Print';
@@ -35,11 +11,33 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import './ReportViewer.css';
+
+// Custom alpha function for hex/rgb to rgba conversion without material-ui
+const alpha = (color, opacity) => {
+  if (!color) return `rgba(137, 91, 245, ${opacity})`;
+  if (color === 'primary') return `rgba(137, 91, 245, ${opacity})`;
+  if (color.startsWith('var(')) {
+    if (color.includes('--color-primary')) return `rgba(137, 91, 245, ${opacity})`;
+    if (color.includes('--color-secondary')) return `rgba(80, 80, 88, ${opacity})`;
+    if (color.includes('--color-fg')) return `rgba(24, 24, 27, ${opacity})`;
+  }
+  if (color.startsWith('#')) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+  if (color.startsWith('rgb')) {
+    return color.replace(/rgb\(|rgba\(/, 'rgba(').replace(/\)/, `, ${opacity})`);
+  }
+  return color;
+};
 
 const defaultTemplate = {
   header: {
     enabled: true,
-    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundColor: 'linear-gradient(135deg, #895BF5 0%, #3730a3 100%)',
     textColor: '#ffffff',
     title: 'Emotional Intelligence Report',
     subtitle: 'You can book a guidance session with our expert',
@@ -82,36 +80,36 @@ const FALLBACK_SCALE = [
     label: 'Needs Improvement',
     color: '#ef4444',
     lightColor: '#fef2f2',
-    image: '📚',
+    image: '',
     largeText: "Keep practicing! You're making progress. Focus on building fundamental skills.",
-    icon: '📚'
+    icon: ''
   },
   {
     min: 3, max: 5,
     label: 'Developing',
     color: '#f59e0b',
     lightColor: '#fffbeb',
-    image: '📊',
+    image: '',
     largeText: "Good effort! You're on the right track. Continue building on your foundation.",
-    icon: '📊'
+    icon: ''
   },
   {
     min: 6, max: 8,
     label: 'Proficient',
     color: '#10b981',
     lightColor: '#f0fdf4',
-    image: '🎯',
+    image: '',
     largeText: "Well done! You're showing strong understanding and solid skills.",
-    icon: '🎯'
+    icon: ''
   },
   {
     min: 9, max: 12,
     label: 'Excellent',
     color: '#8b5cf6',
     lightColor: '#faf5ff',
-    image: '🏆',
+    image: '',
     largeText: "Outstanding! You've mastered this material with exceptional performance!",
-    icon: '🏆'
+    icon: ''
   }
 ];
 
@@ -147,84 +145,88 @@ function getPerformanceLevel(marks, packetName) {
   return FALLBACK_SCALE.find(range => marks >= range.min && marks <= range.max) || FALLBACK_SCALE[0];
 }
 
-// Modern Chart Component
+// Modern Bar Chart Component (MUI removed)
 const ModernBarChart = ({ data, height = 200 }) => {
-  const theme = useTheme();
-  const maxRank = Math.max(...data.map(d => d.rank));
+  const maxRank = Math.max(...data.map(d => d.rank), 1);
 
   return (
-    <Box sx={{ height, display: 'flex', alignItems: 'flex-end', gap: 2, px: 2 }}>
+    <div style={{ height: `${height}px`, display: 'flex', alignItems: 'flex-end', gap: '16px', paddingLeft: '16px', paddingRight: '16px' }}>
       {data.map((item, index) => {
         const heightPercent = (item.rank / maxRank) * 100;
+        const color = item.level?.color || '#3b82f6';
+        
         return (
-          <Box key={item.id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Box
-              sx={{
+          <div key={item.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div
+              className="bar-chart-bar"
+              style={{
                 width: '100%',
-                maxWidth: 60,
+                maxWidth: '60px',
                 height: `${Math.max(20, heightPercent)}%`,
-                background: `linear-gradient(135deg, ${item.level?.color || '#3b82f6'} 0%, ${alpha(item.level?.color || '#3b82f6', 0.7)} 100%)`,
+                background: `linear-gradient(135deg, ${color} 0%, ${alpha(color, 0.7)} 100%)`,
                 borderRadius: '8px 8px 4px 4px',
                 position: 'relative',
-                boxShadow: `0 4px 20px ${alpha(item.level?.color || '#3b82f6', 0.3)}`,
+                boxShadow: `0 4px 20px ${alpha(color, 0.3)}`,
                 transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: 'translateY(0)',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: `0 8px 30px ${alpha(item.level?.color || '#3b82f6', 0.4)}`
-                }
+                cursor: 'pointer'
               }}
             >
-              <Box
-                sx={{
+              <div
+                style={{
                   position: 'absolute',
-                  top: -8,
+                  top: '-12px',
                   left: '50%',
                   transform: 'translateX(-50%)',
                   backgroundColor: 'white',
                   borderRadius: '50%',
-                  p: 0.5,
-                  boxShadow: 2
+                  padding: '4px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '28px',
+                  height: '28px',
+                  zIndex: 2
                 }}
               >
-                <Typography sx={{ fontSize: '16px' }}>
+                <span style={{ fontSize: '14px', lineHeight: 1 }}>
                   {item.level?.icon || '📊'}
-                </Typography>
-              </Box>
-            </Box>
-            <Typography
-              variant="caption"
-              sx={{
-                mt: 1,
+                </span>
+              </div>
+            </div>
+            <span
+              style={{
+                marginTop: '8px',
                 textAlign: 'center',
                 fontWeight: 600,
                 fontSize: '0.75rem',
-                color: 'text.secondary'
+                color: 'var(--color-secondary)'
               }}
             >
               {item.name.length > 10 ? `${item.name.substring(0, 10)}...` : item.name}
-            </Typography>
-          </Box>
+            </span>
+          </div>
         );
       })}
-    </Box>
+    </div>
   );
 };
 
-// Performance Ring Component
+// Performance Ring Component (MUI removed)
 const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
   const circumference = 2 * Math.PI * 45;
   const percentage = totalMarks > 0 ? (marks / totalMarks) * 100 : 0;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const color = level?.color || '#3b82f6';
 
   return (
-    <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle
           cx={size / 2}
           cy={size / 2}
           r="45"
-          stroke="#e5e7eb"
+          stroke="var(--color-border)"
           strokeWidth="8"
           fill="transparent"
         />
@@ -232,7 +234,7 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
           cx={size / 2}
           cy={size / 2}
           r="45"
-          stroke={level?.color || '#3b82f6'}
+          stroke={color}
           strokeWidth="8"
           fill="transparent"
           strokeDasharray={circumference}
@@ -243,28 +245,35 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
           }}
         />
       </svg>
-      <Box sx={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Avatar src={level?.image && level.image.startsWith('data:image') ? level.image : '📊'} sx={{
-          bgcolor: level?.color || '#6b7280',
-          width: 30,
-          height: 30,
-          mr: 0,
-          fontSize: '24px',
-          boxShadow: `0 4px 20px ${alpha(level?.color || '#6b7280', 0.3)}`
-        }}></Avatar>
-        <Typography variant="caption" sx={{ fontWeight: 700, color: level?.color }}>
+      <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div 
+          className="rv-avatar" 
+          style={{
+            backgroundColor: color,
+            width: '30px',
+            height: '30px',
+            fontSize: '18px',
+            boxShadow: `0 4px 20px ${alpha(color, 0.3)}`
+          }}
+        >
+          {level?.image && level.image.startsWith('data:image') ? (
+            <img src={level.image} alt="badge" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+          ) : (
+            level?.icon || '📊'
+          )}
+        </div>
+        <span style={{ fontWeight: 700, fontSize: '11px', color: color, marginTop: '4px' }}>
           {marks || 0}/{totalMarks || 0}
-        </Typography>
-      </Box>
-    </Box>
+        </span>
+      </div>
+    </div>
   );
 };
 
-// Radar (Spider) Chart Component
+// Radar (Spider) Chart Component (MUI removed)
 const RadarChart = ({ scores, size = 660 }) => {
-  const theme = useTheme();
   const center = size / 2;
-  const radius = Math.max(120, center - 80);  // Increased base radius for larger chart
+  const radius = Math.max(120, center - 80);
   const itemCount = scores.length;
   const angleStep = (Math.PI * 2) / Math.max(1, itemCount);
 
@@ -289,7 +298,7 @@ const RadarChart = ({ scores, size = 660 }) => {
         key={`grid-${levelIndex}`}
         points={points}
         fill="none"
-        stroke={alpha(theme.palette.text.primary, 0.15)}
+        stroke="var(--color-border)"
         strokeWidth={1}
       />
     );
@@ -305,8 +314,8 @@ const RadarChart = ({ scores, size = 660 }) => {
     const dy = Math.sin(angle) > 0.2 ? '1em' : Math.sin(angle) < -0.2 ? '-0.4em' : '0.35em';
     return (
       <g key={`axis-${i}`}>
-        <line x1={center} y1={center} x2={end[0]} y2={end[1]} stroke={alpha(theme.palette.text.primary, 0.2)} strokeWidth={1} />
-        <text x={lx} y={ly} textAnchor={textAnchor} fontSize={12} fill={alpha(theme.palette.text.primary, 0.8)} dy={dy}>
+        <line x1={center} y1={center} x2={end[0]} y2={end[1]} stroke="var(--color-border)" strokeWidth={1} />
+        <text x={lx} y={ly} textAnchor={textAnchor} fontSize={12} fill="var(--color-secondary)" dy={dy}>
           {s.name}
         </text>
       </g>
@@ -315,37 +324,41 @@ const RadarChart = ({ scores, size = 660 }) => {
 
   const dots = scores.map((s, i) => {
     const point = getPoint((s.rank || 0) / Math.max(1, s.scaleLength || 1), i).split(',').map(Number);
+    const color = s.level?.color || '#895BF5';
     return (
-      <circle key={`dot-${i}`} cx={point[0]} cy={point[1]} r={3}
-        fill={s.level?.color || theme.palette.primary.main}
-        stroke={alpha(s.level?.color || theme.palette.primary.main, 0.5)}
+      <circle 
+        key={`dot-${i}`} 
+        cx={point[0]} 
+        cy={point[1]} 
+        r={3}
+        fill={color}
+        stroke={alpha(color, 0.5)}
         strokeWidth={1}
       />
     );
   });
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+    <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
       <svg width={660} height={360} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={center} cy={center} r={radius} fill={alpha(theme.palette.primary.main, 0.03)} stroke={alpha(theme.palette.text.primary, 0.15)} />
+        <circle cx={center} cy={center} r={radius} fill="var(--color-primary-fg)" stroke="var(--color-border)" />
         {gridPolygons}
         {axes}
         <polygon
           points={valuePoints}
-          fill={alpha(theme.palette.primary.main, 0.2)}
-          stroke={theme.palette.primary.main}
+          fill="rgba(137, 91, 245, 0.2)"
+          stroke="var(--color-primary)"
           strokeWidth={2}
         />
         {dots}
       </svg>
-    </Box>
+    </div>
   );
 };
 
 const ReportViewer = () => {
   const { quizId, attemptId } = useParams();
   const navigate = useNavigate();
-  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -355,6 +368,7 @@ const ReportViewer = () => {
   const [packets, setPackets] = useState([]);
   const [template, setTemplate] = useState(defaultTemplate);
   const [selectedPacketId, setSelectedPacketId] = useState('all');
+
   const isSpecialReport = useMemo(() => {
     const name = quiz?.name?.toLowerCase() || '';
     return (
@@ -457,23 +471,18 @@ const ReportViewer = () => {
     if (!attempt || packets.length === 0) return scores;
     const marksMap = attempt.packet_marks || {};
 
-    // Debug logging
     console.log('ReportViewer - Attempt packet_marks:', marksMap);
     console.log('ReportViewer - Packets:', packets);
 
     for (const packet of packets) {
-      // Try multiple ways to find the packet marks
-      // First try packet name as key
       let m = marksMap[packet.name];
       console.log(`Checking packet: ${packet.name} (${packet.id}) - Name match:`, m);
 
-      // If not found, try packet ID as key
       if (!m && packet.id) {
         m = marksMap[packet.id];
         console.log(`Checking packet: ${packet.name} (${packet.id}) - ID match:`, m);
       }
 
-      // If still not found, try to find by matching any key that contains the packet name
       if (!m) {
         const keys = Object.keys(marksMap);
         const matchingKey = keys.find(key =>
@@ -491,12 +500,10 @@ const ReportViewer = () => {
 
       console.log(`Final marks for ${packet.name}: marks=${marks}, total=${totalMarks}`);
 
-      // If totalMarks is 0, try to calculate it from packet data
       if (totalMarks === 0 && packet.questions && Array.isArray(packet.questions)) {
         totalMarks = packet.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
       }
 
-      // If still 0, try to get from packet's maxMarks or calculate from scoring scale
       if (totalMarks === 0 && packet.scoringScale && Array.isArray(packet.scoringScale)) {
         const maxRange = packet.scoringScale.reduce((max, range) => Math.max(max, range.max), 0);
         totalMarks = maxRange;
@@ -529,10 +536,7 @@ const ReportViewer = () => {
 
   const handleDownloadPDF = async () => {
     try {
-      // ── 2-second delay to let everything render properly ──
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Target the report container
       const element = document.getElementById('report-container');
 
       if (!element) {
@@ -541,12 +545,10 @@ const ReportViewer = () => {
         return;
       }
 
-      // Pre-process: Replace external images with local versions before capturing
       const allImages = element.querySelectorAll('img');
       allImages.forEach(img => {
         if (img.src && img.src.includes('happimynd.com')) {
           console.log('Pre-processing external image:', img.src);
-          
           if (img.src.includes('happimynd_logo.png')) {
             img.src = '/happimynd_logo.png';
           } else if (img.src.includes('play_store.png')) {
@@ -557,24 +559,20 @@ const ReportViewer = () => {
         }
       });
 
-      // Small delay to let images reload
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        logging: true,  // Enable logging to see CORS issues
+        logging: true,
         backgroundColor: '#ffffff',
-        allowTaint: false,  // Changed to false for better security
+        allowTaint: false,
         foreignObjectRendering: false,
-        imageTimeout: 15000, // 15 second timeout for images
+        imageTimeout: 15000,
         onclone: (clonedDoc) => {
-          // Handle external images - replace with local versions
           clonedDoc.querySelectorAll('img').forEach(img => {
             if (img.src && img.src.includes('happimynd.com')) {
               console.log('Found external image:', img.src);
-              
-              // Replace external happimynd images with local versions
               if (img.src.includes('happimynd_logo.png')) {
                 img.src = '/happimynd_logo.png';
                 console.log('Replaced logo with local version');
@@ -585,7 +583,6 @@ const ReportViewer = () => {
                 img.src = '/app_store.png';
                 console.log('Replaced app_store with local version');
               } else {
-                // For other external images, try to add crossorigin
                 img.setAttribute('crossorigin', 'anonymous');
                 console.log('Added crossorigin to:', img.src);
               }
@@ -598,15 +595,13 @@ const ReportViewer = () => {
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'px',
-        format: [canvas.width / 2, canvas.height / 2], // match element dimensions
+        format: [canvas.width / 2, canvas.height / 2],
       });
 
       pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
       pdf.save('report.pdf');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      
-      // Check if it's a CORS-related error
       const isCorsError = error.message?.includes('CORS') || 
                          error.message?.includes('tainted') ||
                          error.message?.includes('SecurityError');
@@ -621,389 +616,202 @@ const ReportViewer = () => {
 
   if (loading) {
     return (
-      <Box sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '60vh',
-        gap: 2
-      }}>
-        <CircularProgress size={60} thickness={4} />
-        <Typography variant="h6" color="text.secondary">Loading your report...</Typography>
-      </Box>
+      <div className="rv-loading-screen">
+        <div className="rv-spinner" />
+        <p style={{ fontWeight: 600, color: 'var(--color-secondary)' }}>Loading your report...</p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ maxWidth: 900, mx: 'auto', p: 3 }}>
-        <Alert
-          severity="error"
-          sx={{
-            mb: 2,
-            borderRadius: 2,
-            '& .MuiAlert-message': { fontSize: '1.1rem' }
-          }}
-        >
+      <div className="rv-error-screen">
+        <div className="rv-alert-error">
           {error}
-        </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
+        </div>
+        <button
+          className="rv-btn rv-btn--outline"
           onClick={() => navigate('/')}
-          size="large"
         >
-          Back to Dashboard
-        </Button>
-      </Box>
+          <ArrowBackIcon style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Back to Dashboard
+        </button>
+      </div>
     );
   }
 
   return (
-    <Box id="report-container" sx={{
-      maxWidth: 1200,
-      mx: 'auto',
-      p: 3,
-      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-      minHeight: '100vh'
-    }}>
-      {/* Header */}
-      <Paper
-        elevation={0}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          mb: 3,
-          p: 2,
-          borderRadius: 3,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)'
-        }}
-      >
-        <Tooltip title="Back to Dashboard">
-          <IconButton
-            onClick={() => navigate('/')}
-            sx={{
-              mr: 2,
-              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.2) }
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-        </Tooltip>
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div id="report-container" className="report-viewer-container">
+      {/* Shell Header */}
+      <div className="rv-shell-header">
+        <button
+          className="rv-icon-btn"
+          title="Back to Dashboard"
+          onClick={() => navigate('/')}
+        >
+          <ArrowBackIcon />
+        </button>
+        <div className="rv-logo-wrap">
           <img
             src="/happimynd_logo.png"
             alt="HappiMynd Logo"
-            style={{
-              height: '80px',
-              width: 'auto',
-              objectFit: 'contain'
-            }}
+            className="rv-logo-img"
           />
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<DownloadIcon />}
+        </div>
+        <button
+          className="rv-btn rv-btn--primary"
           onClick={handleDownloadPDF}
-          sx={{
-            borderRadius: 2,
-            px: 3,
-            py: 1,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            boxShadow: '0 4px 20px rgba(102, 126, 234, 0.3)'
-          }}
         >
-          Download Report
-        </Button>
-      </Paper>
+          <DownloadIcon /> Download Report
+        </button>
+      </div>
 
       {/* Main Header Card */}
       {template?.header?.enabled && (
-        <Card sx={{
-          mb: 4,
-          background: template.header.backgroundColor,
-          color: template.header.textColor,
-          borderRadius: 4,
-          overflow: 'hidden',
-          position: 'relative',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Ccircle cx="30" cy="30" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-            opacity: 0.3
-          }
-        }}>
-          <CardContent sx={{ p: 4, position: 'relative', zIndex: 1 }}>
-            <Typography variant="h3" sx={{ fontWeight: 900, mb: 1, textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-              {template.header.title || 'Assessment Report'}
-            </Typography>
-            <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: '1.4rem' }}>
-              {template.header.subtitle || quiz?.name}
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8, mt: 2 }}>
-              Generated on {formatDate(new Date().toISOString())}
-            </Typography>
-          </CardContent>
-        </Card>
+        <div 
+          className="rv-card rv-card--header" 
+          style={{ 
+            background: template.header.backgroundColor, 
+            color: template.header.textColor 
+          }}
+        >
+          <h1 className="rv-card__header-title">
+            {template.header.title || 'Assessment Report'}
+          </h1>
+          <p className="rv-card__header-subtitle">
+            {template.header.subtitle || quiz?.name}
+          </p>
+          <p className="rv-card__header-date">
+            Generated on {formatDate(new Date().toISOString())}
+          </p>
+        </div>
       )}
 
       {/* User Info Card */}
       {template?.userInfo?.enabled && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-                {(user?.user_name || user?.email || 'U')[0].toUpperCase()}
-              </Avatar>
-              Assessment Details
-            </Typography>
-            <Grid container spacing={4}>
-              <Grid item xs={12} sm={6} md={3}>
-                <Box sx={{ textAlign: 'center', p: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                    Participant
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                    {user?.user_name || user?.email || 'Anonymous'}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Box sx={{ textAlign: 'center', p: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                    Email
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                    {user?.email || 'N/A'}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Box sx={{ textAlign: 'center', p: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                    Assessment
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                    {quiz?.name || 'Untitled'}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Box sx={{ textAlign: 'center', p: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                    Completed
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                    {formatDate(attempt?.completed_at)}
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+        <div className="rv-card">
+          <h2 className="rv-card__title">
+            <div className="rv-avatar">
+              {(user?.user_name || user?.email || 'U')[0].toUpperCase()}
+            </div>
+            Assessment Details
+          </h2>
+          <div className="rv-grid rv-grid--4cols">
+            <div className="rv-grid-item">
+              <div className="rv-info-box">
+                <p className="rv-info-box__label">Participant</p>
+                <p className="rv-info-box__value">{user?.user_name || user?.email || 'Anonymous'}</p>
+              </div>
+            </div>
+            <div className="rv-grid-item">
+              <div className="rv-info-box">
+                <p className="rv-info-box__label">Email</p>
+                <p className="rv-info-box__value">{user?.email || 'N/A'}</p>
+              </div>
+            </div>
+            <div className="rv-grid-item">
+              <div className="rv-info-box">
+                <p className="rv-info-box__label">Assessment</p>
+                <p className="rv-info-box__value">{quiz?.name || 'Untitled'}</p>
+              </div>
+            </div>
+            <div className="rv-grid-item">
+              <div className="rv-info-box">
+                <p className="rv-info-box__label">Completed</p>
+                <p className="rv-info-box__value">{formatDate(attempt?.completed_at)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Custom Header Text */}
       {quiz?.report_header && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Box
-              sx={{
-                lineHeight: 1.8,
-                fontSize: '1.1rem',
-                color: 'text.primary',
-                textAlign: 'Justify',
-                '& h1, & h2, & h3, & h4, & h5, & h6': {
-                  fontWeight: 600,
-                  marginBottom: '0.5rem',
-                  marginTop: '1rem',
-                  textAlign: 'left'
-                },
-                '& h1': { fontSize: '1.5rem' },
-                '& h2': { fontSize: '1.3rem' },
-                '& h3': { fontSize: '1.2rem' },
-                '& p': { marginBottom: '0.75rem', textAlign: 'Justify' },
-                '& ul, & ol': { marginBottom: '0.75rem', paddingLeft: '1.5rem', textAlign: 'Justify' },
-                '& li': { marginBottom: '0.25rem', textAlign: 'Justify' },
-                '& strong': { fontWeight: 600 },
-                '& em': { fontStyle: 'italic' },
-                '& a': { color: 'primary.main', textDecoration: 'underline' },
-                '& table': {
-                  textAlign: 'left',
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  margin: '1rem 0',
-                  border: '1px solid #e0e0e0'
-                },
-                '& th, & td': {
-                  textAlign: 'left',
-                  padding: '12px 16px',
-                  border: '1px solid #e0e0e0',
-                  verticalAlign: 'top'
-                },
-                '& th': {
-                  backgroundColor: '#f5f5f5',
-                  fontWeight: 600,
-                  fontSize: '0.9rem'
-                },
-                '& td': {
-                  fontSize: '0.9rem'
-                },
-                '& tr:nth-of-type(even)': {
-                  backgroundColor: '#fafafa'
-                }
-              }}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_header}</ReactMarkdown>
-            </Box>
-          </CardContent>
-        </Card>
+        <div className="rv-card">
+          <div className="rv-markdown-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_header}</ReactMarkdown>
+          </div>
+        </div>
       )}
 
       {/* Modern Charts Section */}
       {template?.charts?.enabled && packetScores.length > 0 && !isSpecialReport && !showShortReportFeatures && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                📊 Score Card
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>View Section</InputLabel>
-                <Select
-                  value={selectedPacketId}
-                  label="View Section"
-                  onChange={(e) => setSelectedPacketId(e.target.value)}
-                  sx={{ borderRadius: 2 }}
-                >
-                  <MenuItem value="all">All Sections</MenuItem>
-                  {packets.map(p => (
-                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
+        <div className="rv-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+            <h2 className="rv-card__title" style={{ margin: 0 }}>📊 Score Card</h2>
+            <div className="rv-select-wrap">
+              <span className="rv-select-label">View Section:</span>
+              <select
+                className="rv-select"
+                value={selectedPacketId}
+                onChange={(e) => setSelectedPacketId(e.target.value)}
+              >
+                <option value="all">All Sections</option>
+                {packets.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-            <Grid container spacing={4} style={{ justifyContent: 'center' }}>
-              {/* Overall Performance Rings - full width */}
-              <Grid item xs={12}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    borderRadius: 3,
-                    border: '1px solid #e5e7eb',
-                    background: '#ffffff',
-                    height: '100%'
-                  }}
-                >
-                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                    Parameter Wise Scores
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {filteredPacketScores.map(score => (
-                      <Box key={score.id}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                            {score.name}
-                          </Typography>
-                          <Chip
-                            size="small"
-                            label={score.level?.label}
-                            sx={{
-                              backgroundColor: score.level?.color,
-                              color: 'white',
-                              fontWeight: 700,
-                              px: 1
-                            }}
+          <div className="rv-grid" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="rv-grid-item">
+              <div className="rv-info-box" style={{ background: '#ffffff', textAlign: 'left', padding: '24px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--color-fg)' }}>
+                  Parameter Wise Scores
+                </h3>
+                <div className="rv-parameter-list">
+                  {filteredPacketScores.map(score => {
+                    const scoreColor = score.level?.color || '#3b82f6';
+                    return (
+                      <div className="rv-parameter-item" key={score.id}>
+                        <div className="rv-parameter-meta">
+                          <span className="rv-parameter-name">{score.name}</span>
+                          <span className="rv-badge" style={{ backgroundColor: scoreColor }}>
+                            {score.level?.label}
+                          </span>
+                        </div>
+                        <div className="rv-progress-container" style={{ borderColor: alpha(scoreColor, 0.2), backgroundColor: alpha(scoreColor, 0.05) }}>
+                          <div 
+                            className="rv-progress-fill" 
+                            style={{ 
+                              width: `${Math.max(5, (score.marks / score.totalMarks) * 100)}%`, 
+                              backgroundColor: scoreColor,
+                              boxShadow: `0 0 10px ${alpha(scoreColor, 0.3)}`
+                            }} 
                           />
-                        </Box>
-                        <Box sx={{
-                          height: 12,
-                          width: '100%',
-                          bgcolor: alpha(score.level?.color || '#eee', 0.1),
-                          borderRadius: 6,
-                          overflow: 'hidden',
-                          border: '1px solid',
-                          borderColor: alpha(score.level?.color || '#eee', 0.2)
-                        }}>
-                          <Box sx={{
-                            height: '100%',
-                            width: `${Math.max(5, (score.marks / score.totalMarks) * 100)}%`,
-                            bgcolor: score.level?.color || '#ccc',
-                            borderRadius: 6,
-                            boxShadow: `0 0 10px ${alpha(score.level?.color || '#000', 0.3)}`
-                          }} />
-                        </Box>
-                      </Box>
-                    ))}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                    {selectedPacketId === 'all' && filteredPacketScores.length > 1 && (
-                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed #e5e7eb' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                            Overall Performance
-                          </Typography>
-                          <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                            {Math.round((packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100)}%
-                          </Typography>
-                        </Box>
-                        <Box sx={{
-                          height: 8,
-                          width: '100%',
-                          bgcolor: '#f1f5f9',
-                          borderRadius: 4,
-                          overflow: 'hidden'
-                        }}>
-                          <Box sx={{
-                            height: '100%',
-                            width: `${(packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100}%`,
-                            bgcolor: 'primary.main',
-                            borderRadius: 4
-                          }} />
-                        </Box>
-                      </Box>
-                    )}
-                  </Box>
-                </Paper>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+                  {selectedPacketId === 'all' && filteredPacketScores.length > 1 && (
+                    <div className="rv-overall-summary-box">
+                      <div className="rv-parameter-meta" style={{ marginBottom: '8px' }}>
+                        <span className="rv-parameter-name" style={{ color: 'var(--color-primary)', fontWeight: 800 }}>Overall Performance</span>
+                        <span style={{ fontWeight: 700, color: 'var(--color-fg)' }}>
+                          {Math.round((packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100)}%
+                        </span>
+                      </div>
+                      <div className="rv-progress-container" style={{ height: '8px' }}>
+                        <div 
+                          className="rv-progress-fill" 
+                          style={{ 
+                            width: `${(packetScores.reduce((acc, p) => acc + p.marks, 0) / packetScores.reduce((acc, p) => acc + p.totalMarks, 0)) * 100}%`, 
+                            backgroundColor: 'var(--color-primary)' 
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Personality Analysis - For Personality Quizzes */}
       {template?.sectionAnalysis?.enabled && packetScores.length > 0 && (() => {
-        // Check if this appears to be a personality quiz by looking for known personality types
         const personalityTypes = [
           'Paranoid', 'Dissocial', 'Impulsive', 'Borderline',
           'Histrionic', 'Anankastic', 'Anxious', 'Dependent'
@@ -1017,57 +825,33 @@ const ReportViewer = () => {
 
         if (!isPersonalityQuiz) return null;
 
-        // Sort packets by score (marks) descending and get top 2
         const sortedPackets = [...packetScores].sort((a, b) => b.marks - a.marks);
         const primaryPersonality = sortedPackets.length > 0 ? sortedPackets[0] : null;
         const secondaryPersonality = sortedPackets.length > 1 ? sortedPackets[1] : null;
 
-        // Personality descriptions mapping
         const personalityDescriptions = {
           "Paranoid": "You seem to be a considerate and thoughtful person who tends to give a lot of love and attention to people around. You might be expecting the same treatment in return. However, it might not be possible for everyone to be available for you all the time. Sometimes, it might hurt and you tend to start keeping a distance from such people. You have a great eye for details and tasks which need vigilance can be assigned to you confidently. In fact, you can take up some serious and mundane tasks with a lot of ease and relieve others from the pain of micromanagement when you are around. These traits in you can make some people perceive that it is hard to communicate with you. However, you might be protecting some key tasks or saving yourself from getting hurt.",
-
           "Dissocial": "You seem to have a higher purpose in life and are open to taking risks to achieve it. You are someone who can step out of your comfort zone for any cause and lead by example. Your hard work and drive are inspiring for others and can help even the most difficult projects succeed. You can take decisions and stand by them. However, this open and revolutionary behavior may not always conform to societal norms and may create challenges. Your close ones might feel that you are ignoring their emotional needs, so be mindful of that.",
-
           "Impulsive": "You have the ability to take steps in life that others cannot, but be careful not to be rash. People may see you as courageous and a path breaker, but they may also take advantage of this trait. Acting swiftly helps you seize opportunities, but you may also be sensitive to criticism and struggle with stressful situations. This can lead to vulnerability and, at times, troubling thoughts or emotional instability. You may face challenges in relationships due to intense emotions. Practicing calmness and mindfulness is advised.",
-
           "Borderline": "You can be creative and intense in your approach. You may be selective about your needs and wants, which can sometimes lead to confusion and delayed decision-making. It seems like you are exploring your identity, which may create uncertainty. Your relationships may be deep and intense, but partners may not always meet your emotional expectations. This can lead to feelings of emptiness or disconnection. Repetitive behavioral patterns may create adjustment issues. Being more informed and confident in your choices can help.",
-
           "Histrionic": "You might be an emotional and expressive person, which may make others perceive you as attention-seeking. You are confident and capable of creating a vision for others. Your ability to focus on the bigger picture helps you lead and align people toward a shared purpose. Your communication skills and presence can give you an advantage in group settings.",
-
           "Anankastic": "You prefer following routines and may not appreciate frequent changes. Meeting timelines suits you well and makes you competitive and hardworking. You appear to be ambitious and constantly strive to improve yourself and outperform others.",
-
           "Anxious": "You have a friendly and welcoming personality. You tend to seek advice from friends and family before making important decisions. Your considerate nature makes you likable and popular. You may prefer to follow guidance and avoid questioning authority, often going with the flow.",
-
           "Dependent": "You feel responsible and have hidden ambitions. You work hard in areas you are passionate about and pay close attention to detail. Perfectionism is one of your strengths, but it may also cause you to spend excessive time refining even small tasks. You may sometimes feel you are not meeting your own expectations and doubt your work quality. This need for perfection can impact your relationships, as everything else may take a back seat."
         };
 
         const getPersonalityDescription = (packetName) => {
           if (!packetName) return null;
-
-          // Try exact match first
-          if (personalityDescriptions[packetName]) {
-            return personalityDescriptions[packetName];
-          }
-
-          // Try case-insensitive match
+          if (personalityDescriptions[packetName]) return personalityDescriptions[packetName];
           const lowerPacketName = packetName.toLowerCase();
           const matchedKey = Object.keys(personalityDescriptions).find(key =>
             key.toLowerCase() === lowerPacketName
           );
-
-          if (matchedKey) {
-            return personalityDescriptions[matchedKey];
-          }
-
-          // Try partial match
+          if (matchedKey) return personalityDescriptions[matchedKey];
           const partialMatch = Object.keys(personalityDescriptions).find(key =>
             lowerPacketName.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerPacketName)
           );
-
-          if (partialMatch) {
-            return personalityDescriptions[partialMatch];
-          }
-
+          if (partialMatch) return personalityDescriptions[partialMatch];
           return null;
         };
 
@@ -1075,368 +859,206 @@ const ReportViewer = () => {
         const secondaryDescription = secondaryPersonality ? getPersonalityDescription(secondaryPersonality.name) : null;
 
         return (
-          <Card sx={{
-            mb: 4,
-            borderRadius: 4,
-            background: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-          }}>
-            <CardContent sx={{ p: 4 }}>
-              <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                🎭 Personality Analysis
-              </Typography>
+          <div className="rv-card">
+            <h2 className="rv-card__title">🎭 Personality Analysis</h2>
+            
+            {primaryPersonality && primaryDescription && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', lineHeight: 1.8, fontSize: '15px', textAlign: 'justify', color: 'var(--color-fg)' }}>
+                  {primaryDescription}
+                </div>
+              </div>
+            )}
+            
+            {secondaryPersonality && secondaryDescription && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', lineHeight: 1.8, fontSize: '15px', textAlign: 'justify', color: 'var(--color-fg)' }}>
+                  {secondaryDescription}
+                </div>
+              </div>
+            )}
 
-              {/* Primary Personality */}
-              {primaryPersonality && (
-                <Box sx={{ mb: 4 }}>
-                  {primaryDescription && (
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 3,
-                        borderRadius: 2,
-                        backgroundColor: '#fafafa',
-                        border: '1px solid #e5e7eb'
-                      }}
-                    >
-                      <Typography variant="body2" sx={{
-                        lineHeight: 1.8,
-                        color: 'text.primary',
-                        textAlign: 'justify',
-                        fontSize: '0.95rem'
-                      }}>
-                        {primaryDescription}
-                      </Typography>
-                    </Paper>
-                  )}
-                </Box>
-              )}
-
-              {/* Secondary Personality */}
-              {secondaryPersonality && (
-                <Box>
-                  {secondaryDescription && (
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 3,
-                        borderRadius: 2,
-                        backgroundColor: '#fafafa',
-                        border: '1px solid #e5e7eb'
-                      }}
-                    >
-                      <Typography variant="body2" sx={{
-                        lineHeight: 1.8,
-                        color: 'text.primary',
-                        textAlign: 'justify',
-                        fontSize: '0.95rem'
-                      }}>
-                        {secondaryDescription}
-                      </Typography>
-                    </Paper>
-                  )}
-                </Box>
-              )}
-
-              {!primaryPersonality && !secondaryPersonality && (
-                <Alert severity="info">
-                  Personality analysis requires at least one completed section.
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+            {!primaryPersonality && !secondaryPersonality && (
+              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
+                Personality analysis requires at least one completed section.
+              </div>
+            )}
+          </div>
         );
       })()}
 
       {/* Detailed Section Analysis (Hide for Personality Quizzes) */}
       {template?.sectionAnalysis?.enabled && !quiz?.name?.toLowerCase().includes('personality') && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              🔍 Analysis
-            </Typography>
+        <div className="rv-card">
+          <h2 className="rv-card__title">🔍 Analysis</h2>
+          <div className="rv-analysis-grid rv-analysis-grid--2cols">
+            {filteredPacketScores.map(p => {
+              const pColor = p.level?.color || '#3b82f6';
+              const lightBg = p.level?.lightColor || '#f8fafc';
+              return (
+                <div 
+                  className="rv-analysis-card" 
+                  key={p.id}
+                  style={{
+                    background: `linear-gradient(135deg, ${lightBg} 0%, #ffffff 100%)`
+                  }}
+                >
+                  <div className="rv-analysis-card__header">
+                    <div 
+                      className="rv-avatar rv-avatar--large" 
+                      style={{
+                        backgroundColor: pColor,
+                        boxShadow: `0 4px 20px ${alpha(pColor, 0.3)}`
+                      }}
+                    >
+                      {p.level?.image && p.level.image.startsWith('data:image') ? (
+                        <img src={p.level.image} alt="badge" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                      ) : (
+                        p.level?.icon || '📘'
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="rv-analysis-card__title">{p.name}</h3>
+                      {!showShortReportFeatures && (
+                        <span className="rv-badge" style={{ backgroundColor: pColor }}>
+                          {p.level?.label || 'Level'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-            <Grid container spacing={3}>
-              {filteredPacketScores.map(p => (
-                <Grid item xs={12} md={showShortReportFeatures && filteredPacketScores.length === 1 ? 12 : 6} key={p.id}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 3,
-                      borderRadius: 3,
-                      border: '1px solid #e5e7eb',
-                      background: `linear-gradient(135deg, ${p.level?.lightColor || '#f8fafc'} 0%, #ffffff 100%)`,
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        transform: 'translateY(-4px)',
-                        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Avatar src={p.level?.image && p.level.image.startsWith('data:image') ? p.level.image : undefined} sx={{
-                        bgcolor: p.level?.color || '#6b7280',
-                        width: 50,
-                        height: 50,
-                        mr: 2,
-                        fontSize: '24px',
-                        boxShadow: `0 4px 20px ${alpha(p.level?.color || '#6b7280', 0.3)}`
-                      }}>
-                        {p.level?.image && p.level.image.startsWith('data:image') ? '' : (p.level?.icon || '📘')}
-                      </Avatar>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                          {p.name}
-                        </Typography>
-                        {!showShortReportFeatures && (
-                          <Chip
-                            label={p.level?.label || 'Level'}
-                            sx={{
-                              backgroundColor: p.level?.color || '#6b7280',
-                              color: 'white',
-                              fontWeight: 700,
-                              fontSize: '0.75rem'
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </Box>
-
-                    {showShortReportFeatures && (
-                      <Box sx={{ mb: 3 }}>
-                        <Box sx={{
-                          height: 32,
-                          width: '100%',
-                          bgcolor: alpha(p.level?.color || '#eee', 0.1),
-                          borderRadius: 2,
-                          overflow: 'hidden',
-                          border: '1px solid',
-                          borderColor: alpha(p.level?.color || '#eee', 0.2),
-                          position: 'relative',
+                  {showShortReportFeatures && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <div 
+                        className="rv-progress-container" 
+                        style={{ 
+                          height: '32px', 
+                          borderColor: alpha(pColor, 0.2), 
+                          backgroundColor: alpha(pColor, 0.05),
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <Box sx={{
+                          justifyContent: 'center',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        <div 
+                          className="rv-progress-fill" 
+                          style={{ 
                             position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            height: '100%',
-                            width: `${Math.max(10, (p.marks / p.totalMarks) * 100)}%`,
-                            bgcolor: p.level?.color || '#ccc',
-                            transition: 'width 1s ease-in-out',
-                            boxShadow: `0 0 20px ${alpha(p.level?.color || '#000', 0.2)}`
-                          }} />
-                          <Typography variant="subtitle2" sx={{
+                            left: 0, top: 0, bottom: 0,
+                            width: `${Math.max(10, (p.marks / p.totalMarks) * 100)}%`, 
+                            backgroundColor: pColor,
+                            borderRadius: '4px',
+                            boxShadow: `0 0 20px ${alpha(pColor, 0.2)}`
+                          }} 
+                        />
+                        <span 
+                          style={{
                             position: 'relative',
                             zIndex: 1,
                             fontWeight: 800,
-                            color: (p.marks / p.totalMarks) > 0.4 ? 'white' : 'text.primary',
+                            color: (p.marks / p.totalMarks) > 0.4 ? 'white' : 'var(--color-fg)',
                             textTransform: 'uppercase',
-                            letterSpacing: 1,
+                            letterSpacing: '1px',
+                            fontSize: '13px',
                             textShadow: (p.marks / p.totalMarks) > 0.4 ? '0 1px 2px rgba(0,0,0,0.4)' : 'none'
-                          }}>
-                            {p.level?.label}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    )}
+                          }}
+                        >
+                          {p.level?.label}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                    <Divider sx={{ mb: 2 }} />
-
-                    {/* Insights Text */}
-                    <Typography variant="body2" sx={{
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.6,
-                      color: 'text.secondary',
-                      fontStyle: 'italic',
-                      textAlign: 'justify'
-                    }}>
-                      {p.level?.largeText || 'No detailed description available for this level.'}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
+                  <div style={{ height: '1px', backgroundColor: 'var(--color-border)', margin: '16px 0' }} />
+                  
+                  <p className="rv-analysis-card__text">
+                    {p.level?.largeText || 'No detailed description available for this level.'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Custom Footer Text */}
       {quiz?.report_footer && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Box
-              sx={{
-                lineHeight: 1.8,
-                fontSize: '1.1rem',
-                color: 'text.primary',
-                textAlign: 'left',
-                '& h1, & h2, & h3, & h4, & h5, & h6': {
-                  fontWeight: 600,
-                  marginBottom: '0.5rem',
-                  marginTop: '1rem',
-                  textAlign: 'left'
-                },
-                '& h1': { fontSize: '1.5rem' },
-                '& h2': { fontSize: '1.3rem' },
-                '& h3': { fontSize: '1.2rem' },
-                '& p': { marginBottom: '0.75rem', textAlign: 'left' },
-                '& ul, & ol': { marginBottom: '0.75rem', paddingLeft: '1.5rem', textAlign: 'left' },
-                '& li': { marginBottom: '0.25rem', textAlign: 'left' },
-                '& strong': { fontWeight: 600 },
-                '& em': { fontStyle: 'italic' },
-                '& a': { color: 'primary.main', textDecoration: 'underline' },
-                '& table': {
-                  textAlign: 'justify',
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  margin: '1rem 0',
-                  border: '1px solid #e0e0e0'
-                },
-                '& th, & td': {
-                  textAlign: 'justify',
-                  padding: '12px 16px',
-                  border: '1px solid #e0e0e0',
-                  verticalAlign: 'top'
-                },
-                '& th': {
-                  backgroundColor: '#f5f5f5',
-                  fontWeight: 600,
-                  fontSize: '0.9rem'
-                },
-                '& td': {
-                  fontSize: '0.8rem'
-                },
-                '& tr:nth-of-type(even)': {
-                  backgroundColor: '#fafafa'
-                }
-              }}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_footer}</ReactMarkdown>
-            </Box>
-          </CardContent>
-        </Card>
+        <div className="rv-card">
+          <div className="rv-markdown-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_footer}</ReactMarkdown>
+          </div>
+        </div>
       )}
 
       {/* Next Steps Section */}
       {showShortReportFeatures && (
-        <Card sx={{
-          mb: 4,
-          borderRadius: 4,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        }}>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-              🎯 Next Steps
-            </Typography>
+        <div className="rv-card">
+          <h2 className="rv-card__title">🎯 Next Steps</h2>
+          
+          <p style={{ marginBottom: '16px', textAlign: 'justify', lineHeight: 1.8, fontSize: '1.05rem', color: 'var(--color-fg)' }}>
+            Congratulations on completing your self assessment and going through the summary. Now that you know how you are doing on this aspect of life, we are sure you have gained a comprehensive understanding of what steps to be taken up next.
+          </p>
+          
+          <p style={{ marginBottom: '16px', textAlign: 'justify', lineHeight: 1.8, fontSize: '1.05rem', color: 'var(--color-fg)' }}>
+            If you are keen on making the most out of your summary, an assisted session by our emotional wellbeing expert will guide you in minutely scrutinizing and interpreting your performance on this parameter, what implications the scores carry, and guiding you on the necessary next steps that can set you sailing on a holistic wellness journey.
+          </p>
+          
+          <p style={{ marginBottom: '24px', textAlign: 'justify', lineHeight: 1.8, fontSize: '1.05rem', color: 'var(--color-fg)' }}>
+            Once aware of your needs, you can choose from our unique range of accessible, actionable & transformative services available over a fully digital human assisted platform while ensuring utmost confidentiality.
+          </p>
 
-            <Typography variant="body1" sx={{ mb: 3, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
-              Congratulations on completing your self assessment and going through the summary. Now that you know how you are doing on this aspect of life, we are sure you have gained a comprehensive understanding of what steps to be taken up next.
-            </Typography>
+          <div style={{ height: '1px', backgroundColor: 'var(--color-border)', margin: '24px 0' }} />
+          
+          <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 16px 0' }}>🤝 Support Services:</h3>
 
-            <Typography variant="body1" sx={{ mb: 3, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
-              If you are keen on making the most out of your summary, an assisted session by our emotional wellbeing expert will
-              guide you in minutely scrutinizing and interpreting your performance on this parameter, what implications the scores carry, and
-              guiding you on the necessary next steps that can set you sailing on a holistic wellness journey.
-            </Typography>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+            {[
+              { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
+              { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
+              { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
+              { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
+              { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
+            ].map((service) => (
+              <div key={service.name} style={{ fontSize: '14px', lineHeight: 1.6, textAlign: 'justify', color: 'var(--color-fg)' }}>
+                <strong>{service.name}</strong> {service.desc}
+              </div>
+            ))}
+          </div>
 
-            <Typography variant="body1" sx={{ mb: 4, textAlign: 'justify', lineHeight: 1.8, fontSize: '1.1rem' }}>
-              Once aware of your needs, you can choose from our unique range of accessible, actionable & transformative services available over a fully
-              digital human assisted platform while ensuring utmost confidentiality.
-            </Typography>
+          <div className="rv-contact-details">
+            <h4 className="rv-contact-details__title">📞 Contact Details</h4>
+            <p className="rv-contact-details__text">
+              For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>9110599581</strong> or visit our website at <a href="https://www.happimynd.com" target="_blank" rel="noopener noreferrer">www.happimynd.com</a> to explore more.
+            </p>
+          </div>
 
-            <Divider sx={{ mb: 4 }} />
+          <h4 style={{ fontWeight: 700, color: 'var(--color-secondary)', fontSize: '14px', margin: '0 0 12px 0' }}>⚠️ Disclaimer :</h4>
+          
+          <span className="rv-disclaimer-text">
+            <strong>A.</strong> If the services are availed by a person who belongs/works with a company/organization which are enrolled with the services for its employees or has a tie up with HappiMynd, the services/tools available to the users are subject to the following terms:
+            <br />1. The user can avail only those services which the affiliated company has subscribed/purchased for its employees.
+            <br />2. If the user is willing to avail services which are not covered/subscribed/purchased by the affiliated company, then the user can make an individual/personal purchase of the required services.
+            <br />3. The services available and their prices for an individual user can be found on the dashboard of the HappiMynd app or website itself.
+          </span>
 
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1, color: 'primary.main', textAlign: 'left' }}>
-              🤝 Support Services:
-            </Typography>
-
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              {[
-                { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
-                { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
-                { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
-                { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
-                { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
-              ].map((service) => (
-                <Grid item xs={12} key={service.name}>
-                  <Typography variant="body2" sx={{ lineHeight: 1.6, textAlign: 'justify' }}>
-                    <strong>{service.name}</strong> {service.desc}
-                  </Typography>
-                </Grid>
-              ))}
-            </Grid>
-
-            <Box sx={{ p: 3, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3, mb: 4 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1, textAlign: 'left' }}>
-                📞 Contact Details
-              </Typography>
-              <Typography variant="body1" sx={{ textAlign: 'left' }}>
-                For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>9110599581</strong> or visit our website at <a href="https://www.happimynd.com" target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'none', fontWeight: 600 }}>www.happimynd.com</a> to explore more.
-              </Typography>
-            </Box>
-
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', textAlign: 'left' }}>
-              ⚠️ Disclaimer :
-            </Typography>
-
-            <Typography variant="caption" sx={{ display: 'block', mb: 2, textAlign: 'justify', lineHeight: 1.6, color: 'text.secondary' }}>
-              <strong>A.</strong> If the services are availed by a person who belongs/works with a company/organization which are enrolled with the services for its employees or has a tie up with HappiMynd, the services/tools available to the users are subject to the following terms:
-              <br />1. The user can avail only those services which the affiliated company has subscribed/purchased for its employees.
-              <br />2. If the user is willing to avail services which are not covered/subscribed/purchased by the affiliated company, then the user can make an individual/personal purchase of the required services.
-              <br />3. The services available and their prices for an individual user can be found on the dashboard of the HappiMynd app or website itself.
-            </Typography>
-
-            <Typography variant="caption" sx={{ display: 'block', textAlign: 'justify', lineHeight: 1.6, color: 'text.secondary' }}>
-              <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for medical advice. The statements used in HappiLIFE awareness tool are inspired by ICD-10 (WHO) & DSM-5® guidelines. If you are having difficult thoughts or going through rough times, consider calling the below listed helpline numbers:
-              <br />• National Emergency No. - 112
-              <br />• Women Helpline - 1091
-              <br />• Senior Citizen Helpline - 14567
-              <br />• Suicide Prevention - 9820466726 (AASRA)
-            </Typography>
-          </CardContent>
-        </Card>
+          <span className="rv-disclaimer-text">
+            <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for medical advice. The statements used in HappiLIFE awareness tool are inspired by ICD-10 (WHO) & DSM-5® guidelines. If you are having difficult thoughts or going through rough times, consider calling the below listed helpline numbers:
+            <br />• National Emergency No. - 112
+            <br />• Women Helpline - 1091
+            <br />• Senior Citizen Helpline - 14567
+            <br />• Suicide Prevention - 9820466726 (AASRA)
+          </span>
+        </div>
       )}
 
       {/* Footer */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          textAlign: 'center',
-          borderRadius: 3,
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)'
-        }}
-      >
-        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-          Report generated on {formatDate(new Date().toISOString())} •
-          Keep up the excellent work and continue learning! 🚀
-        </Typography>
-      </Paper>
-    </Box>
+      <div className="rv-card" style={{ textAlign: 'center', padding: '24px', margin: 0 }}>
+        <p style={{ margin: 0, fontWeight: 500, color: 'var(--color-secondary)', fontSize: '14px' }}>
+          Report generated on {formatDate(new Date().toISOString())} • Keep up the excellent work and continue learning! 🚀
+        </p>
+      </div>
+    </div>
   );
 };
 

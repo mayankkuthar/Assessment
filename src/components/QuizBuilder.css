@@ -1,0 +1,288 @@
+/* src/components/QuizBuilder.css */
+
+.quiz-builder {
+  width: 100%;
+}
+
+.quiz-builder__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .quiz-builder__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Card overrides for quiz builder */
+.quiz-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-6);
+  height: 100%;
+  min-height: 400px;
+}
+
+.quiz-card--form {
+  height: fit-content;
+  position: sticky;
+  top: var(--space-6);
+}
+
+.quiz-card__title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-fg);
+  margin-top: 0;
+  margin-bottom: var(--space-5);
+}
+
+/* Drag and Drop list area */
+.droppable-area {
+  min-height: 150px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background-color: rgba(255, 255, 255, 0.4);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.droppable-area--active {
+  background-color: rgba(137, 91, 245, 0.04);
+  border-color: var(--color-primary);
+}
+
+.draggable-packet {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-fast) var(--ease-out);
+  cursor: grab;
+}
+
+.draggable-packet:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.draggable-packet:active {
+  cursor: grabbing;
+}
+
+.draggable-packet__name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+  margin-bottom: 2px;
+}
+
+.draggable-packet__questions {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+}
+
+/* Available packets list */
+.available-packets-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.available-packet-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.available-packet-item:hover:not(.available-packet-item--disabled) {
+  border-color: var(--color-primary);
+  background-color: rgba(137, 91, 245, 0.02);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.available-packet-item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg);
+}
+
+.available-packet-item__name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+  margin-bottom: 2px;
+}
+
+.available-packet-item__questions {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+}
+
+/* Saved Quizzes Section */
+.saved-quizzes-card {
+  margin-top: var(--space-6);
+}
+
+.saved-quizzes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.saved-quiz-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.saved-quiz-item:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.saved-quiz-item__name {
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--color-fg);
+  margin-bottom: 2px;
+}
+
+.saved-quiz-item__date {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+}
+
+.saved-quiz-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Quiz Preview Section */
+.quiz-preview-card {
+  margin-top: var(--space-6);
+}
+
+.preview-question-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.preview-question-item {
+  padding: var(--space-4);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.preview-question-item__header {
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--color-fg);
+  margin-bottom: var(--space-2);
+}
+
+.preview-question-item__meta {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+  margin-bottom: var(--space-3);
+}
+
+.preview-question-item__options {
+  margin-left: var(--space-4);
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.preview-question-item__option {
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+}
+
+.preview-question-item__correct {
+  font-weight: 600;
+  color: #10b981;
+  font-size: var(--text-sm);
+}
+
+/* Button Toggle Group for Graph View */
+.btn-group-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+.btn-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-secondary);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-toggle:hover {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.btn-toggle--active {
+  background-color: var(--color-primary-fg);
+  color: var(--color-primary);
+}
+
+/* Alert Info */
+.alert--info {
+  background-color: var(--color-tertiary);
+  color: var(--color-primary);
+  border: 1px solid rgba(137, 91, 245, 0.2);
+}
+
+.graph-view-container {
+  height: 600px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.list-view-container {
+  height: 600px;
+  overflow-y: auto;
+  padding-bottom: var(--space-4);
+}

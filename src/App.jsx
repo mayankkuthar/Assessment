@@ -22,6 +22,7 @@ import ListItem from '@mui/material/ListItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Divider from '@mui/material/Divider'
+import MenuIcon from '@mui/icons-material/Menu'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import Brightness4Icon from '@mui/icons-material/Brightness4'
 import Brightness7Icon from '@mui/icons-material/Brightness7'
@@ -45,7 +46,7 @@ import AssessmentResults from './components/AssessmentResults'
 import AssessmentReport from './components/AssessmentReport'
 import ReportViewer from './components/ReportViewer'
 import AuthPage from './components/AuthPage'
-import UserDashboard from './components/UserDashboard'
+import UserDashboard from './components/UserDashboard/UserDashboard'
 import AdminDashboard from './components/AdminDashboard'
 import PasswordReset from './components/PasswordReset'
 import PDFTemplateConfig from './components/PDFTemplateConfig'
@@ -113,6 +114,7 @@ function App() {
   const [howToOpen, setHowToOpen] = useState(false)
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Get navigation items based on user type
   const navItems = isAdmin ? adminNavItems : userNavItems
@@ -391,69 +393,65 @@ function App() {
         <Route path="/report/:quizId/:attemptId" element={<ReportViewer />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="*" element={
-          <Box sx={{ display: 'flex' }}>
-            <Drawer
-              variant="permanent"
-              sx={{
-                width: drawerWidth,
-                flexShrink: 0,
-                [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
-              }}
-            >
-              <Toolbar />
-              <Box sx={{ overflow: 'auto', mt: 2 }}>
-                <List>
-                  {navItems.map((item, idx) => (
-                    <ListItem button key={item.label} selected={tab === idx} onClick={() => setTab(idx)}>
-                      <ListItemIcon>{item.icon}</ListItemIcon>
-                      <ListItemText primary={item.label} />
-                    </ListItem>
-                  ))}
-                </List>
-                <Divider sx={{ my: 2 }} />
-                <List>
-                  <ListItem button onClick={() => setHowToOpen(true)}>
-                    <ListItemIcon><InfoOutlinedIcon /></ListItemIcon>
-                    <ListItemText primary="How to Use" />
-                  </ListItem>
-                </List>
-              </Box>
-            </Drawer>
-            <Box
-              component="main"
-              sx={{
-                flexGrow: 1,
-                minHeight: '100vh',
-                background: 'inherit',
-                overflow: 'auto',
-              }}
-            >
-              <AppBar position="fixed" color="primary" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-                <Toolbar>
-                  <Typography variant="h6" sx={{ mr: 2 }}>
-                    Assessment Tool {isAdmin ? '(Admin)' : '(User)'} {useFallback && '(Fallback Mode)'}
-                  </Typography>
-                  <Box sx={{ flexGrow: 1 }} />
+          <div className="app-layout">
+            <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+              <div className="sidebar__header">
+                Assessment Tool
+              </div>
+              <nav className="sidebar__nav">
+                {navItems.map((item, idx) => (
+                  <div 
+                    key={item.label} 
+                    className={`nav-item ${tab === idx ? 'nav-item--active' : ''}`} 
+                    onClick={() => {
+                       setTab(idx)
+                       setSidebarOpen(false)
+                    }}
+                  >
+                    <div className="nav-item__icon">{item.icon}</div>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </nav>
+              <div className="sidebar__footer">
+                <div className="nav-item" onClick={() => setHowToOpen(true)}>
+                  <div className="nav-item__icon"><InfoOutlinedIcon /></div>
+                  <span>How to Use</span>
+                </div>
+              </div>
+            </aside>
+            <div className={`overlay ${sidebarOpen ? 'overlay--visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
+
+            <main className="main-content">
+              <header className="navbar">
+                <div className="navbar__left">
+                  <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
+                    <MenuIcon />
+                  </button>
+                  <div className="navbar__title">
+                    {isAdmin ? 'Admin Dashboard' : 'User Dashboard'} {useFallback && '(Fallback Mode)'}
+                  </div>
+                </div>
+                <div className="navbar__right">
                   {isAdmin && (
-                    <Button component="label" color="inherit" variant="outlined" sx={{ mr: 2 }}>
+                    <label className="btn btn--outline" style={{ margin: 0, cursor: 'pointer' }}>
                       Upload Excel
                       <input type="file" accept=".xlsx,.xls" hidden onChange={uploadExcel} />
-                    </Button>
+                    </label>
                   )}
-                  <IconButton color="inherit" onClick={() => setDarkMode((prev) => !prev)}>
+                  <IconButton onClick={() => setDarkMode((prev) => !prev)} style={{ color: 'var(--color-fg)' }}>
                     {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
                   </IconButton>
-                  <Button color="inherit" onClick={() => {
+                  <button className="btn btn--secondary" onClick={() => {
                     localStorage.removeItem('currentUser');
                     setUser(null);
                     setIsAdmin(false);
-                  }}>Logout</Button>
-                </Toolbar>
-              </AppBar>
-              <Toolbar />
+                  }}>Logout</button>
+                </div>
+              </header>
               
               {/* Content Area */}
-              <Box sx={{ mt: 2, width: '100%' }}>
+              <div className="content-area">
                 {isAdmin ? (
                   // Admin Mode
                   <>
@@ -618,8 +616,8 @@ function App() {
                     )}
                   </>
                 )}
-              </Box>
-            </Box>
+              </div>
+            </main>
             <Dialog open={howToOpen} onClose={() => setHowToOpen(false)} maxWidth="sm" fullWidth>
               <DialogTitle>How to Use</DialogTitle>
               <DialogContent dividers>
@@ -644,10 +642,10 @@ function App() {
                 )}
               </DialogContent>
               <DialogActions>
-                <Button onClick={() => setHowToOpen(false)}>Close</Button>
+                <button className="btn btn--primary" onClick={() => setHowToOpen(false)}>Close</button>
               </DialogActions>
             </Dialog>
-          </Box>
+          </div>
         } />
       </Routes>
     </ThemeProvider>

@@ -1,33 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
-import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
-import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SettingsIcon from '@mui/icons-material/Settings';
-import Slider from '@mui/material/Slider';
-import Switch from '@mui/material/Switch';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import Alert from '@mui/material/Alert';
+import CloseIcon from '@mui/icons-material/Close';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import './PacketManager.css';
 
 const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQuestion, updateQuestion, deleteQuestion, onDataChange }) => {
   const [packetName, setPacketName] = useState('');
@@ -758,606 +739,419 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Grid container spacing={4} sx={{ width: '100%', margin: 0 }}>
-        <Grid item xs={12} lg={4}>
-          <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, height: 'fit-content', position: 'sticky', top: 20 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>New Packet</Typography>
-              <TextField
-                label="Packet Name"
+    <div className="packet-manager">
+      <div className="packet-manager__grid">
+        {/* Left column / Sidebar */}
+        <div className="packet-manager__sidebar">
+          {/* New Packet Form */}
+          <div className="section-card">
+            <h3 className="section-card__title">New Packet</h3>
+            <div className="form-group">
+              <label className="form-label">Packet Name</label>
+              <input
+                type="text"
+                className="form-input"
                 value={packetName}
                 onChange={e => setPacketName(e.target.value)}
-                size="medium"
-                fullWidth
-                variant="outlined"
-                sx={{ mb: 3 }}
-                InputLabelProps={{ shrink: true }}
+                placeholder="Enter packet name..."
               />
-              <TextField
-                label="Description"
+            </div>
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <textarea
+                className="form-input"
                 value={packetDescription}
                 onChange={e => setPacketDescription(e.target.value)}
-                size="medium"
-                fullWidth
-                variant="outlined"
-                sx={{ mb: 3 }}
-                InputLabelProps={{ shrink: true }}
-                multiline
                 rows={2}
+                placeholder="Enter packet description..."
               />
-              <TextField
-                label="Scoring Logic"
+            </div>
+            <div className="form-group">
+              <label className="form-label">Scoring Logic</label>
+              <textarea
+                className="form-input"
                 value={scoringLogic}
                 onChange={e => setScoringLogic(e.target.value)}
-                size="medium"
-                fullWidth
-                variant="outlined"
-                sx={{ mb: 3 }}
-                InputLabelProps={{ shrink: true }}
-                multiline
                 rows={3}
                 placeholder="Enter scoring logic for this packet..."
-                helperText="Describe how this packet should be scored"
               />
-              <Button 
-                variant="contained" 
-                startIcon={<AddCircleOutlineIcon />} 
-                onClick={handleAddPacket} 
-                fullWidth
-                sx={{ 
-                  height: 48, 
-                  fontWeight: 600,
-                  background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                  '&:hover': {
-                    background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)',
-                    transform: 'scale(1.02)'
-                  }
-                }}
-              >
-                Add Packet
-              </Button>
-            </CardContent>
-          </Card>
-          <Card variant="outlined" sx={{ mt: 3, borderRadius: 3, boxShadow: 2 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>Packets</Typography>
-              
-              {/* Overall Statistics */}
-              {packets.length > 0 && (
-                <Box sx={{ 
-                  mb: 3, 
-                  p: 2, 
-                  backgroundColor: 'rgba(103, 58, 183, 0.1)', 
-                  borderRadius: 2,
-                  border: '1px solid rgba(103, 58, 183, 0.3)'
-                }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'text.primary' }}>
-                    📈 Overall Assessment Statistics
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Packets: <strong>{packets.length}</strong>
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Questions: <strong>
-                          {packets.reduce((total, packet) => total + (packet.questions?.length || 0), 0)}
-                        </strong>
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Min Marks: <strong>
-                          {(() => {
-                            const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.minMarks > 0);
-                            if (allMarks.length === 0) return 0;
-                            return Math.min(...allMarks.map(m => m.minMarks));
-                          })()}
-                        </strong>
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2" color="text.secondary">
-                        Max Marks: <strong>
-                          {(() => {
-                            const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.maxMarks > 0);
-                            if (allMarks.length === 0) return 0;
-                            return Math.max(...allMarks.map(m => m.maxMarks));
-                          })()}
-                        </strong>
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Box>
-              )}
-              <List sx={{ p: 0 }}>
-                {packets.map((packet) => (
-                  <ListItem
+              <span className="form-helper">Describe how this packet should be scored</span>
+            </div>
+            <button className="btn btn--primary btn--full" onClick={handleAddPacket}>
+              <AddCircleOutlineIcon className="btn-icon" />
+              Add Packet
+            </button>
+          </div>
+
+          {/* Packets List */}
+          <div className="section-card" style={{ marginTop: 'var(--space-6)' }}>
+            <h3 className="section-card__title">Packets</h3>
+
+            {/* Overall Statistics */}
+            {packets.length > 0 && (
+              <div className="packet-stats-summary">
+                <h4 className="packet-stats-summary__title">
+                  📈 Overall Assessment Statistics
+                </h4>
+                <div className="packet-stats-summary__grid">
+                  <div className="packet-stats-summary__item">
+                    <span>Total Packets:</span> <strong>{packets.length}</strong>
+                  </div>
+                  <div className="packet-stats-summary__item">
+                    <span>Total Questions:</span> <strong>{packets.reduce((total, packet) => total + (packet.questions?.length || 0), 0)}</strong>
+                  </div>
+                  <div className="packet-stats-summary__item">
+                    <span>Min Marks:</span> <strong>
+                      {(() => {
+                        const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.minMarks > 0);
+                        if (allMarks.length === 0) return 0;
+                        return Math.min(...allMarks.map(m => m.minMarks));
+                      })()}
+                    </strong>
+                  </div>
+                  <div className="packet-stats-summary__item">
+                    <span>Max Marks:</span> <strong>
+                      {(() => {
+                        const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.maxMarks > 0);
+                        if (allMarks.length === 0) return 0;
+                        return Math.max(...allMarks.map(m => m.maxMarks));
+                      })()}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="packet-list">
+              {packets.map((packet) => {
+                const isSelected = selectedPacket === packet.id && editingPacket !== packet.id;
+                const isEditingThis = editingPacket === packet.id;
+
+                return (
+                  <div 
                     key={packet.id}
-                    button={editingPacket !== packet.id}
-                    selected={selectedPacket === packet.id && editingPacket !== packet.id}
-                    onClick={() => editingPacket !== packet.id && setSelectedPacket(packet.id)}
-                    secondaryAction={
-                      editingPacket !== packet.id ? (
-                        <Box>
-                          <IconButton edge="end" aria-label="edit" onClick={() => startEditPacket(packet)}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton edge="end" aria-label="delete" onClick={() => handleDeletePacket(packet.id)}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                      ) : null
-                    }
-                    sx={{ 
-                      borderRadius: 2, 
-                      mb: 1,
-                      '&:hover': { backgroundColor: 'rgba(67, 233, 123, 0.1)' },
-                      '&.Mui-selected': { 
-                        backgroundColor: 'rgba(67, 233, 123, 0.2)',
-                        '&:hover': { backgroundColor: 'rgba(67, 233, 123, 0.3)' }
-                      }
-                    }}
+                    className={`packet-list-item ${isSelected ? 'packet-list-item--selected' : ''} ${isEditingThis ? 'packet-list-item--editing' : ''}`}
+                    onClick={() => !isEditingThis && setSelectedPacket(packet.id)}
                   >
-                    {editingPacket === packet.id ? (
-                      <Box sx={{ width: '100%', p: 2 }}>
-                        <TextField
-                          label="Packet Name"
-                          value={editPacketName}
-                          onChange={e => setEditPacketName(e.target.value)}
-                          size="small"
-                          fullWidth
-                          variant="outlined"
-                          sx={{ mb: 2 }}
-                          InputLabelProps={{ shrink: true }}
-                        />
-                        <TextField
-                          label="Description"
-                          value={editPacketDescription}
-                          onChange={e => setEditPacketDescription(e.target.value)}
-                          size="small"
-                          fullWidth
-                          variant="outlined"
-                          sx={{ mb: 2 }}
-                          InputLabelProps={{ shrink: true }}
-                          multiline
-                          rows={2}
-                        />
-                        <TextField
-                          label="Scoring Logic"
-                          value={editScoringLogic}
-                          onChange={e => setEditScoringLogic(e.target.value)}
-                          size="small"
-                          fullWidth
-                          variant="outlined"
-                          sx={{ mb: 2 }}
-                          InputLabelProps={{ shrink: true }}
-                          multiline
-                          rows={3}
-                          placeholder="Enter scoring logic for this packet..."
-                          helperText="Describe how this packet should be scored"
-                        />
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button 
-                            variant="contained" 
-                            size="small" 
-                            onClick={saveEditPacket}
-                            sx={{ 
-                              fontWeight: 600,
-                              background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                              '&:hover': {
-                                background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)'
-                              }
-                            }}
-                          >
+                    {isEditingThis ? (
+                      <div className="packet-edit-form" onClick={e => e.stopPropagation()}>
+                        <div className="form-group">
+                          <label className="form-label">Packet Name</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={editPacketName}
+                            onChange={e => setEditPacketName(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Description</label>
+                          <textarea
+                            className="form-input"
+                            value={editPacketDescription}
+                            onChange={e => setEditPacketDescription(e.target.value)}
+                            rows={2}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Scoring Logic</label>
+                          <textarea
+                            className="form-input"
+                            value={editScoringLogic}
+                            onChange={e => setEditScoringLogic(e.target.value)}
+                            rows={3}
+                          />
+                          <span className="form-helper">Describe how this packet should be scored</span>
+                        </div>
+                        <div className="btn-group">
+                          <button className="btn btn--primary btn--sm" onClick={saveEditPacket}>
                             Save
-                          </Button>
-                          <Button 
-                            variant="outlined" 
-                            size="small" 
-                            onClick={cancelEditPacket}
-                          >
+                          </button>
+                          <button className="btn btn--outline btn--sm" onClick={cancelEditPacket}>
                             Cancel
-                          </Button>
-                        </Box>
-                      </Box>
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <ListItemText 
-                        primary={packet.name} 
-                        secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              {packet.questions?.length || 0} questions
-                            </Typography>
+                      <>
+                        <div className="packet-list-item__info">
+                          <div className="packet-list-item__name">{packet.name}</div>
+                          <div className="packet-list-item__meta">
+                            <span className="badge badge--outline">{packet.questions?.length || 0} questions</span>
                             {packet.description && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>
-                                {packet.description}
-                              </Typography>
+                              <p className="packet-list-item__desc">{packet.description}</p>
                             )}
                             {packet.scoringLogic && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
-                                Scoring: {packet.scoringLogic}
-                              </Typography>
+                              <span className="packet-list-item__scoring">Scoring: {packet.scoringLogic}</span>
                             )}
                             {packet.questions && packet.questions.length > 0 && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                Total: {(() => {
+                              <div className="packet-list-item__marks-range">
+                                {(() => {
                                   const marks = calculatePacketMarks(packet.id);
                                   if (marks.minMarks === marks.maxMarks) {
-                                    return `${marks.minMarks} marks`;
+                                    return `🎯 ${marks.minMarks} total marks`;
                                   } else {
-                                    return `${marks.minMarks}-${marks.maxMarks} marks`;
+                                    return `🎯 ${marks.minMarks}-${marks.maxMarks} total marks`;
                                   }
                                 })()}
-                              </Typography>
+                              </div>
                             )}
-                            {packet.questions && packet.questions.length > 0 && (
-                              <Box sx={{ 
-                                mt: 1, 
-                                p: 1, 
-                                backgroundColor: 'rgba(76, 175, 80, 0.1)', 
-                                borderRadius: 1,
-                                border: '1px solid rgba(76, 175, 80, 0.3)'
-                              }}>
-                                <Typography variant="caption" sx={{ 
-                                  color: 'success.main', 
-                                  fontWeight: 600,
-                                  display: 'block',
-                                  textAlign: 'center'
-                                }}>
-                                  {(() => {
-                                    const marks = calculatePacketMarks(packet.id);
-                                    if (marks.minMarks === marks.maxMarks) {
-                                      return `🎯 ${marks.minMarks} total marks`;
-                                    } else {
-                                      return `🎯 ${marks.minMarks}-${marks.maxMarks} total marks`;
-                                    }
-                                  })()}
-                                </Typography>
-                              </Box>
+                          </div>
+                        </div>
+                        <div className="packet-list-item__actions" onClick={e => e.stopPropagation()}>
+                          <button className="icon-btn" onClick={() => startEditPacket(packet)} title="Edit">
+                            <EditIcon />
+                          </button>
+                          <button className="icon-btn icon-btn--danger" onClick={() => handleDeletePacket(packet.id)} title="Delete">
+                            <DeleteIcon />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column / Main Content Area */}
+        <div className="packet-manager__main">
+          {selectedPacket ? (
+            <div className="section-card">
+              <h3 className="section-card__title">Add Question to Packet</h3>
+
+              {/* Packet Marks Summary */}
+              {currentPacketMarks.totalQuestions > 0 && (
+                <div className="packet-scoring-box">
+                  <div className="packet-scoring-box__header">
+                    <h4 className="packet-scoring-box__title">
+                      📊 Packet Scoring Range
+                    </h4>
+                    <button className="btn btn--outline btn--sm" onClick={openScoringScaleDialog}>
+                      <SettingsIcon className="btn-icon" />
+                      Configure Scale
+                    </button>
+                  </div>
+                  <div className="packet-scoring-box__grid">
+                    <div>Questions: <strong>{currentPacketMarks.totalQuestions}</strong></div>
+                    <div>Score Range: <strong>{currentPacketMarks.minMarks} - {currentPacketMarks.maxMarks} marks</strong></div>
+                  </div>
+                  <p className="packet-scoring-box__helper">
+                    💡 Students can score between {currentPacketMarks.minMarks} and {currentPacketMarks.maxMarks} total marks in this packet
+                  </p>
+
+                  {/* Scoring Scale Display */}
+                  {enableScoringScale && scoringScale.length > 0 && (
+                    <div className="scoring-scale-display">
+                      <span className="scoring-scale-display__title">🎯 Performance Scale:</span>
+                      <div className="scoring-scale-display__list">
+                        {scoringScale.map((range, index) => (
+                          <div key={index} className="scoring-scale-display__item">
+                            <span 
+                              className="scoring-scale-badge" 
+                              style={{ backgroundColor: range.color }}
+                            >
+                              {range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} {range.label} ({range.min}-{range.max})
+                            </span>
+                            {range.largeText && (
+                              <span className="scoring-scale-quote">"{range.largeText}"</span>
                             )}
-                          </Box>
-                        }
-                        primaryTypographyProps={{ fontWeight: 500 }}
-                      />
-                    )}
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} lg={8}>
-          {selectedPacket && (
-            <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, minHeight: 500 }}>
-              <CardContent sx={{ p: 4 }}>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>Add Question to Packet</Typography>
-                
-                {/* Packet Marks Summary */}
-                {currentPacketMarks.totalQuestions > 0 && (
-                  <Box sx={{ 
-                    mb: 3, 
-                    p: 2, 
-                    backgroundColor: 'rgba(67, 233, 123, 0.1)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(67, 233, 123, 0.3)'
-                  }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        📊 Packet Scoring Range
-                      </Typography>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<SettingsIcon />}
-                        onClick={openScoringScaleDialog}
-                        sx={{ minWidth: 'auto' }}
-                      >
-                        Configure Scale
-                      </Button>
-                    </Box>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={4}>
-                        <Typography variant="body2" color="text.secondary">
-                          Questions: <strong>{currentPacketMarks.totalQuestions}</strong>
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={8}>
-                        <Typography variant="body2" color="text.secondary">
-                          Score Range: <strong>{currentPacketMarks.minMarks} - {currentPacketMarks.maxMarks} marks</strong>
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      💡 Students can score between {currentPacketMarks.minMarks} and {currentPacketMarks.maxMarks} total marks in this packet
-                    </Typography>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-                    {/* Scoring Scale Display */}
-                    {enableScoringScale && scoringScale.length > 0 && (
-                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(0,0,0,0.1)' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
-                          🎯 Performance Scale:
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          {scoringScale.map((range, index) => (
-                            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip
-                                label={`${range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} ${range.label} (${range.min}-${range.max})`}
-                                sx={{
-                                  backgroundColor: range.color,
-                                  color: 'white',
-                                  fontWeight: 600,
-                                  fontSize: '0.75rem'
-                                }}
-                              />
-                              {range.largeText && (
-                                <Typography 
-                                  variant="caption" 
-                                  sx={{ 
-                                    color: 'text.secondary',
-                                    fontStyle: 'italic'
-                                  }}
-                                >
-                                  "{range.largeText}"
-                                </Typography>
-                              )}
-                            </Box>
-                          ))}
-                        </Box>
-                      </Box>
-                    )}
-                    
+              {/* Question Add Form */}
+              <div className="form-row">
+                <div className="form-group flex-2">
+                  <label className="form-label">Question Text</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={questionText}
+                    onChange={e => setQuestionText(e.target.value)}
+                    placeholder="Enter question text..."
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label className="form-label">Type</label>
+                  <select
+                    className="form-input"
+                    value={questionType}
+                    onChange={e => handleQuestionTypeChange(e.target.value)}
+                  >
+                    <option value="MCQ">MCQ</option>
+                    <option value="TrueFalse">True/False</option>
+                  </select>
+                </div>
+              </div>
 
-                  </Box>
-                )}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                  <Grid item xs={12} md={8}>
-                    <TextField
-                      label="Question Text"
-                      value={questionText}
-                      onChange={e => setQuestionText(e.target.value)}
-                      size="medium"
-                      fullWidth
-                      variant="outlined"
-                      sx={{ mb: 2 }}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      select
-                      label="Type"
-                      value={questionType}
-                      onChange={e => handleQuestionTypeChange(e.target.value)}
-                      size="medium"
-                      SelectProps={{ native: true }}
-                      fullWidth
-                    >
-                      <option value="MCQ">MCQ</option>
-                      <option value="TrueFalse">True/False</option>
-                    </TextField>
-                  </Grid>
-                </Grid>
-                {questionType === 'MCQ' && (
-                  <Grid container spacing={2} sx={{ mb: 3 }} style={{ flexDirection: 'column' }}>
-                    <Grid item xs={12}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Options</Typography>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<AddIcon />}
-                          onClick={addOption}
-                          sx={{ minWidth: 'auto' }}
-                        >
-                          Add Option
-                        </Button>
-                      </Box>
-                    </Grid>
+              {/* MCQ Options */}
+              {questionType === 'MCQ' && (
+                <div className="options-container">
+                  <div className="options-header">
+                    <h4 className="options-title">Options</h4>
+                    <button className="btn btn--outline btn--sm" onClick={addOption}>
+                      <AddIcon className="btn-icon" />
+                      Add Option
+                    </button>
+                  </div>
+                  <div className="options-list">
                     {options.map((opt, idx) => (
-                      <Grid item xs={12} key={idx}>
-                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                          <TextField
-                            label={`Option ${idx + 1}`}
+                      <div key={idx} className="option-row">
+                        <div className="form-group flex-1">
+                          <input
+                            type="text"
+                            className="form-input"
                             value={opt.text}
                             onChange={e => updateOptionText(idx, e.target.value)}
-                            size="medium"
-                            fullWidth
-                            variant="outlined"
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ flex: 1 }}
+                            placeholder={`Option ${idx + 1}`}
                           />
-                          <TextField
-                            label="Marks"
+                        </div>
+                        <div className="form-group option-marks-input">
+                          <input
                             type="number"
+                            className="form-input"
                             value={opt.marks}
                             onChange={e => updateOptionMarks(idx, e.target.value)}
-                            size="medium"
-                            variant="outlined"
-                            inputProps={{ min: 0, max: 100 }}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ width: 100 }}
+                            placeholder="Marks"
+                            min={0}
                           />
-                          <IconButton
-                            onClick={() => removeOption(idx)}
-                            disabled={options.length <= 1}
-                            color="error"
-                            size="small"
-                          >
-                            <RemoveIcon />
-                          </IconButton>
-                        </Box>
-                      </Grid>
+                        </div>
+                        <button 
+                          className="icon-btn icon-btn--danger option-remove-btn" 
+                          onClick={() => removeOption(idx)}
+                          disabled={options.length <= 1}
+                        >
+                          <RemoveIcon />
+                        </button>
+                      </div>
                     ))}
-                  </Grid>
-                )}
-                {questionType === 'TrueFalse' && (
-                  <Grid container spacing={2} sx={{ mb: 3 }} style={{ flexDirection: 'column' }}>
-                    <Grid item xs={12}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>True/False Options</Typography>
-                    </Grid>
+                  </div>
+                </div>
+              )}
+
+              {/* True/False Options */}
+              {questionType === 'TrueFalse' && (
+                <div className="options-container">
+                  <h4 className="options-title">True/False Options</h4>
+                  <div className="options-list">
                     {options.map((opt, idx) => (
-                      <Grid item xs={12} sm={6} key={idx} >
-                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                          <TextField
-                            label={opt.text}
+                      <div key={idx} className="option-row option-row--tf">
+                        <span className="tf-label">{opt.text}</span>
+                        <div className="form-group option-marks-input">
+                          <input
                             type="number"
+                            className="form-input"
                             value={opt.marks}
                             onChange={e => updateOptionMarks(idx, e.target.value)}
-                            size="medium"
-                            variant="outlined"
-                            inputProps={{ min: 0, max: 100 }}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ flex: 1 }}
+                            placeholder="Marks"
+                            min={0}
                           />
-                          <Typography variant="body2" color="text.secondary">
-                            marks for {opt.text}
-                          </Typography>
-                        </Box>
-                      </Grid>
+                        </div>
+                        <span className="tf-helper-text">marks for {opt.text}</span>
+                      </div>
                     ))}
-                  </Grid>
-                )}
-                <Button 
-                  variant="contained" 
-                  onClick={handleAddQuestion} 
-                  startIcon={<AddCircleOutlineIcon />} 
-                  sx={{ 
-                    mb: 4,
-                    height: 48,
-                    fontWeight: 600,
-                    background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                    '&:hover': {
-                      background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)',
-                      transform: 'scale(1.02)'
-                    }
-                  }}
-                >
-                  Add Question
-                </Button>
-                <Typography variant="h6" sx={{ mt: 4, mb: 2, fontWeight: 600 }}>Questions in Packet</Typography>
-                <List sx={{ p: 0 }}>
-                  {packets.find(p => p.id === selectedPacket)?.questions?.map((q) => (
-                    <ListItem key={q.id} alignItems="flex-start" sx={{ 
-                      mb: 2, 
-                      borderRadius: 2, 
-                      border: '1px solid rgba(0,0,0,0.1)',
-                      backgroundColor: 'rgba(255,255,255,0.5)'
-                    }}
-                      secondaryAction={
-                        <>
-                          <IconButton edge="end" aria-label="edit" onClick={() => startEditQuestion(q)}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteQuestion(q.id)}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </>
-                      }
+                  </div>
+                </div>
+              )}
+
+              <button className="btn btn--primary" onClick={handleAddQuestion} style={{ marginTop: 'var(--space-4)' }}>
+                <AddCircleOutlineIcon className="btn-icon" />
+                Add Question
+              </button>
+
+              <hr className="divider" />
+
+              {/* Questions List */}
+              <h3 className="section-card__title" style={{ marginTop: 'var(--space-6)' }}>Questions in Packet</h3>
+              <div className="question-list">
+                {packets.find(p => p.id === selectedPacket)?.questions?.map((q) => {
+                  const isEditingThisQ = editingQuestionId === q.id;
+
+                  return (
+                    <div 
+                      key={q.id} 
+                      className={`question-item ${isEditingThisQ ? 'question-item--editing' : ''}`}
                     >
-                      {editingQuestionId === q.id ? (
-                        <Box sx={{ width: '100%' }}>
-                          <TextField
-                            value={editQuestionText}
-                            onChange={e => setEditQuestionText(e.target.value)}
-                            size="medium"
-                            fullWidth
-                            variant="outlined"
-                            sx={{ mb: 2 }}
-                            InputLabelProps={{ shrink: true }}
-                          />
-                          <TextField
-                            select
-                            label="Type"
-                            value={editQuestionType}
-                            onChange={e => handleEditQuestionTypeChange(e.target.value)}
-                            size="medium"
-                            SelectProps={{ native: true }}
-                            fullWidth
-                            variant="outlined"
-                            sx={{ mb: 2 }}
-                            InputLabelProps={{ shrink: true }}
-                          >
-                            <option value="MCQ">MCQ</option>
-                            <option value="TrueFalse">True/False</option>
-                          </TextField>
-                          <Grid container spacing={2} sx={{ mb: 2 }}>
-                            <Grid item xs={12}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Options</Typography>
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  startIcon={<AddIcon />}
-                                  onClick={addEditOption}
-                                  sx={{ minWidth: 'auto' }}
-                                >
-                                  Add Option
-                                </Button>
-                              </Box>
-                            </Grid>
-                            {editOptions.map((opt, idx) => (
-                              <Grid item xs={12} key={idx}>
-                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                                  <TextField
-                                    label={`Option ${idx + 1}`}
-                                    value={opt.text}
-                                    onChange={e => updateEditOptionText(idx, e.target.value)}
-                                    size="medium"
-                                    fullWidth
-                                    variant="outlined"
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ flex: 1 }}
-                                  />
-                                  <TextField
-                                    label="Marks"
-                                    type="number"
-                                    value={opt.marks}
-                                    onChange={e => updateEditOptionMarks(idx, e.target.value)}
-                                    size="medium"
-                                    variant="outlined"
-                                    inputProps={{ min: 0, max: 100 }}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ width: 100 }}
-                                  />
-                                  <IconButton
+                      {isEditingThisQ ? (
+                        <div className="question-edit-form">
+                          <div className="form-group">
+                            <label className="form-label">Question Text</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={editQuestionText}
+                              onChange={e => setEditQuestionText(e.target.value)}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Type</label>
+                            <select
+                              className="form-input"
+                              value={editQuestionType}
+                              onChange={e => handleEditQuestionTypeChange(e.target.value)}
+                            >
+                              <option value="MCQ">MCQ</option>
+                              <option value="TrueFalse">True/False</option>
+                            </select>
+                          </div>
+
+                          <div className="options-container">
+                            <div className="options-header">
+                              <h4 className="options-title">Options</h4>
+                              <button className="btn btn--outline btn--sm" onClick={addEditOption}>
+                                <AddIcon className="btn-icon" />
+                                Add Option
+                              </button>
+                            </div>
+                            <div className="options-list">
+                              {editOptions.map((opt, idx) => (
+                                <div key={idx} className="option-row">
+                                  <div className="form-group flex-1">
+                                    <input
+                                      type="text"
+                                      className="form-input"
+                                      value={opt.text}
+                                      onChange={e => updateEditOptionText(idx, e.target.value)}
+                                      placeholder={`Option ${idx + 1}`}
+                                    />
+                                  </div>
+                                  <div className="form-group option-marks-input">
+                                    <input
+                                      type="number"
+                                      className="form-input"
+                                      value={opt.marks}
+                                      onChange={e => updateEditOptionMarks(idx, e.target.value)}
+                                      placeholder="Marks"
+                                      min={0}
+                                    />
+                                  </div>
+                                  <button 
+                                    className="icon-btn icon-btn--danger option-remove-btn" 
                                     onClick={() => removeEditOption(idx)}
                                     disabled={editOptions.length <= 1}
-                                    color="error"
-                                    size="small"
                                   >
                                     <RemoveIcon />
-                                  </IconButton>
-                                </Box>
-                              </Grid>
-                            ))}
-                          </Grid>
-                          <Box sx={{ display: 'flex', gap: 2 }}>
-                            <Button 
-                              variant="contained" 
-                              size="medium" 
-                              onClick={() => {
-                                console.log('🔍 Save button clicked for question:', q.id);
-                                console.log('🔍 Current editOptions before save:', editOptions);
-                                console.log('🔍 Window stored options:', window.lastEditOptions);
-                                saveEditQuestion(q.id);
-                              }}
-                              sx={{ 
-                                fontWeight: 600,
-                                background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                                '&:hover': {
-                                  background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)'
-                                }
-                              }}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="btn-group" style={{ marginTop: 'var(--space-4)' }}>
+                            <button 
+                              className="btn btn--primary" 
+                              onClick={() => saveEditQuestion(q.id)}
                             >
                               Save
-                            </Button>
-                            <Button 
-                              variant="outlined" 
-                              size="medium" 
+                            </button>
+                            <button 
+                              className="btn btn--outline" 
                               onClick={() => {
                                 setEditingQuestionId(null);
                                 setEditQuestionText('');
@@ -1365,330 +1159,235 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                               }}
                             >
                               Cancel
-                            </Button>
-                          </Box>
-                        </Box>
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <ListItemText
-                          primary={q.question_text || q.text}
-                          secondary={
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
+                        <>
+                          <div className="question-item__content">
+                            <div className="question-item__text">{q.question_text || q.text}</div>
+                            <div className="question-item__meta">
+                              <span className="badge badge--outline">
                                 Type: {(q.question_type === 'mcq' || q.type === 'mcq') ? 'MCQ' : 'True/False'}
-                              </Typography>
-                              {q.options && Array.isArray(q.options) && q.options.length > 0 && (
-                                <Typography variant="caption" color="text.secondary">
-                                  Options: {q.options.map((opt, idx) => 
-                                    `${opt.text} (${opt.marks} marks)`
-                                  ).join(' | ')}
-                                </Typography>
-                              )}
-                              <Typography variant="caption" color="text.secondary">
+                              </span>
+                              <span className="badge badge--outline">
                                 Total Marks: {q.options ? q.options.reduce((sum, opt) => sum + (opt.marks || 1), 0) : (q.marks || 1)}
-                              </Typography>
-                            </Box>
-                          }
-                          primaryTypographyProps={{ fontWeight: 500 }}
-                        />
+                              </span>
+                            </div>
+                            {q.options && Array.isArray(q.options) && q.options.length > 0 && (
+                              <div className="question-item__options-preview">
+                                {q.options.map((opt, idx) => (
+                                  <span key={idx} className="option-preview-pill">
+                                    <strong>{opt.text}</strong> ({opt.marks}m)
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="question-item__actions">
+                            <button className="icon-btn" onClick={() => startEditQuestion(q)} title="Edit">
+                              <EditIcon />
+                            </button>
+                            <button className="icon-btn icon-btn--danger" onClick={() => handleDeleteQuestion(q.id)} title="Delete">
+                              <DeleteIcon />
+                            </button>
+                          </div>
+                        </>
                       )}
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state__icon">
+                <HelpOutlineIcon style={{ width: '48px', height: '48px' }} />
+              </div>
+              <p className="empty-state__title">No packet selected</p>
+              <p className="empty-state__subtitle">Select a packet from the list or create a new one to manage questions.</p>
+            </div>
           )}
-        </Grid>
-      </Grid>
+        </div>
+      </div>
 
-      {/* Scoring Scale Configuration Dialog */}
-      <Dialog 
-        open={scoringScaleDialog} 
-        onClose={closeScoringScaleDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          🎯 Configure Performance Scoring Scale
-          <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
-            Define performance ranges and labels for this packet
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-              Debug: Dialog is open, enableScoringScale = {enableScoringScale.toString()}
-            </Typography>
-            
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={enableScoringScale}
-                  onChange={(e) => {
-                    console.log('Switch changed to:', e.target.checked);
-                    setEnableScoringScale(e.target.checked);
-                  }}
-                />
-              }
-              label="Enable Custom Scoring Scale"
-              sx={{ mb: 2 }}
-            />
-            
-            {/* Test button to manually toggle state */}
-            <Button 
-              variant="outlined" 
-              size="small" 
-              onClick={() => {
-                console.log('Button clicked, current state:', enableScoringScale);
-                setEnableScoringScale(!enableScoringScale);
-              }}
-              sx={{ ml: 2 }}
-            >
-              Toggle State: {enableScoringScale ? 'ON' : 'OFF'}
-            </Button>
-            
-            {enableScoringScale && (
-              <Box>
-                <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                  Debug: Switch is enabled, rendering content...
-                </Typography>
-                
-                <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>
-                  Current Packet Range: {currentPacketMarks?.minMarks || 0} - {currentPacketMarks?.maxMarks || 0} marks
-                </Typography>
-                
-                <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                  Debug: Scoring scale has {scoringScale.length} items
-                </Typography>
-                
-                {/* Add Range Button */}
-                <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<span style={{ fontSize: '1.2rem' }}>➕</span>}
-                    onClick={addScoringRange}
-                    sx={{ 
-                      fontWeight: 600,
-                      background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                      color: '#000',
-                      '&:hover': {
-                        background: 'linear-gradient(90deg, #38f9d7 0%, #43e97b 100%)'
-                      }
-                    }}
-                  >
-                    Add Performance Level
-                  </Button>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
-                    💡 Click to add more ranges (6, 8, or any number you need)
-                  </Typography>
-                </Box>
-                
-                {scoringScale.map((range, index) => (
-                  <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid rgba(0,0,0,0.1)', borderRadius: 1, position: 'relative' }}>
-                    {/* Remove Button */}
-                    <IconButton
-                      size="small"
-                      onClick={() => removeScoringRange(index)}
-                      disabled={scoringScale.length <= 2}
-                      sx={{
-                        position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        color: scoringScale.length <= 2 ? 'text.disabled' : '#ff4444'
-                      }}
-                    >
-                      <RemoveIcon />
-                    </IconButton>
-                    
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, pr: 4 }}>
-                      Level {index + 1}: {range.label}
-                    </Typography>
-                    
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={12} sm={2}>
-                        <TextField
-                          label="Min Score"
-                          type="number"
-                          value={range.min}
-                          onChange={(e) => updateScoringScaleRange(index, 'min', e.target.value)}
-                          size="small"
-                          fullWidth
-                          inputProps={{ 
-                            step: "0.1",
-                            placeholder: "e.g., 0.5 or 3.75"
-                          }}
-                          helperText="Supports decimals (e.g., 0.5, 3.75)"
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <TextField
-                          label="Max Score"
-                          type="number"
-                          value={range.max}
-                          onChange={(e) => updateScoringScaleRange(index, 'max', e.target.value)}
-                          size="small"
-                          fullWidth
-                          inputProps={{ 
-                            step: "0.1",
-                            placeholder: "e.g., 5.5 or 10.25"
-                          }}
-                          helperText="Supports decimals (e.g., 5.5, 10.25)"
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <TextField
-                          label="Label"
-                          value={range.label}
-                          onChange={(e) => updateScoringScaleRange(index, 'label', e.target.value)}
-                          size="small"
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <TextField
-                          label="Color"
-                          value={range.color}
-                          onChange={(e) => updateScoringScaleRange(index, 'color', e.target.value)}
-                          size="small"
-                          fullWidth
-                          inputProps={{ placeholder: '#ff6b6b' }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                            Image
-                          </Typography>
-                          
-                          {/* Image Preview */}
-                          {range.image && range.image.startsWith('data:image') && (
-                            <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
-                              <Box
-                                sx={{
-                                  width: 60,
-                                  height: 60,
-                                  border: '2px solid #ddd',
-                                  borderRadius: 1,
-                                  overflow: 'hidden',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  backgroundColor: '#f5f5f5'
-                                }}
-                              >
-                                <img
-                                  src={range.image}
-                                  alt={`Preview for ${range.label}`}
-                                  style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover'
-                                  }}
-                                />
-                              </Box>
-                            </Box>
-                          )}
-                          
-                          <input
-                            accept="image/png,image/jpeg,image/jpg"
-                            type="file"
-                            onChange={(e) => handleImageUpload(index, e)}
-                            style={{ display: 'none' }}
-                            id={`image-upload-${index}`}
+      {/* Scoring Scale Configuration Modal */}
+      {scoringScaleDialog && (
+        <div className="modal-overlay" onClick={closeScoringScaleDialog}>
+          <div className="modal-container modal-container--lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">🎯 Configure Performance Scoring Scale</h3>
+                <p className="modal-subtitle">Define performance ranges and labels for this packet</p>
+              </div>
+              <button className="modal-close-btn" onClick={closeScoringScaleDialog}>
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="scoring-config-switch-group">
+                <label className="switch-label">
+                  <input
+                    type="checkbox"
+                    className="switch-input"
+                    checked={enableScoringScale}
+                    onChange={(e) => setEnableScoringScale(e.target.checked)}
+                  />
+                  <span className="switch-slider"></span>
+                  <span className="switch-text">Enable Custom Scoring Scale</span>
+                </label>
+              </div>
+
+              {enableScoringScale && (
+                <div className="scoring-config-details">
+                  <div className="scoring-info-bar">
+                    <span>Current Packet Range:</span> <strong>{currentPacketMarks?.minMarks || 0} - {currentPacketMarks?.maxMarks || 0} marks</strong>
+                  </div>
+
+                  <div className="scoring-actions-bar">
+                    <button className="btn btn--outline btn--sm" onClick={addScoringRange}>
+                      <AddIcon className="btn-icon" />
+                      Add Performance Level
+                    </button>
+                    <span className="scoring-actions-bar__helper">
+                      💡 Click to add more ranges (6, 8, or any number you need)
+                    </span>
+                  </div>
+
+                  <div className="scoring-ranges-list">
+                    {scoringScale.map((range, index) => (
+                      <div key={index} className="scoring-range-card">
+                        <button 
+                          className="icon-btn icon-btn--danger scoring-range-card__delete"
+                          onClick={() => removeScoringRange(index)}
+                          disabled={scoringScale.length <= 2}
+                          title="Remove level"
+                        >
+                          <RemoveIcon />
+                        </button>
+
+                        <h5 className="scoring-range-card__title">
+                          Level {index + 1}: {range.label || 'Unnamed'}
+                        </h5>
+
+                        <div className="scoring-range-card__grid">
+                          <div className="form-group">
+                            <label className="form-label">Min Score</label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              value={range.min}
+                              onChange={(e) => updateScoringScaleRange(index, 'min', e.target.value)}
+                              step="0.1"
+                              placeholder="0.0"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Max Score</label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              value={range.max}
+                              onChange={(e) => updateScoringScaleRange(index, 'max', e.target.value)}
+                              step="0.1"
+                              placeholder="10.0"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Label</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={range.label}
+                              onChange={(e) => updateScoringScaleRange(index, 'label', e.target.value)}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Color</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={range.color}
+                              onChange={(e) => updateScoringScaleRange(index, 'color', e.target.value)}
+                              placeholder="#ff6b6b"
+                            />
+                          </div>
+                          <div className="form-group image-upload-group">
+                            <label className="form-label">Level Image</label>
+                            <div className="image-upload-wrapper">
+                              {range.image && range.image.startsWith('data:image') ? (
+                                <div className="image-preview-thumbnail">
+                                  <img src={range.image} alt={`Preview for ${range.label}`} />
+                                </div>
+                              ) : (
+                                <span className="image-emoji-fallback">{range.image}</span>
+                              )}
+                              <input
+                                accept="image/png,image/jpeg,image/jpg"
+                                type="file"
+                                onChange={(e) => handleImageUpload(index, e)}
+                                style={{ display: 'none' }}
+                                id={`image-upload-${index}`}
+                              />
+                              <label htmlFor={`image-upload-${index}`} className="btn btn--outline btn--sm image-upload-btn">
+                                {range.image && range.image.startsWith('data:image') ? 'Change' : 'Upload'}
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="form-group" style={{ marginTop: 'var(--space-3)' }}>
+                          <label className="form-label">Motivational Large Text</label>
+                          <textarea
+                            className="form-input"
+                            value={range.largeText || ''}
+                            onChange={(e) => updateScoringScaleRange(index, 'largeText', e.target.value)}
+                            rows={2}
+                            placeholder="Enter motivational text for this performance level..."
                           />
-                          <label htmlFor={`image-upload-${index}`}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              component="span"
-                              fullWidth
-                              sx={{ minHeight: 40 }}
-                            >
-                              {range.image && range.image.startsWith('data:image') ? 'Change Image' : 'Upload Image'}
-                            </Button>
-                          </label>
-                        </Box>
-                      </Grid>
-                    </Grid>
-                    
-                    {/* Large Text Field */}
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
-                      <Grid item xs={12}>
-                        <TextField
-                          label="Large Text"
-                          value={range.largeText || ''}
-                          onChange={(e) => updateScoringScaleRange(index, 'largeText', e.target.value)}
-                          size="small"
-                          fullWidth
-                          multiline
-                          rows={2}
-                          placeholder="Enter motivational text for this performance level..."
-                          helperText="This text will be displayed prominently when students achieve this level"
-                        />
-                      </Grid>
-                    </Grid>
-                    
-                    {/* Range Preview */}
-                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
-                        Preview:
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <Chip
-                          label={`${range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} ${range.label} (${range.min}-${range.max})`}
-                          sx={{
-                            backgroundColor: range.color,
-                            color: 'white',
-                            fontWeight: 600
-                          }}
-                        />
-                      </Box>
-                      {range.largeText && (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                            Large Text Preview:
-                          </Typography>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              p: 1, 
-                              backgroundColor: range.color, 
-                              color: 'white', 
-                              borderRadius: 1,
-                              fontWeight: 500,
-                              textAlign: 'center'
-                            }}
-                          >
-                            {range.largeText}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                ))}
-                
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  💡 <strong>Flexible Scoring Scale:</strong> You can add as many performance levels as needed (6, 8, or more). 
-                  Make sure ranges connect properly without gaps. The system will automatically adjust min/max values when you add or remove levels.
-                  <br />
-                  ✨ <strong>Decimal Support:</strong> Score ranges now support decimal values (e.g., 0.5-3.75, 3.76-7.5) for precise grading!
-                </Alert>
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeScoringScaleDialog}>Cancel</Button>
-          <Button 
-            onClick={saveScoringScale} 
-            variant="contained"
-            disabled={!enableScoringScale}
-          >
-            Save Scale
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+                        </div>
+
+                        {/* Range Preview */}
+                        <div className="scoring-range-preview">
+                          <div className="scoring-range-preview__header">Preview:</div>
+                          <div className="scoring-range-preview__pill-row">
+                            <span className="scoring-scale-badge" style={{ backgroundColor: range.color }}>
+                              {range.image && range.image.startsWith('data:image') ? '🖼️' : range.image} {range.label} ({range.min}-{range.max})
+                            </span>
+                          </div>
+                          {range.largeText && (
+                            <div className="scoring-range-preview__large-text" style={{ backgroundColor: range.color }}>
+                              {range.largeText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="alert alert--warning" style={{ marginTop: 'var(--space-4)' }}>
+                    💡 <strong>Flexible Scoring Scale:</strong> You can add as many performance levels as needed (6, 8, or more).
+                    Make sure ranges connect properly without gaps. The system will automatically adjust min/max values when you add or remove levels.
+                    <br />
+                    ✨ <strong>Decimal Support:</strong> Score ranges now support decimal values (e.g., 0.5-3.75, 3.76-7.5) for precise grading!
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn--outline" onClick={closeScoringScaleDialog}>Cancel</button>
+              <button
+                className="btn btn--primary"
+                onClick={saveScoringScale}
+                disabled={!enableScoringScale}
+              >
+                Save Scale
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import './PDFTemplateConfig.css';
 import {
   Box,
   Container,
@@ -3219,276 +3220,211 @@ const PDFTemplateConfig = () => {
   );
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
-      <Container maxWidth="xl">
-        {/* Header Section */}
-        <Paper elevation={3} sx={{ p: 4, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-          <Typography variant="h4" component="h1" sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', mb: 1 }}>
-            📄 PDF Template Configuration
-          </Typography>
-          <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.8)', textAlign: 'center', mb: 4 }}>
-            Design and customize your assessment report templates
-          </Typography>
+    <div className="pdf-config-container">
+      {/* Header Section */}
+      <div className="pdf-config-header">
+        <h1 className="pdf-config-header__title">
+          📄 PDF Template Configuration
+        </h1>
+        <p className="pdf-config-header__subtitle">
+          Design and customize your assessment report templates
+        </p>
+        
+        {/* Search and Quick Actions */}
+        <div className="pdf-config-toolbar">
+          <div className="pdf-config-search">
+            <SearchIcon />
+            <input
+              type="text"
+              placeholder="Search templates, settings..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           
-          {/* Search and Quick Actions */}
-          <Paper elevation={1} sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
-              <TextField
-                placeholder="Search templates, settings..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />,
-                  sx: { bgcolor: 'white', borderRadius: 2 }
-                }}
-                sx={{ flexGrow: 1, maxWidth: 400 }}
-              />
-              <Stack direction="row" spacing={2}>
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  startIcon={<TuneIcon />}
-                >
-                  {showAdvanced ? 'Hide Advanced' : 'Show Advanced'}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="warning"
-                  onClick={() => saveTemplateVersion()}
-                  startIcon={<HistoryIcon />}
-                >
-                  Save Version
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-          
-          {/* Quiz Selection and Actions */}
-          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} alignItems={{ lg: 'center' }} justifyContent="space-between">
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="center">
-              <FormControl sx={{ minWidth: 280 }}>
-                <InputLabel sx={{ color: 'white' }}>Select Quiz</InputLabel>
-                <Select
-                  value={selectedQuiz}
-                  onChange={(e) => handleQuizChange(e.target.value)}
-                  label="Select Quiz"
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.1)', 
-                    color: 'white',
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                    '& .MuiSvgIcon-root': { color: 'white' }
-                  }}
-                >
-                  <MenuItem value="">Choose a Quiz</MenuItem>
-                  {quizzes.map(quiz => (
-                    <MenuItem key={quiz.id} value={quiz.id}>{quiz.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {selectedQuiz && (
-                <Chip
-                  label={`Configuring: ${quizzes.find(q => q.id === selectedQuiz)?.name}`}
-                  color="info"
-                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 'bold' }}
-                />
-              )}
-              
-              {/* Save Status Indicator */}
-              {selectedQuiz && (
-                <Chip
-                  label={
-                    isAutoSaving ? "Auto-saving..." :
-                    hasUnsavedChanges ? "Unsaved changes" :
-                    "All changes saved"
-                  }
-                  icon={
-                    isAutoSaving ? <CircularProgress size={16} sx={{ color: 'inherit' }} /> :
-                    hasUnsavedChanges ? <SaveIcon /> :
-                    <CheckIcon />
-                  }
-                  color={
-                    isAutoSaving ? "info" :
-                    hasUnsavedChanges ? "warning" :
-                    "success"
-                  }
-                  variant="filled"
-                  size="small"
-                  sx={{ color: 'white', fontWeight: 'bold' }}
-                />
-              )}
-            </Stack>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="contained"
-                color="info"
-                onClick={() => validateTemplate()}
-                disabled={!selectedQuiz}
-                startIcon={<CheckIcon />}
-                sx={{ py: 1.5 }}
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button
+              className="rv-btn rv-btn--outline"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              {showAdvanced ? 'Hide Advanced' : 'Show Advanced'}
+            </button>
+            <button
+              className="rv-btn rv-btn--outline"
+              onClick={() => saveTemplateVersion()}
+            >
+              Save Version
+            </button>
+          </div>
+        </div>
+        
+        {/* Quiz Selection and Actions */}
+        <div className="pdf-config-toolbar" style={{ marginTop: '16px', background: 'transparent', border: 'none', padding: 0 }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="pdf-config-select-group">
+              <select
+                className="pdf-config-select"
+                value={selectedQuiz}
+                onChange={(e) => handleQuizChange(e.target.value)}
               >
-                Validate
-              </Button>
-              <Button
-                variant="contained"
-                color={hasUnsavedChanges ? "warning" : "success"}
-                onClick={saveTemplate}
-                disabled={isLoading || !selectedQuiz}
-                startIcon={
-                  isLoading ? <CircularProgress size={20} color="inherit" /> :
-                  isAutoSaving ? <CircularProgress size={20} color="inherit" /> :
-                  hasUnsavedChanges ? <SaveIcon /> : <SaveIcon />
-                }
-                sx={{ py: 1.5, px: 3 }}
-              >
-                {isLoading ? 'Saving...' : 
-                 isAutoSaving ? 'Auto-saving...' :
-                 hasUnsavedChanges ? 'Save Changes' : 'Save Template'}
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
-
-        {/* Main Content */}
-        <Grid container spacing={3}>
-          {/* Configuration Panel */}
-          <Grid item xs={12} lg={4}>
-            <Paper elevation={3} sx={{ borderRadius: 3, overflow: 'hidden', height: 'fit-content' }}>
-              <Box sx={{ bgcolor: 'primary.main', color: 'white', p: 3, textAlign: 'center' }}>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  Template Settings
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                  Customize your PDF reports
-                </Typography>
-              </Box>
-              
-              <Tabs
-                value={activeTab}
-                onChange={(e, newValue) => setActiveTab(newValue)}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}
-              >
-                {tabs.map((tab) => (
-                  <Tab
-                    key={tab.id}
-                    value={tab.id}
-                    label={tab.label}
-                    icon={tab.icon}
-                    iconPosition="start"
-                    sx={{ minHeight: 64, textTransform: 'none', fontWeight: 'medium' }}
-                  />
+                <option value="">Choose a Quiz</option>
+                {quizzes.map(quiz => (
+                  <option key={quiz.id} value={quiz.id}>{quiz.name}</option>
                 ))}
-              </Tabs>
+              </select>
+            </div>
+            {selectedQuiz && (
+              <span className="rv-badge" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}>
+                Configuring: {quizzes.find(q => q.id === selectedQuiz)?.name}
+              </span>
+            )}
+            
+            {/* Save Status Indicator */}
+            {selectedQuiz && (
+              <span className="rv-badge" style={{ 
+                backgroundColor: isAutoSaving ? 'var(--color-primary)' : hasUnsavedChanges ? '#f59e0b' : '#10b981', 
+                color: 'white',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                {isAutoSaving ? "Auto-saving..." : hasUnsavedChanges ? "Unsaved changes" : "All changes saved"}
+              </span>
+            )}
+          </div>
+          
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button
+              className="rv-btn rv-btn--outline"
+              onClick={() => validateTemplate()}
+              disabled={!selectedQuiz}
+              style={{ paddingLeft: '24px', paddingRight: '24px' }}
+            >
+              Validate
+            </button>
+            <button
+              className="rv-btn rv-btn--primary"
+              onClick={saveTemplate}
+              disabled={isLoading || !selectedQuiz}
+              style={{ paddingLeft: '32px', paddingRight: '32px' }}
+            >
+              {isLoading ? 'Saving...' : 
+               isAutoSaving ? 'Auto-saving...' :
+               hasUnsavedChanges ? 'Save Changes' : 'Save Template'}
+            </button>
+          </div>
+        </div>
+      </div>
 
-              <Box sx={{ p: 3, maxHeight: 700, overflow: 'auto' }}>
-                {searchTerm && (
-                  <Alert severity="info" sx={{ mb: 3 }}>
-                    <Typography variant="body2">
-                      🔍 Filtering settings for: <strong>"{searchTerm}"</strong>
-                    </Typography>
-                  </Alert>
-                )}
-                {tabs.find(tab => tab.id === activeTab)?.component()}
-              </Box>
-            </Paper>
-          </Grid>
+      {/* Main Content */}
+      <div className="pdf-config-layout">
+        {/* Configuration Panel */}
+        <div className="pdf-config-sidebar">
+          <div className="pdf-config-sidebar__header">
+            <h2 className="pdf-config-sidebar__title">
+              Template Settings
+            </h2>
+            <p className="pdf-config-sidebar__subtitle">
+              Customize your PDF reports
+            </p>
+          </div>
+          
+          <div className="pdf-config-tabs-nav">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`pdf-config-tab-btn ${activeTab === tab.id ? 'pdf-config-tab-btn--active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-          {/* Preview and History Panel */}
-          <Grid item xs={12} lg={8}>
-            <Grid container spacing={3}>
-              {/* Preview Panel */}
-              <Grid item xs={12} xl={8}>
-                <Paper elevation={3} sx={{ borderRadius: 3, overflow: 'hidden' }}>
-                  <Box sx={{ bgcolor: 'success.main', color: 'white', p: 3, textAlign: 'center' }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      <PreviewIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                      Live Preview
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                      See your changes in real-time
-                    </Typography>
-                  </Box>
-                  <Box sx={{ p: 3, minHeight: 400 }}>
-                    {renderPreview()}
-                  </Box>
-                </Paper>
-              </Grid>
+          <div className="pdf-config-panel-content">
+            {searchTerm && (
+              <div className="rv-alert-error" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe', marginBottom: '16px' }}>
+                🔍 Filtering settings for: <strong>"{searchTerm}"</strong>
+              </div>
+            )}
+            {tabs.find(tab => tab.id === activeTab)?.component()}
+          </div>
+        </div>
 
+        {/* Preview and History Panel */}
+        <div className="pdf-config-content">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px', alignItems: 'start' }}>
+            {/* Preview Panel */}
+            <div className="pdf-config-card">
+              <div className="pdf-config-card__header pdf-config-card__header--preview">
+                <PreviewIcon /> Live Preview
+              </div>
+              <div className="pdf-config-card__content" style={{ minHeight: '400px' }}>
+                {renderPreview()}
+              </div>
+            </div>
+
+            {/* Version History & Stats Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
               {/* Version History Panel */}
-              <Grid item xs={12} xl={4}>
-                <Paper elevation={3} sx={{ borderRadius: 3, overflow: 'hidden' }}>
-                  <Box sx={{ bgcolor: 'secondary.main', color: 'white', p: 3, textAlign: 'center' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      <HistoryIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                      Version History
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                      Track your changes
-                    </Typography>
-                  </Box>
-                  <Box sx={{ p: 2, maxHeight: 400, overflow: 'auto' }}>
-                    {renderVersionHistory()}
-                  </Box>
-                </Paper>
-              </Grid>
+              <div className="pdf-config-card">
+                <div className="pdf-config-card__header pdf-config-card__header--history">
+                  <HistoryIcon /> Version History
+                </div>
+                <div className="pdf-config-card__content" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {renderVersionHistory()}
+                </div>
+              </div>
 
               {/* Template Statistics Panel */}
-              <Grid item xs={12}>
-                <Paper elevation={3} sx={{ borderRadius: 3, overflow: 'hidden' }}>
-                  <Box sx={{ bgcolor: 'info.main', color: 'white', p: 3, textAlign: 'center' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      <AnalyticsIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                      Template Statistics
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                      Overview of your configuration
-                    </Typography>
-                  </Box>
-                  <Box sx={{ p: 3 }}>
-                    {renderTemplateStats()}
-                  </Box>
-                </Paper>
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
+              <div className="pdf-config-card">
+                <div className="pdf-config-card__header pdf-config-card__header--stats">
+                  <AnalyticsIcon /> Statistics
+                </div>
+                <div className="pdf-config-card__content">
+                  {renderTemplateStats()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {/* Speed Dial for Quick Actions */}
-        <SpeedDial
-          ariaLabel="Quick Actions"
-          sx={{ position: 'fixed', bottom: 24, right: 24 }}
-          icon={<SpeedDialIcon />}
+      {/* Floating Actions Dock for Quick Actions */}
+      <div className="pdf-config-actions-dock">
+        <button
+          className="pdf-config-action-fab"
+          title="Save Template"
+          onClick={saveTemplate}
         >
-          <SpeedDialAction
-            icon={<SaveIcon />}
-            tooltipTitle="Save Template"
-            onClick={saveTemplate}
-          />
-          <SpeedDialAction
-            icon={<RefreshIcon />}
-            tooltipTitle="Reset"
-            onClick={() => resetSectionOrder()}
-          />
-          <SpeedDialAction
-            icon={<CloudDownloadIcon />}
-            tooltipTitle="Export"
-            onClick={() => {
-              const templateData = JSON.stringify(template, null, 2);
-              const blob = new Blob([templateData], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `pdf-template-${selectedQuiz || 'default'}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          />
-        </SpeedDial>
-      </Container>
-    </Box>
+          <SaveIcon />
+        </button>
+        <button
+          className="pdf-config-action-fab"
+          title="Reset Order"
+          onClick={() => resetSectionOrder()}
+        >
+          <RefreshIcon />
+        </button>
+        <button
+          className="pdf-config-action-fab"
+          title="Export Config"
+          onClick={() => {
+            const templateData = JSON.stringify(template, null, 2);
+            const blob = new Blob([templateData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pdf-template-${selectedQuiz || 'default'}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
+          <CloudDownloadIcon />
+        </button>
+      </div>
+    </div>
   );
 };
 

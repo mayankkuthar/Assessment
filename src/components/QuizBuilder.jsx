@@ -1,21 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
-import IconButton from '@mui/material/IconButton';
 import PreviewIcon from '@mui/icons-material/Preview';
 import SaveIcon from '@mui/icons-material/Save';
 import EditIcon from '@mui/icons-material/Edit';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import MenuItem from '@mui/material/MenuItem';
+import './QuizBuilder.css';
 import QuizAssignmentGraph from './QuizAssignmentGraph';
 import RichTextEditor from './RichTextEditor';
 
@@ -158,298 +147,234 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
   );
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Grid container spacing={4} sx={{ width: '100%', margin: 0 }}>
-        <Grid item xs={12} lg={4}>
-          <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, height: 'fit-content', position: 'sticky', top: 20 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-                {isEditing ? 'Edit Quiz' : 'Build Quiz'}
-              </Typography>
-              <TextField
-                label="Quiz Name"
-                value={quizName}
-                onChange={e => setQuizName(e.target.value)}
-                size="medium"
-                fullWidth
-                variant="outlined"
-                sx={{ mb: 3 }}
-                InputLabelProps={{ shrink: true }}
-              />
-              <RichTextEditor
-                label="Report Header"
-                value={reportHeader}
-                onChange={setReportHeader}
-                placeholder="Enter header text that will appear before Performance Overview in the report..."
-                height={150}
-              />
-              <RichTextEditor
-                label="Report Footer"
-                value={reportFooter}
-                onChange={setReportFooter}
-                placeholder="Enter footer text that will appear after Achievement Summary in the report..."
-                height={150}
-              />
-              {!isEditing && (
-                <TextField
-                  select
-                  label="Select Profile"
-                  value={selectedProfile}
-                  onChange={e => setSelectedProfile(e.target.value)}
-                  size="medium"
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mb: 3 }}
-                  InputLabelProps={{ shrink: true }}
-                >
-                  <MenuItem value="">-- Select --</MenuItem>
-                  {profiles.map((profile) => (
-                    <MenuItem key={profile.id} value={profile.id}>
-                      {profile.name} ({profile.type})
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-              <Button
-                variant="contained"
-                onClick={saveQuiz}
-                disabled={!quizName || (!isEditing && !selectedProfile) || quizPackets.length === 0}
-                fullWidth
-                sx={{ mb: 2, py: 1.5, fontWeight: 600 }}
-                startIcon={<SaveIcon />}
-              >
-                {isEditing ? 'Update Quiz' : 'Save Quiz'}
-              </Button>
-              {isEditing && (
-                <Button
-                  variant="outlined"
-                  onClick={cancelEdit}
-                  fullWidth
-                  sx={{ mb: 2, py: 1.5, fontWeight: 600 }}
-                >
-                  Cancel Edit
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                onClick={() => setShowPreview(!showPreview)}
-                disabled={quizPackets.length === 0}
-                fullWidth
-                sx={{ py: 1.5, fontWeight: 600 }}
-                startIcon={<PreviewIcon />}
-              >
-                {showPreview ? 'Hide Preview' : 'Preview Quiz'}
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} lg={4}>
-          <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, minHeight: 400 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>Quiz Packets (Drag to Reorder)</Typography>
-              <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="quiz-packets">
-                  {(provided) => (
-                    <List {...provided.droppableProps} ref={provided.innerRef} sx={{ 
-                      minHeight: 100, 
-                      border: '2px dashed #ccc', 
-                      borderRadius: 2, 
-                      p: 2,
-                      backgroundColor: 'rgba(255,255,255,0.5)'
-                    }}>
-                      {quizPackets.map((packet, index) => (
-                        <Draggable key={packet.id} draggableId={packet.id} index={index}>
-                          {(provided) => (
-                            <ListItem
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              sx={{
-                                mb: 1,
-                                p: 2,
-                                borderRadius: 2,
-                                backgroundColor: 'var(--card-bg)',
-                                border: '1px solid var(--border)',
-                                boxShadow: 'var(--card-shadow)',
-                                '&:hover': {
-                                  backgroundColor: 'var(--highlight)',
-                                  transform: 'translateY(-1px)',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                },
-                                transition: 'all 0.2s ease-in-out'
-                              }}
-                            >
-                              <ListItemText
-                                primary={
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'var(--text)' }}>
-                                    {packet.name}
-                                  </Typography>
-                                }
-                                secondary={
-                                  <Typography variant="body2" color="text.secondary">
-                                    {packet.questions?.length || 0} questions
-                                  </Typography>
-                                }
-                              />
-                              <IconButton
-                                onClick={() => setQuizPackets(quizPackets.filter(p => p.id !== packet.id))}
-                                size="small"
-                                sx={{ color: 'error.main' }}
-                              >
-                                <AddCircleOutlineIcon sx={{ transform: 'rotate(45deg)' }} />
-                              </IconButton>
-                            </ListItem>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </List>
-                  )}
-                </Droppable>
-              </DragDropContext>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} lg={4}>
-          <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, minHeight: 400 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>Available Packets</Typography>
-              <List>
-                {packets.map((packet) => (
-                  <ListItem
-                    key={packet.id}
-                    button
-                    onClick={() => addPacketToQuiz(packet)}
-                    disabled={quizPackets.find((p) => p.id === packet.id)}
-                    sx={{
-                      mb: 1,
-                      p: 2,
-                      borderRadius: 2,
-                      backgroundColor: 'var(--card-bg)',
-                      border: '1px solid var(--border)',
-                      boxShadow: 'var(--card-shadow)',
-                      '&:hover': {
-                        backgroundColor: 'var(--highlight)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      },
-                      '&:disabled': {
-                        opacity: 0.5,
-                        backgroundColor: 'var(--card-bg)',
-                        transform: 'none',
-                        boxShadow: 'var(--card-shadow)',
-                      },
-                      transition: 'all 0.2s ease-in-out'
-                    }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'var(--text)' }}>
-                          {packet.name}
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography variant="body2" color="text.secondary">
-                          {packet.questions?.length || 0} questions
-                        </Typography>
-                      }
-                    />
-                    <AddCircleOutlineIcon sx={{ color: 'primary.main' }} />
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+    <div className="quiz-builder">
+      <div className="quiz-builder__grid">
+        {/* Left Column - Form */}
+        <div className="quiz-card quiz-card--form">
+          <h3 className="quiz-card__title">
+            {isEditing ? 'Edit Quiz' : 'Build Quiz'}
+          </h3>
+          <div className="form-group">
+            <label className="form-label">Quiz Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={quizName}
+              onChange={e => setQuizName(e.target.value)}
+              placeholder="Enter quiz name..."
+            />
+          </div>
+          
+          <RichTextEditor
+            label="Report Header"
+            value={reportHeader}
+            onChange={setReportHeader}
+            placeholder="Enter header text that will appear before Performance Overview in the report..."
+            height={150}
+          />
+          <RichTextEditor
+            label="Report Footer"
+            value={reportFooter}
+            onChange={setReportFooter}
+            placeholder="Enter footer text that will appear after Achievement Summary in the report..."
+            height={150}
+          />
 
-      {showPreview && (
-        <Card variant="outlined" sx={{ mt: 4, borderRadius: 3, boxShadow: 2 }}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>Quiz Preview</Typography>
-            {allQuestions.length === 0 ? (
-              <Typography color="text.secondary">No questions to preview. Add packets first.</Typography>
-            ) : (
-              <List>
-                {allQuestions.map((question, index) => (
-                  <ListItem key={index} sx={{ mb: 2, p: 2, borderRadius: 2, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-                    <ListItemText
-                      primary={
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                          {index + 1}. {question.question_text}
-                        </Typography>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Type: {(question.question_type === 'mcq' || question.type === 'mcq') ? 'Multiple Choice' : 'True/False'} | Packet: {question.packetName}
-                          </Typography>
-                          {(question.question_type === 'mcq' || question.type === 'mcq') && question.options && (
-                            <Box>
-                              {question.options.map((option, optIndex) => (
-                                <Typography key={optIndex} variant="body2" sx={{ ml: 2 }}>
-                                  {String.fromCharCode(65 + optIndex)}. {option}
-                                </Typography>
-                              ))}
-                            </Box>
-                          )}
-                          <Typography variant="body2" sx={{ mt: 1, fontWeight: 600, color: 'success.main' }}>
-                            Correct Answer: {question.correct_answer}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </ListItem>
+          {!isEditing && (
+            <div className="form-group">
+              <label className="form-label">Select Profile</label>
+              <select
+                className="form-input"
+                value={selectedProfile}
+                onChange={e => setSelectedProfile(e.target.value)}
+              >
+                <option value="">-- Select --</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.type})
+                  </option>
                 ))}
-              </List>
-            )}
-          </CardContent>
-        </Card>
+              </select>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="btn btn--primary btn--full"
+            onClick={saveQuiz}
+            disabled={!quizName || (!isEditing && !selectedProfile) || quizPackets.length === 0}
+            style={{ marginBottom: 'var(--space-3)' }}
+          >
+            <SaveIcon className="btn-icon" />
+            {isEditing ? 'Update Quiz' : 'Save Quiz'}
+          </button>
+          
+          {isEditing && (
+            <button
+              type="button"
+              className="btn btn--outline btn--full"
+              onClick={cancelEdit}
+              style={{ marginBottom: 'var(--space-3)' }}
+            >
+              Cancel Edit
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="btn btn--outline btn--full"
+            onClick={() => setShowPreview(!showPreview)}
+            disabled={quizPackets.length === 0}
+          >
+            <PreviewIcon className="btn-icon" />
+            {showPreview ? 'Hide Preview' : 'Preview Quiz'}
+          </button>
+        </div>
+
+        {/* Center Column - Quiz Packets (Drag and Drop) */}
+        <div className="quiz-card">
+          <h3 className="quiz-card__title">Quiz Packets (Drag to Reorder)</h3>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <Droppable droppableId="quiz-packets">
+              {(provided, snapshot) => (
+                <div 
+                  {...provided.droppableProps} 
+                  ref={provided.innerRef} 
+                  className={`droppable-area ${snapshot.isDraggingOver ? 'droppable-area--active' : ''}`}
+                >
+                  {quizPackets.map((packet, index) => (
+                    <Draggable key={packet.id} draggableId={packet.id} index={index}>
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="draggable-packet"
+                        >
+                          <div>
+                            <div className="draggable-packet__name">{packet.name}</div>
+                            <div className="draggable-packet__questions">
+                              {packet.questions?.length || 0} questions
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="icon-btn icon-btn--danger"
+                            onClick={() => setQuizPackets(quizPackets.filter(p => p.id !== packet.id))}
+                            title="Remove Packet"
+                          >
+                            <AddCircleOutlineIcon style={{ transform: 'rotate(45deg)', width: '18px', height: '18px' }} />
+                          </button>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </div>
+
+        {/* Right Column - Available Packets */}
+        <div className="quiz-card">
+          <h3 className="quiz-card__title">Available Packets</h3>
+          <div className="available-packets-list">
+            {packets.map((packet) => {
+              const isDisabled = !!quizPackets.find((p) => p.id === packet.id);
+              return (
+                <div
+                  key={packet.id}
+                  className={`available-packet-item ${isDisabled ? 'available-packet-item--disabled' : ''}`}
+                  onClick={() => !isDisabled && addPacketToQuiz(packet)}
+                >
+                  <div>
+                    <div className="available-packet-item__name">{packet.name}</div>
+                    <div className="available-packet-item__questions">
+                      {packet.questions?.length || 0} questions
+                    </div>
+                  </div>
+                  <AddCircleOutlineIcon style={{ color: isDisabled ? 'var(--color-muted)' : 'var(--color-primary)', width: '20px', height: '20px' }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Quiz Preview */}
+      {showPreview && (
+        <div className="section-card quiz-preview-card">
+          <h3 className="section-card__title">Quiz Preview</h3>
+          {allQuestions.length === 0 ? (
+            <p className="form-helper">No questions to preview. Add packets first.</p>
+          ) : (
+            <div className="preview-question-list">
+              {allQuestions.map((question, index) => (
+                <div key={index} className="preview-question-item">
+                  <div className="preview-question-item__header">
+                    {index + 1}. {question.question_text}
+                  </div>
+                  <div className="preview-question-item__meta">
+                    Type: {(question.question_type === 'mcq' || question.type === 'mcq') ? 'Multiple Choice' : 'True/False'} | Packet: {question.packetName}
+                  </div>
+                  {(question.question_type === 'mcq' || question.type === 'mcq') && question.options && (
+                    <div className="preview-question-item__options">
+                      {question.options.map((option, optIndex) => (
+                        <div key={optIndex} className="preview-question-item__option">
+                          {String.fromCharCode(65 + optIndex)}. {typeof option === 'object' ? option.text : option}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="preview-question-item__correct">
+                    Correct Answer: {question.correct_answer || 'N/A'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
-      <Card variant="outlined" sx={{ mt: 4, borderRadius: 3, boxShadow: 2 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>Saved Quizzes</Typography>
-          {savedQuizzes.length === 0 ? (
-            <Typography color="text.secondary">No quizzes saved yet. Create your first quiz above!</Typography>
-          ) : (
-            <List className="saved-quizzes-list">
-              {savedQuizzes.map((quiz) => (
-                <ListItem key={quiz.id} sx={{ mb: 2, p: 2, borderRadius: 2, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--card-shadow)' }}>
-                  <ListItemText
-                    primary={
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'var(--text)' }}>
-                        {quiz.name}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        Created: {new Date(quiz.created_at).toLocaleDateString()}
-                      </Typography>
-                    }
-                  />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton
-                      onClick={() => editQuiz(quiz)}
-                      size="small"
-                      sx={{ color: 'primary.main' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => deleteQuiz(quiz.id)}
-                      size="small"
-                      sx={{ color: 'error.main' }}
-                    >
-                      <AddCircleOutlineIcon sx={{ transform: 'rotate(45deg)' }} />
-                    </IconButton>
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </CardContent>
-      </Card>
+      {/* Saved Quizzes */}
+      <div className="section-card saved-quizzes-card">
+        <h3 className="section-card__title">Saved Quizzes</h3>
+        {savedQuizzes.length === 0 ? (
+          <p className="form-helper">No quizzes saved yet. Create your first quiz above!</p>
+        ) : (
+          <div className="saved-quizzes-list">
+            {savedQuizzes.map((quiz) => (
+              <div key={quiz.id} className="saved-quiz-item">
+                <div>
+                  <div className="saved-quiz-item__name">{quiz.name}</div>
+                  <div className="saved-quiz-item__date">
+                    Created: {new Date(quiz.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="saved-quiz-item__actions">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => editQuiz(quiz)}
+                    title="Edit Quiz"
+                  >
+                    <EditIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--danger"
+                    onClick={() => deleteQuiz(quiz.id)}
+                    title="Delete Quiz"
+                  >
+                    <AddCircleOutlineIcon style={{ transform: 'rotate(45deg)', width: '18px', height: '18px' }} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Quiz Assignment Graph Section */}
       <QuizAssignmentGraph
@@ -460,7 +385,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
         onRemoveAssignment={removeQuizAssignment}
         onDataChange={onDataChange}
       />
-    </Box>
+    </div>
   );
 };
 

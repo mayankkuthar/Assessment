@@ -1,37 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Tooltip,
-  CircularProgress,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  InputAdornment
-} from '@mui/material';
-import {
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
   Search as SearchIcon,
   FilterList as FilterIcon
 } from '@mui/icons-material';
 import PDFGenerator from '../services/pdfGenerator';
+import './AssessmentReport.css';
 
 const AssessmentReport = () => {
   const [quizzes, setQuizzes] = useState([]);
@@ -167,8 +142,6 @@ const AssessmentReport = () => {
       const packetScores = quizPackets.map(packet => {
         const packetQuestions = allQuestions.filter(q => q.packet_id === packet.id);
         const correct = packetQuestions.filter(q => {
-          // For now, we'll use a mock answer since we don't have actual user answers
-          // In a real scenario, this would come from the attempt data
           return Math.random() > 0.5; // Mock: 50% chance of correct answer
         }).length;
         const total = packetQuestions.length;
@@ -177,7 +150,6 @@ const AssessmentReport = () => {
         // Calculate actual marks based on question marks
         const totalPossibleMarks = packetQuestions.reduce((sum, q) => sum + (q.marks || 1), 0);
         const earnedMarks = packetQuestions.filter((q, index) => {
-          // Mock: use the same random logic for which questions are correct
           return Math.random() > 0.5;
         }).reduce((sum, q) => sum + (q.marks || 1), 0);
         
@@ -260,7 +232,6 @@ const AssessmentReport = () => {
       
       console.log('🚀 Generating PDF report with packets containing individual scoring scales');
       
-      // Generate the report with packets containing individual scoring scales
       console.log('🚀 About to call generateReport with:');
       console.log('  - selectedQuiz:', selectedQuiz);
       console.log('  - userData:', userData);
@@ -274,7 +245,7 @@ const AssessmentReport = () => {
         userData || { user_name: 'Unknown User', email: 'No email' },
         attempt, // Pass the actual attempt data
         allQuestions,
-        {}, // Mock answers - in real scenario, this would be attempt.answers
+        {}, // Mock answers
         packetsWithScoringScales, // Pass packets with individual scoring scales
         null, // No global scoring scale needed
         template // Pass the template configuration
@@ -299,10 +270,6 @@ const AssessmentReport = () => {
       setGeneratingPDF(false);
     }
   };
-
-
-
-
 
   const formatDate = (dateString) => {
     try {
@@ -336,7 +303,7 @@ const AssessmentReport = () => {
         name: attempt.user.user_name || attempt.user.email || 'Unknown User',
         email: attempt.user.email || 'No email',
         role: attempt.user.profile || 'No role',
-        organization: attempt.user.organization || 'Not specified' // Added organization field
+        organization: attempt.user.organization || 'Not specified'
       };
     }
     
@@ -348,7 +315,7 @@ const AssessmentReport = () => {
           name: profile.name || 'Unknown User',
           email: profile.email || 'No email',
           role: profile.role || 'No role',
-          organization: attempt.userData.organization || 'Not specified' // Added organization field
+          organization: attempt.userData.organization || 'Not specified'
         };
       }
     }
@@ -360,7 +327,7 @@ const AssessmentReport = () => {
         name: profile.name || 'Unknown User',
         email: profile.email || 'No email',
         role: profile.role || 'No role',
-        organization: 'Not specified' // Added organization field
+        organization: 'Not specified'
       };
     }
     
@@ -368,264 +335,232 @@ const AssessmentReport = () => {
     return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Not specified' };
   };
 
-
-
   if (loading && !selectedQuiz) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
+      <div className="report-spinner-wrap">
+        <div className="report-spinner" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ m: 2 }}>
+      <div className="report-alert">
         {error}
-      </Alert>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3, fontWeight: 'bold' }}>
-        Assessment Reports
-      </Typography>
+    <div className="assessment-report">
+      <div className="report-page-header">
+        <div className="report-page-header__icon">
+          <AssessmentIcon />
+        </div>
+        <div>
+          <h1 className="report-page-header__title">Assessment Reports</h1>
+          <p className="report-page-header__subtitle">
+            {showDetails ? `${selectedQuiz.name} Attempts` : 'Select a quiz to view candidate attempts and generate reports'}
+          </p>
+        </div>
+      </div>
 
       {!showDetails ? (
         // Quiz Selection View
-        <Box>
-          <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField
-              placeholder="Search quizzes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ minWidth: 300 }}
-            />
-          </Box>
+        <div>
+          <div className="report-toolbar">
+            <div className="report-search">
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder="Search quizzes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
 
-          <Grid container spacing={3}>
+          <div className="report-quiz-grid">
             {filteredQuizzes.map((quiz) => (
-              <Grid item xs={12} sm={6} md={4} key={quiz.id}>
-                <Card 
-                  sx={{ 
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: 4
-                    }
-                  }}
-                  onClick={() => handleQuizSelect(quiz)}
-                >
-                  <CardContent>
-                    <Box display="flex" alignItems="center" mb={2}>
-                      <AssessmentIcon sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="h6" component="div">
-                        {quiz.name}
-                      </Typography>
-                    </Box>
-                    
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Created: {formatDate(quiz.created_at)}
-                    </Typography>
-                    
-                    <Typography variant="body2" color="text.secondary">
-                      Description: {quiz.description || 'No description available'}
-                    </Typography>
-                    
-                    <Box sx={{ mt: 2 }}>
-                      <Chip 
-                        label="Click to View Reports" 
-                        color="primary" 
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
+              <div
+                className="report-quiz-card"
+                key={quiz.id}
+                onClick={() => handleQuizSelect(quiz)}
+              >
+                <div className="report-quiz-card__header">
+                  <div className="report-quiz-card__icon">
+                    <AssessmentIcon />
+                  </div>
+                  <h3 className="report-quiz-card__name">{quiz.name}</h3>
+                </div>
+                
+                <p className="report-quiz-card__meta">
+                  Created: {formatDate(quiz.created_at)}
+                </p>
+                
+                <p className="report-quiz-card__desc">
+                  {quiz.description || 'No description available'}
+                </p>
+                
+                <div>
+                  <span className="report-quiz-card__badge">
+                    Click to View Reports
+                  </span>
+                </div>
+              </div>
             ))}
-          </Grid>
+          </div>
 
           {filteredQuizzes.length === 0 && (
-            <Box textAlign="center" py={4}>
-              <Typography variant="h6" color="text.secondary">
-                {searchTerm ? 'No quizzes found matching your search.' : 'No quizzes available.'}
-              </Typography>
-            </Box>
+            <div className="report-empty">
+              <h3>No quizzes found</h3>
+              <p>{searchTerm ? 'No quizzes found matching your search.' : 'No quizzes available.'}</p>
+            </div>
           )}
-        </Box>
+        </div>
       ) : (
         // Quiz Details View
-        <Box>
-          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button 
-              variant="outlined" 
+        <div>
+          <div className="report-detail-title-bar">
+            <button 
+              className="report-back-btn" 
               onClick={() => setShowDetails(false)}
-              sx={{ minWidth: 'auto' }}
             >
               ← Back to Quizzes
-            </Button>
+            </button>
             
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+            <h2 className="report-detail-title">
               {selectedQuiz.name} - Assessment Reports
-            </Typography>
-          </Box>
+            </h2>
+          </div>
 
-          <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <TextField
-              placeholder="Search students..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ minWidth: 250 }}
-            />
+          <div className="report-toolbar">
+            <div className="report-search" style={{ flex: 'none', width: '250px' }}>
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
 
-            <TextField
-              select
-              label="Filter by Status"
+            <select
+              className="report-filter-select"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              sx={{ minWidth: 150 }}
             >
               <option value="all">All Attempts</option>
               <option value="completed">Completed</option>
               <option value="in-progress">In Progress</option>
-            </TextField>
-            
+            </select>
+          </div>
 
-          </Box>
-
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-                  <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Organization</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+          <div className="report-table-container">
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Profile</th>
+                  <th>Organization</th>
+                  <th>Status</th>
+                  <th>Completed</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {filteredAttempts.map((attempt) => {
                   const profile = getProfileInfo(attempt);
                   
                   return (
-                    <TableRow key={attempt.id} hover>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight={500}>
+                    <tr key={attempt.id}>
+                      <td>
+                        <div>
+                          <p className="report-table__name">
                             {profile.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          </p>
+                          <p className="report-table__email">
                             {profile.email}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={profile.role} 
-                          size="small" 
-                          color="primary" 
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={attempt.user?.organization || 'Not specified'} 
-                          size="small" 
-                          color={attempt.user?.organization === 'HappiMynd' ? 'primary' : 'secondary'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={attempt.status || 'completed'}
-                          color={attempt.status === 'completed' ? 'success' : 'warning'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {formatDate(attempt.completed_at)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title="View Report in Browser">
-                            <IconButton
-                              onClick={() => {
-                                if (selectedQuiz && attempt?.id) {
-                                  window.open(`/report/${selectedQuiz.id}/${attempt.id}`, '_blank');
-                                }
-                              }}
-                              color="primary"
-                              size="small"
-                            >
-                              <AssessmentIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
+                          </p>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="report-badge report-badge--primary">
+                          {profile.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`report-badge ${
+                          (attempt.user?.organization || profile.organization) === 'HappiMynd' 
+                            ? 'report-badge--primary' 
+                            : 'report-badge--outline'
+                        }`}>
+                          {attempt.user?.organization || profile.organization || 'Not specified'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`report-badge ${
+                          attempt.status === 'completed' 
+                            ? 'report-badge--success' 
+                            : 'report-badge--warning'
+                        }`}>
+                          {attempt.status || 'completed'}
+                        </span>
+                      </td>
+                      <td>
+                        {formatDate(attempt.completed_at)}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            className="report-action-btn"
+                            title="View Report in Browser"
+                            onClick={() => {
+                              if (selectedQuiz && attempt?.id) {
+                                window.open(`/report/${selectedQuiz.id}/${attempt.id}`, '_blank');
+                              }
+                            }}
+                          >
+                            <AssessmentIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              </tbody>
+            </table>
+          </div>
 
           {filteredAttempts.length === 0 && (
-            <Box textAlign="center" py={4}>
-              <Typography variant="h6" color="text.secondary">
+            <div className="report-empty">
+              <h3>No attempts found</h3>
+              <p>
                 {searchTerm || filterStatus !== 'all' 
                   ? 'No attempts found matching your criteria.' 
                   : 'No attempts found for this quiz.'}
-              </Typography>
-            </Box>
+              </p>
+            </div>
           )}
 
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-            <Typography variant="h6" gutterBottom>
-              📊 Quiz Summary
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">
-                  Total Attempts: <strong>{quizAttempts.length}</strong>
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">
-                  Completed: <strong>{quizAttempts.filter(a => a.status === 'completed').length}</strong>
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">
-                  Packets: <strong>{quizPackets.length}</strong>
-                </Typography>
-              </Grid>
-            </Grid>
-          </Box>
-        </Box>
+          <div className="report-summary-box">
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Total Attempts</p>
+              <p className="report-summary-box__value">{quizAttempts.length}</p>
+            </div>
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Completed Attempts</p>
+              <p className="report-summary-box__value">{quizAttempts.filter(a => a.status === 'completed').length}</p>
+            </div>
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Packets</p>
+              <p className="report-summary-box__value">{quizPackets.length}</p>
+            </div>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 
-export default AssessmentReport; 
+export default AssessmentReport;

@@ -1,14 +1,4 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Alert,
-  Button,
-  ToggleButton,
-  ToggleButtonGroup,
-} from '@mui/material';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import 'reactflow/dist/style.css';
@@ -42,13 +32,11 @@ const QuizAssignmentGraph = ({
   // Check if we have data to display
   if (!profiles || !savedQuizzes || profiles.length === 0 || savedQuizzes.length === 0) {
     return (
-      <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, height: '400px' }}>
-        <CardContent sx={{ p: 3, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography variant="h6" color="text.secondary">
-            No quizzes or profiles available for assignment
-          </Typography>
-        </CardContent>
-      </Card>
+      <div className="section-card" style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--space-6)' }}>
+        <h3 className="section-card__title" style={{ color: 'var(--color-muted-fg)', textAlign: 'center', margin: 0 }}>
+          No quizzes or profiles available for assignment
+        </h3>
+      </div>
     );
   }
 
@@ -239,27 +227,25 @@ const QuizAssignmentGraph = ({
 
     if (reactFlowError) {
       return (
-        <Box sx={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Alert severity="error">
-            <Typography variant="body2">
-              Graph view is temporarily unavailable. Please use the list view.
-            </Typography>
-          </Alert>
-        </Box>
+        <div style={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="alert alert--error">
+            Graph view is temporarily unavailable. Please use the list view.
+          </div>
+        </div>
       );
     }
 
     return (
       <React.Suspense fallback={
-        <Box sx={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography>Loading graph view...</Typography>
-        </Box>
+        <div style={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p>Loading graph view...</p>
+        </div>
       }>
-        <Box sx={{ height: '600px', width: '100%' }}>
+        <div className="graph-view-container">
           <style>
             {`
               .react-flow {
-                height: 82% !important;
+                height: 100% !important;
               }
               .react-flow__node {
                 cursor: grab;
@@ -327,127 +313,120 @@ const QuizAssignmentGraph = ({
               <Controls style={{ background: '#2a2a2a', border: '1px solid #444' }} />
             </ReactFlowComponent>
           </ReactFlowProvider>
-        </Box>
+        </div>
       </React.Suspense>
     );
   };
 
   const ListView = () => (
-    <Box sx={{ height: '600px', overflowY: 'auto', pb: 2 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+    <div className="list-view-container">
+      <h4 style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>
         Available Quizzes ({savedQuizzes.length}):
-      </Typography>
-      <Box sx={{ mb: 3 }}>
+      </h4>
+      <div style={{ marginBottom: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
         {savedQuizzes.map((quiz) => (
-          <Box key={quiz.id} sx={{ 
-            p: 2, 
-            mb: 1, 
-            bgcolor: '#e3f2fd', 
-            borderRadius: 1, 
-            border: '1px solid #2196f3' 
+          <div key={quiz.id} style={{ 
+            padding: 'var(--space-3) var(--space-4)', 
+            backgroundColor: 'var(--color-tertiary)', 
+            borderRadius: 'var(--radius-md)', 
+            border: '1px solid rgba(137, 91, 245, 0.2)' 
           }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
               {quiz.name}
-            </Typography>
-          </Box>
+            </span>
+          </div>
         ))}
-      </Box>
+      </div>
 
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+      <h4 style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>
         Profiles ({profiles.length}):
-      </Typography>
-      <Box sx={{ mb: 3 }}>
+      </h4>
+      <div style={{ marginBottom: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
         {profiles.map((profile) => (
-          <Box key={profile.id} sx={{ 
-            p: 2, 
-            mb: 1, 
-            bgcolor: '#f3e5f5', 
-            borderRadius: 1, 
-            border: '1px solid #9c27b0' 
+          <div key={profile.id} style={{ 
+            padding: 'var(--space-3) var(--space-4)', 
+            backgroundColor: 'rgba(166, 85, 247, 0.05)', 
+            borderRadius: 'var(--radius-md)', 
+            border: '1px solid rgba(166, 85, 247, 0.2)' 
           }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
               {profile.name} ({profile.type})
-            </Typography>
-          </Box>
+            </span>
+          </div>
         ))}
-      </Box>
+      </div>
 
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+      <h4 style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>
         Current Assignments ({quizAssignments?.length || 0}):
-      </Typography>
-      <Box>
+      </h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         {quizAssignments?.map((assignment) => {
           const quiz = savedQuizzes.find(q => q.id === assignment.quiz_id);
           const profile = profiles.find(p => p.id === assignment.profile_id);
           return (
-            <Box key={assignment.id} sx={{ 
-              p: 2, 
-              mb: 1, 
-              bgcolor: '#e8f5e8', 
-              borderRadius: 1, 
-              border: '1px solid #4caf50',
+            <div key={assignment.id} style={{ 
+              padding: 'var(--space-3) var(--space-4)', 
+              backgroundColor: 'rgba(16, 185, 129, 0.05)', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid rgba(16, 185, 129, 0.2)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <Typography variant="body2">
-                <strong>{quiz?.name || 'Unknown Quiz'}</strong> → <strong>{profile?.name || 'Unknown Profile'}</strong>
-              </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
+              <span style={{ fontSize: 'var(--text-sm)' }}>
+                <strong>{quiz?.name || 'Unknown Quiz'}</strong> &rarr; <strong>{profile?.name || 'Unknown Profile'}</strong>
+              </span>
+              <button
+                className="btn btn--outline btn--sm"
+                style={{ color: 'var(--color-destructive)', borderColor: 'var(--color-destructive)', padding: '4px 12px' }}
                 onClick={() => onRemoveAssignment(assignment.profile_id, assignment.quiz_id)}
               >
                 Remove
-              </Button>
-            </Box>
+              </button>
+            </div>
           );
         })}
         {(!quizAssignments || quizAssignments.length === 0) && (
-          <Typography variant="body2" color="text.secondary">
-            No assignments yet
-          </Typography>
+          <p className="form-helper" style={{ margin: 0 }}>No assignments yet</p>
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 2, height: '700px' }}>
-      <CardContent sx={{ p: 3, height: '100%' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Quiz Assignment Manager
-          </Typography>
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={handleViewModeChange}
-            size="small"
+    <div className="section-card" style={{ marginTop: 'var(--space-6)', minHeight: '700px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+        <h3 className="section-card__title" style={{ margin: 0 }}>
+          Quiz Assignment Manager
+        </h3>
+        <div className="btn-group-toggle">
+          <button 
+            type="button"
+            className={`btn-toggle ${viewMode === 'list' ? 'btn-toggle--active' : ''}`}
+            onClick={() => setViewMode('list')}
           >
-            <ToggleButton value="list" aria-label="list view">
-              <ViewListIcon sx={{ mr: 1 }} />
-              List View
-            </ToggleButton>
-            <ToggleButton value="graph" aria-label="graph view">
-              <AccountTreeIcon sx={{ mr: 1 }} />
-              Graph View
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-        
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2">
-            <strong>List View:</strong> Simple overview of quizzes, profiles, and assignments.
-            <br />
-            <strong>Graph View:</strong> Drag from quiz (blue) to profile (purple) to assign. Click connections to remove.
-          </Typography>
-        </Alert>
+            <ViewListIcon style={{ width: '18px', height: '18px' }} />
+            List View
+          </button>
+          <button 
+            type="button"
+            className={`btn-toggle ${viewMode === 'graph' ? 'btn-toggle--active' : ''}`}
+            onClick={() => setViewMode('graph')}
+          >
+            <AccountTreeIcon style={{ width: '18px', height: '18px' }} />
+            Graph View
+          </button>
+        </div>
+      </div>
+      
+      <div className="alert alert--info" style={{ marginBottom: 'var(--space-4)' }}>
+        <strong>List View:</strong> Simple overview of quizzes, profiles, and assignments.
+        <br />
+        <strong>Graph View:</strong> Drag from quiz (blue) to profile (purple) to assign. Click connections to remove.
+      </div>
 
-        {viewMode === 'list' ? <ListView /> : <GraphView />}
-      </CardContent>
-    </Card>
+      {viewMode === 'list' ? <ListView /> : <GraphView />}
+    </div>
   );
 };
 

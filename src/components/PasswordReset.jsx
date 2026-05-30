@@ -1,26 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  CircularProgress
-} from '@mui/material'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
 
-const theme = createTheme({
-  palette: {
-    primary: { main: '#2563eb' },
-  },
-  typography: {
-    fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
-  },
-})
 
 function PasswordReset() {
   const [password, setPassword] = useState('')
@@ -68,128 +49,84 @@ function PasswordReset() {
 
   if (!session && !error) {
     return (
-      <ThemeProvider theme={theme}>
-        <Box
-          sx={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            p: 2
-          }}
-        >
-          <Card sx={{ maxWidth: 400, width: '100%' }}>
-            <CardContent sx={{ p: 4, textAlign: 'center' }}>
-              <CircularProgress />
-              <Typography sx={{ mt: 2 }}>Verifying reset link...</Typography>
-            </CardContent>
-          </Card>
-        </Box>
-      </ThemeProvider>
+      <div className="auth-layout">
+        <div className="auth-card" style={{ textAlign: 'center' }}>
+          <div className="dashboard__spinner" style={{ margin: '0 auto var(--space-4)' }}></div>
+          <p>Verifying reset link...</p>
+        </div>
+      </div>
     )
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          p: 2
-        }}
-      >
-        <Card sx={{ maxWidth: 400, width: '100%' }}>
-          <CardContent sx={{ p: 4 }}>
-            {/* HappiMynd Logo */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-              <img 
-                src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
-                alt="HappiMynd Logo"
-                style={{
-                  height: '60px',
-                  width: 'auto',
-                  objectFit: 'contain'
-                }}
+    <div className="auth-layout">
+      <div className="auth-card">
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
+          <img 
+            src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+            alt="HappiMynd Logo"
+            style={{ height: '60px', width: 'auto', objectFit: 'contain' }}
+          />
+        </div>
+        
+        <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-6)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-fg)' }}>
+          Forgot Password
+        </h2>
+
+        {error && <div className="alert alert--error" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+        {success && <div className="alert alert--success" style={{ marginBottom: 'var(--space-4)' }}>{success}</div>}
+
+        {session ? (
+          <form onSubmit={handlePasswordReset}>
+            <p style={{ textAlign: 'center', marginBottom: 'var(--space-6)', color: 'var(--color-secondary)' }}>
+              Enter your new password below.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">New Password</label>
+              <input
+                className="form-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
-            </Box>
-            
-            <Typography variant="h4" align="center" sx={{ mb: 3, fontWeight: 'bold', overflow: 'visible' }}>
-              Forgot Password
-            </Typography>
+              <div className="form-helper">Password must be at least 6 characters long</div>
+            </div>
 
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
+            <div className="form-group">
+              <label className="form-label">Confirm New Password</label>
+              <input
+                className="form-input"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
 
-            {success && (
-              <Alert severity="success" sx={{ mb: 2 }}>
-                {success}
-              </Alert>
-            )}
-
-            {session ? (
-              <Box component="form" onSubmit={handlePasswordReset}>
-                <Typography variant="body1" sx={{ mb: 3, textAlign: 'center' }}>
-                  Enter your new password below.
-                </Typography>
-
-                <TextField
-                  fullWidth
-                  label="New Password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  sx={{ mb: 2 }}
-                  required
-                  helperText="Password must be at least 6 characters long"
-                />
-
-                <TextField
-                  fullWidth
-                  label="Confirm New Password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  sx={{ mb: 3 }}
-                  required
-                />
-
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                  disabled={loading || !password || !confirmPassword}
-                  sx={{ mb: 2 }}
-                >
-                  {loading ? (
-                    <CircularProgress size={24} color="inherit" />
-                  ) : (
-                    'Update Password'
-                  )}
-                </Button>
-              </Box>
-            ) : (
-              <Box sx={{ textAlign: 'center' }}>
-                <Button
-                  variant="contained"
-                  onClick={handleBackToLogin}
-                  sx={{ mt: 2 }}
-                >
-                  Back to Login
-                </Button>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      </Box>
-    </ThemeProvider>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              style={{ width: '100%' }}
+              disabled={loading || !password || !confirmPassword}
+            >
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </form>
+        ) : (
+          <div style={{ textAlign: 'center' }}>
+            <button
+              className="btn btn--outline"
+              onClick={handleBackToLogin}
+              style={{ marginTop: 'var(--space-4)' }}
+            >
+              Back to Login
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
