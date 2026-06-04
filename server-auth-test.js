@@ -458,6 +458,15 @@ app.get('/api/auth/user', (req, res) => {
 });
 
 // Mock data endpoints to prevent errors
+app.get('/api/users', (req, res) => {
+  console.log('👥 Get all users');
+  const safeUsers = mockData.users.map(u => {
+    const { password, ...withoutPassword } = u;
+    return withoutPassword;
+  });
+  res.json(safeUsers);
+});
+
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   console.log(`👤 Get user ${userId}`);
@@ -1096,25 +1105,78 @@ app.get('/api/quiz-assignments', (req, res) => {
 });
 
 app.post('/api/quiz-assignments', (req, res) => {
-  const newAssignment = req.body;
-  const newId = String(Date.now());
-  console.log(`➕ Create new quiz assignment:`, newAssignment);
+  const { quizId, quiz_id, profileIds, profileId, userIds, userId, due_date, dueDate, status } = req.body;
+  const qId = quizId || quiz_id || '1';
+  const resolvedDueDate = due_date || dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const resolvedStatus = status || 'assigned';
   
-  const assignment = {
-    id: newId,
-    quiz_id: newAssignment.quiz_id || newAssignment.quizId || '1',
-    profile_id: newAssignment.profile_id || newAssignment.profileIds?.[0] || '1',
-    assigned_at: new Date().toISOString(),
-    due_date: newAssignment.due_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: newAssignment.status || 'assigned',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+  console.log(`➕ Create new quiz assignments for quiz ${qId}:`, { profileIds, profileId, userIds, userId });
   
-  mockData.quizAssignments.push(assignment);
+  const createdAssignments = [];
+  let baseTime = Date.now();
+  
+  // 1. Process profile assignments
+  const profilesToAssign = [];
+  if (Array.isArray(profileIds)) {
+    profilesToAssign.push(...profileIds);
+  } else if (profileId) {
+    profilesToAssign.push(profileId);
+  }
+  
+  profilesToAssign.forEach((pId, index) => {
+    // Check if duplicate assignment exists (matching both profile_id and quiz_id, and with NO user_id)
+    const exists = mockData.quizAssignments.some(a => a.quiz_id === qId && a.profile_id === pId && !a.user_id);
+    if (!exists) {
+      const assignment = {
+        id: String(baseTime + index),
+        quiz_id: qId,
+        profile_id: pId,
+        user_id: null,
+        assigned_at: new Date().toISOString(),
+        due_date: resolvedDueDate,
+        status: resolvedStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      mockData.quizAssignments.push(assignment);
+      createdAssignments.push(assignment);
+    }
+  });
+  
+  // 2. Process user assignments
+  const usersToAssign = [];
+  if (Array.isArray(userIds)) {
+    usersToAssign.push(...userIds);
+  } else if (userId) {
+    usersToAssign.push(userId);
+  }
+  
+  usersToAssign.forEach((uId, index) => {
+    // Check if duplicate assignment exists
+    const exists = mockData.quizAssignments.some(a => a.quiz_id === qId && a.user_id === uId);
+    if (!exists) {
+      const userObj = mockData.users.find(u => u.id === uId);
+      const userProfile = userObj ? mockData.profiles.find(p => p.name === userObj.profile) : null;
+      
+      const assignment = {
+        id: String(baseTime + profilesToAssign.length + index),
+        quiz_id: qId,
+        profile_id: userProfile ? userProfile.id : null,
+        user_id: uId,
+        assigned_at: new Date().toISOString(),
+        due_date: resolvedDueDate,
+        status: resolvedStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      mockData.quizAssignments.push(assignment);
+      createdAssignments.push(assignment);
+    }
+  });
+  
   saveData(mockData);
   
-  res.status(201).json(assignment);
+  res.status(201).json(createdAssignments.length > 0 ? createdAssignments[0] : { success: true });
 });
 
 app.put('/api/quiz-assignments/:id', (req, res) => {
@@ -1164,7 +1226,31 @@ app.delete('/api/quiz-assignments/profile/:profileId/quiz/:quizId', (req, res) =
   console.log(`🗑️ Delete quiz assignment for profile ${profileId} and quiz ${quizId}`);
   
   const assignmentIndex = mockData.quizAssignments.findIndex(
-    a => a.profile_id === profileId && a.quiz_id === quizId
+    a => a.profile_id === profileId && a.quiz_id === quizId && !a.user_id
+  );
+  
+  if (assignmentIndex === -1) {
+    return res.status(404).json({ error: 'Assignment not found' });
+  }
+  
+  const deletedAssignment = mockData.quizAssignments[assignmentIndex];
+  mockData.quizAssignments.splice(assignmentIndex, 1);
+  saveData(mockData);
+  
+  res.json({
+    success: true,
+    message: `Quiz assignment removed successfully`,
+    deleted_assignment: deletedAssignment
+  });
+});
+
+// Remove assignment by user and quiz ID
+app.delete('/api/quiz-assignments/user/:userId/quiz/:quizId', (req, res) => {
+  const { userId, quizId } = req.params;
+  console.log(`🗑️ Delete quiz assignment for user ${userId} and quiz ${quizId}`);
+  
+  const assignmentIndex = mockData.quizAssignments.findIndex(
+    a => a.user_id === userId && a.quiz_id === quizId
   );
   
   if (assignmentIndex === -1) {
@@ -1359,8 +1445,16 @@ app.get('/api/users/:userId/assigned-quizzes', (req, res) => {
   const userId = req.params.userId;
   console.log(`📋 Get assigned quizzes for user ${userId}`);
   
-  // Get assignments for this user and enrich with quiz and profile data
-  const userAssignments = mockData.quizAssignments.filter(a => a.user_id === userId);
+  // Find the user to get their profile name
+  const user = mockData.users.find(u => u.id === userId);
+  const userProfileName = user ? user.profile : null;
+  const userProfile = userProfileName ? mockData.profiles.find(p => p.name === userProfileName) : null;
+  
+  // Get assignments: matching the user's ID OR the user's profile ID
+  const userAssignments = mockData.quizAssignments.filter(a => 
+    (a.user_id && String(a.user_id) === String(userId)) ||
+    (!a.user_id && userProfile && String(a.profile_id) === String(userProfile.id))
+  );
   
   const enrichedAssignments = userAssignments.map(assignment => {
     const quiz = mockData.quizzes.find(q => q.id === assignment.quiz_id);

@@ -8,8 +8,8 @@ import './QuizBuilder.css';
 import QuizAssignmentGraph from './QuizAssignmentGraph';
 import RichTextEditor from './RichTextEditor';
 
-const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, deleteQuiz, addPacketsToQuiz, removePacketsFromQuiz, assignQuiz, removeQuizAssignment, quizAssignments, onDataChange, getQuizPackets }) => {
-  const [selectedProfile, setSelectedProfile] = useState('');
+const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, deleteQuiz, addPacketsToQuiz, removePacketsFromQuiz, assignQuiz, assignQuizToProfiles, removeQuizAssignment, quizAssignments, onDataChange, getQuizPackets }) => {
+  const [selectedProfiles, setSelectedProfiles] = useState([]);
   const [quizPackets, setQuizPackets] = useState([]);
   const [quizName, setQuizName] = useState('');
   const [reportHeader, setReportHeader] = useState('');
@@ -37,8 +37,8 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
   };
 
   const saveQuiz = async () => {
-    if (!quizName || (!isEditing && !selectedProfile) || quizPackets.length === 0) {
-      alert('Quiz name, profile (for new quizzes), and at least one packet required!');
+    if (!quizName || (!isEditing && selectedProfiles.length === 0) || quizPackets.length === 0) {
+      alert('Quiz name, at least one profile (for new quizzes), and at least one packet required!');
       return;
     }
     
@@ -84,8 +84,16 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
           await addPacketsToQuiz(newQuiz.id, quizPackets.map(p => p.id));
         }
 
-        // Assign quiz to the selected profile
-        await assignQuiz(selectedProfile, newQuiz.id);
+        // Assign quiz to the selected profiles
+        if (selectedProfiles.length > 0) {
+          if (assignQuizToProfiles) {
+            await assignQuizToProfiles(newQuiz.id, selectedProfiles);
+          } else {
+            for (const profileId of selectedProfiles) {
+              await assignQuiz(profileId, newQuiz.id);
+            }
+          }
+        }
         alert('Quiz saved successfully!');
       }
 
@@ -99,7 +107,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       setReportHeader('');
       setReportFooter('');
       setQuizPackets([]);
-      setSelectedProfile('');
+      setSelectedProfiles([]);
       setEditingQuiz(null);
       setIsEditing(false);
     } catch (error) {
@@ -114,7 +122,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       setQuizName(quiz.name);
       setReportHeader(quiz.report_header || '');
       setReportFooter(quiz.report_footer || '');
-      setSelectedProfile(quiz.profileId || '');
+      setSelectedProfiles([]);
       
       // Load existing packets for this quiz
       const existingPackets = await getQuizPackets(quiz.id);
@@ -132,7 +140,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
     setReportHeader('');
     setReportFooter('');
     setQuizPackets([]);
-    setSelectedProfile('');
+    setSelectedProfiles([]);
     setEditingQuiz(null);
     setIsEditing(false);
   };
@@ -182,19 +190,59 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
 
           {!isEditing && (
             <div className="form-group">
-              <label className="form-label">Select Profile</label>
-              <select
-                className="form-input"
-                value={selectedProfile}
-                onChange={e => setSelectedProfile(e.target.value)}
+              <label className="form-label">Select Profiles to Assign Quiz</label>
+              <div 
+                className="form-input" 
+                style={{ 
+                  height: 'auto', 
+                  maxHeight: '150px', 
+                  overflowY: 'auto', 
+                  padding: '10px',
+                  backgroundColor: 'var(--color-bg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-border)'
+                }}
               >
-                <option value="">-- Select --</option>
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}{profile.type ? ` (${profile.type})` : ''}
-                  </option>
-                ))}
-              </select>
+                {profiles.map((profile) => {
+                  const isChecked = selectedProfiles.includes(profile.id);
+                  return (
+                    <label 
+                      key={profile.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px', 
+                        cursor: 'pointer',
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--color-fg)',
+                        fontWeight: 500
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProfiles([...selectedProfiles, profile.id]);
+                          } else {
+                            setSelectedProfiles(selectedProfiles.filter(id => id !== profile.id));
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>{profile.name}{profile.type ? ` (${profile.type})` : ''}</span>
+                    </label>
+                  );
+                })}
+                {profiles.length === 0 && (
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
+                    No profiles available. Create a profile first.
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -202,7 +250,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
             type="button"
             className="btn btn--primary btn--full"
             onClick={saveQuiz}
-            disabled={!quizName || (!isEditing && !selectedProfile) || quizPackets.length === 0}
+            disabled={!quizName || (!isEditing && selectedProfiles.length === 0) || quizPackets.length === 0}
             style={{ marginBottom: 'var(--space-3)' }}
           >
             <SaveIcon className="btn-icon" />

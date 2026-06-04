@@ -49,7 +49,7 @@ const AdminDashboard = () => {
         const entries = await Promise.all(
           userIds.map(async (id) => {
             try {
-              const res = await fetch(`http://65.1.6.81:3001/api/users/${id}`)
+              const res = await fetch(`/api/users/${id}`)
               if (res.ok) return [id, await res.json()]
             } catch (e) {
               /* ignore individual user fetch failures */

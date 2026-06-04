@@ -23,7 +23,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { useDatabase } from '../hooks/useDatabase'
 import './ActiveTracking.css'
 
-const API_BASE = 'http://65.1.6.81:3001'
+const API_BASE = ''
 
 // Selectable limits for the per-employee chart so labels stay readable
 const EMPLOYEE_LIMIT_OPTIONS = [10, 15, 25, 50]

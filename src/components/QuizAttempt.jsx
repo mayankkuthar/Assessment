@@ -78,10 +78,10 @@ const QuizAttempt = () => {
 
         // Load quiz data
         const [quizRes, questionsRes, profilesRes, assignmentsRes] = await Promise.all([
-          fetch(`http://65.1.6.81:3001/api/quizzes/${quizId}`),
-          fetch(`http://65.1.6.81:3001/api/questions?quiz_id=${quizId}`),
-          fetch('http://65.1.6.81:3001/api/profiles'),
-          fetch('http://65.1.6.81:3001/api/quiz-assignments')
+          fetch(`/api/quizzes/${quizId}`),
+          fetch(`/api/questions?quiz_id=${quizId}`),
+          fetch('/api/profiles'),
+          fetch('/api/quiz-assignments')
         ]);
 
         if (!quizRes.ok || !questionsRes.ok) {
@@ -397,7 +397,7 @@ const QuizAttempt = () => {
       console.log('Final Attempt Data:', attemptData);
 
       // Save quiz attempt to mock data
-      const attemptResponse = await fetch('http://65.1.6.81:3001/api/quiz-attempts', {
+      const attemptResponse = await fetch('/api/quiz-attempts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

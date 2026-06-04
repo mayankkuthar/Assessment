@@ -70,15 +70,20 @@ const UserDashboard = () => {
       (user.profile != null && p.name === user.profile) ||
       (user.profile_id != null && String(p.id) === String(user.profile_id))
     );
-    if (!userProfile) return [];
 
     return quizAssignments
-      .filter(a => String(a.profile_id) === String(userProfile.id))
-      .map(a => ({
-        ...a,
-        quiz: quizzes.find(q => String(q.id) === String(a.quiz_id)) || null,
-        profile: userProfile
-      }))
+      .filter(a => 
+        (userProfile && String(a.profile_id) === String(userProfile.id) && !a.user_id) ||
+        (a.user_id && String(a.user_id) === String(user.id))
+      )
+      .map(a => {
+        const assignedProfile = userProfile || (a.profile_id ? profiles.find(p => String(p.id) === String(a.profile_id)) : null);
+        return {
+          ...a,
+          quiz: quizzes.find(q => String(q.id) === String(a.quiz_id)) || null,
+          profile: assignedProfile
+        };
+      })
       .filter(a => a.quiz); // drop assignments whose quiz was deleted
   }, [user, profiles, quizzes, quizAssignments]);
 
@@ -116,7 +121,7 @@ const UserDashboard = () => {
       const entries = await Promise.all(
         ids.map(async (id) => {
           try {
-            const res = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${id}`);
+            const res = await fetch(`/api/quiz-packets/${id}`);
             if (!res.ok) return [id, 0];
             const packetsData = await res.json();
             const count = packetsData.reduce(

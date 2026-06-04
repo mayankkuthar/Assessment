@@ -221,7 +221,7 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', filter: 'drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.08))' }}>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -416,10 +416,10 @@ const ReportViewer = () => {
 
         // Load quiz, attempts, packets, and template in parallel
         const [quizRes, attemptsRes, packetsRes, templateRes] = await Promise.all([
-          fetch(`http://65.1.6.81:3001/api/quizzes/${quizId}`),
-          fetch('http://65.1.6.81:3001/api/quiz-attempts'),
-          fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`),
-          fetch(`http://65.1.6.81:3001/api/pdf-templates/${quizId}`).catch(() => null)
+          fetch(`/api/quizzes/${quizId}`),
+          fetch('/api/quiz-attempts'),
+          fetch(`/api/quiz-packets/${quizId}`),
+          fetch(`/api/pdf-templates/${quizId}`).catch(() => null)
         ]);
 
         if (!quizRes.ok || !attemptsRes.ok || !packetsRes.ok) {
@@ -443,7 +443,7 @@ const ReportViewer = () => {
         let userData = null;
         if (foundAttempt.user_id) {
           try {
-            const userRes = await fetch(`http://65.1.6.81:3001/api/users/${foundAttempt.user_id}`);
+            const userRes = await fetch(`/api/users/${foundAttempt.user_id}`);
             if (userRes.ok) {
               userData = await userRes.json();
             }
@@ -640,16 +640,16 @@ const ReportViewer = () => {
   }
 
   return (
-    <div id="report-container" className="report-viewer-container">
-      {/* Shell Header */}
+    <div className="report-viewer-shell">
+      {/* Shell Header - For web navigation and operations, NOT captured in the printed PDF */}
       <div className="rv-shell-header">
         <button
-          className="rv-icon-btn"
-          title="Back to Dashboard"
+          className="rv-btn rv-btn--outline"
           onClick={() => navigate('/')}
         >
-          <ArrowBackIcon />
+          <ArrowBackIcon style={{ marginRight: '8px', fontSize: '20px' }} /> Back to Dashboard
         </button>
+        
         <div className="rv-logo-wrap">
           <img
             src="/happimynd_logo.png"
@@ -657,72 +657,112 @@ const ReportViewer = () => {
             className="rv-logo-img"
           />
         </div>
+
         <button
           className="rv-btn rv-btn--primary"
           onClick={handleDownloadPDF}
         >
-          <DownloadIcon /> Download Report
+          <DownloadIcon style={{ marginRight: '8px', fontSize: '20px' }} /> Download PDF Report
         </button>
       </div>
 
-      {/* Main Header Card */}
-      {template?.header?.enabled && (
-        <div 
-          className="rv-card rv-card--header" 
-          style={{ 
-            background: template.header.backgroundColor, 
-            color: template.header.textColor 
-          }}
-        >
-          <h1 className="rv-card__header-title">
-            {template.header.title || 'Assessment Report'}
-          </h1>
-          <p className="rv-card__header-subtitle">
-            {template.header.subtitle || quiz?.name}
-          </p>
-          <p className="rv-card__header-date">
-            Generated on {formatDate(new Date().toISOString())}
-          </p>
-        </div>
-      )}
-
-      {/* User Info Card */}
-      {template?.userInfo?.enabled && (
-        <div className="rv-card">
-          <h2 className="rv-card__title">
-            <div className="rv-avatar">
-              {(user?.user_name || user?.email || 'U')[0].toUpperCase()}
-            </div>
-            Assessment Details
-          </h2>
-          <div className="rv-grid rv-grid--4cols">
-            <div className="rv-grid-item">
-              <div className="rv-info-box">
-                <p className="rv-info-box__label">Participant</p>
-                <p className="rv-info-box__value">{user?.user_name || user?.email || 'Anonymous'}</p>
-              </div>
-            </div>
-            <div className="rv-grid-item">
-              <div className="rv-info-box">
-                <p className="rv-info-box__label">Email</p>
-                <p className="rv-info-box__value">{user?.email || 'N/A'}</p>
-              </div>
-            </div>
-            <div className="rv-grid-item">
-              <div className="rv-info-box">
-                <p className="rv-info-box__label">Assessment</p>
-                <p className="rv-info-box__value">{quiz?.name || 'Untitled'}</p>
-              </div>
-            </div>
-            <div className="rv-grid-item">
-              <div className="rv-info-box">
-                <p className="rv-info-box__label">Completed</p>
-                <p className="rv-info-box__value">{formatDate(attempt?.completed_at)}</p>
-              </div>
+      {/* Printable Report Content */}
+      <div id="report-container" className="report-viewer-container">
+        {/* Official Printable Header Card */}
+        <div className="rv-card rv-print-header-card">
+          <div className="rv-print-header-top">
+            <img
+              src="/happimynd_logo.png"
+              alt="HappiMynd Logo"
+              className="rv-print-logo"
+            />
+            <div className="rv-print-meta">
+              <span className="rv-print-badge-official">Official Assessment Record</span>
+              <span className="rv-print-date">Generated: {formatDate(attempt?.completed_at)}</span>
             </div>
           </div>
+
+          <div className="rv-print-divider" />
+
+          {/* Title and Metadata */}
+          <div className="rv-print-title-block">
+            <h1 className="rv-print-title">
+              {template.header.title || 'Assessment Performance Report'}
+            </h1>
+            <p className="rv-print-subtitle">
+              {template.header.subtitle || quiz?.name}
+            </p>
+          </div>
+
+          {/* Participant Profile Grid */}
+          {template?.userInfo?.enabled && (
+            <div className="rv-profile-grid">
+              <div className="rv-profile-item">
+                <div className="rv-profile-icon-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div className="rv-profile-details">
+                  <span className="rv-profile-label">Participant</span>
+                  <p className="rv-profile-value">
+                    {user?.user_name || user?.email || 'Anonymous'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="rv-profile-item">
+                <div className="rv-profile-icon-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </div>
+                <div className="rv-profile-details">
+                  <span className="rv-profile-label">Email Address</span>
+                  <p className="rv-profile-value">
+                    {user?.email || 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rv-profile-item">
+                <div className="rv-profile-icon-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                </div>
+                <div className="rv-profile-details">
+                  <span className="rv-profile-label">Assessment</span>
+                  <p className="rv-profile-value">
+                    {quiz?.name || 'Untitled'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rv-profile-item">
+                <div className="rv-profile-icon-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                </div>
+                <div className="rv-profile-details">
+                  <span className="rv-profile-label">Completed At</span>
+                  <p className="rv-profile-value">
+                    {formatDate(attempt?.completed_at)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
 
       {/* Custom Header Text */}
       {quiz?.report_header && (
@@ -753,9 +793,9 @@ const ReportViewer = () => {
             </div>
           </div>
 
-          <div className="rv-grid" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="rv-grid" style={{ gridTemplateColumns: selectedPacketId === 'all' && filteredPacketScores.length > 1 ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr' }}>
             <div className="rv-grid-item">
-              <div className="rv-info-box" style={{ background: '#ffffff', textAlign: 'left', padding: '24px' }}>
+              <div className="rv-info-box" style={{ background: '#ffffff', textAlign: 'left', padding: '24px', height: '100%' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--color-fg)' }}>
                   Parameter Wise Scores
                 </h3>
@@ -806,6 +846,17 @@ const ReportViewer = () => {
                 </div>
               </div>
             </div>
+
+            {selectedPacketId === 'all' && filteredPacketScores.length > 1 && (
+              <div className="rv-grid-item">
+                <div className="rv-info-box" style={{ background: '#ffffff', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 20px 0', color: 'var(--color-fg)', alignSelf: 'flex-start' }}>
+                    Performance Analysis Radar
+                  </h3>
+                  <RadarChart scores={packetScores} size={340} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -891,7 +942,7 @@ const ReportViewer = () => {
       {template?.sectionAnalysis?.enabled && !quiz?.name?.toLowerCase().includes('personality') && (
         <div className="rv-card">
           <h2 className="rv-card__title">🔍 Analysis</h2>
-          <div className="rv-analysis-grid rv-analysis-grid--2cols">
+          <div className={`rv-analysis-grid ${filteredPacketScores.length > 1 ? 'rv-analysis-grid--2cols' : ''}`}>
             {filteredPacketScores.map(p => {
               const pColor = p.level?.color || '#895BF5';
               const lightBg = p.level?.lightColor || '#FFFFFF';
@@ -900,7 +951,8 @@ const ReportViewer = () => {
                   className="rv-analysis-card" 
                   key={p.id}
                   style={{
-                    background: `linear-gradient(135deg, ${lightBg} 0%, #ffffff 100%)`
+                    background: `linear-gradient(135deg, ${lightBg} 0%, #ffffff 100%)`,
+                    borderLeftColor: pColor
                   }}
                 >
                   <div className="rv-analysis-card__header">
@@ -1012,7 +1064,7 @@ const ReportViewer = () => {
           
           <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 16px 0' }}>🤝 Support Services:</h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+          <div className="rv-service-grid">
             {[
               { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
               { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
@@ -1020,8 +1072,9 @@ const ReportViewer = () => {
               { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
               { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
             ].map((service) => (
-              <div key={service.name} style={{ fontSize: '14px', lineHeight: 1.6, textAlign: 'justify', color: 'var(--color-fg)' }}>
-                <strong>{service.name}</strong> {service.desc}
+              <div key={service.name} className="rv-service-card">
+                <h4 className="rv-service-card__name">{service.name}</h4>
+                <p className="rv-service-card__desc">{service.desc}</p>
               </div>
             ))}
           </div>
@@ -1059,6 +1112,7 @@ const ReportViewer = () => {
         </p>
       </div>
     </div>
+  </div>
   );
 };
 

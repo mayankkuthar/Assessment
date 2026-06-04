@@ -18,6 +18,7 @@ export const useDatabase = () => {
   const [userQuizAttempts, setUserQuizAttempts] = useState([])
   const [allQuizAttempts, setAllQuizAttempts] = useState([])
   const [userStats, setUserStats] = useState(null)
+  const [users, setUsers] = useState([])
 
   // Load all data on component mount
   const loadData = useCallback(async () => {
@@ -37,6 +38,15 @@ export const useDatabase = () => {
       setPackets(packetsData)
       setQuizzes(quizzesData)
       setQuizAssignments(quizAssignmentsData)
+
+      // Safe fetch for users list to prevent app crash if backend is not updated yet
+      try {
+        const usersData = await userService.getAllUsers()
+        setUsers(usersData || [])
+      } catch (userErr) {
+        console.warn('Could not load users list (this is expected if the backend server is not updated yet):', userErr)
+        setUsers([])
+      }
     } catch (err) {
       console.error('Error loading data:', err)
       setError(err.message)
@@ -251,6 +261,30 @@ export const useDatabase = () => {
     }
   }, [])
 
+  const assignQuizToUsers = useCallback(async (quizId, userIds) => {
+    try {
+      await quizService.assignQuizToUsers(quizId, userIds)
+      const updatedAssignments = await quizService.getAllQuizAssignments()
+      setQuizAssignments(updatedAssignments)
+    } catch (err) {
+      console.error('Error assigning quiz to users:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  const removeUserQuizAssignment = useCallback(async (userId, quizId) => {
+    try {
+      await quizService.removeUserQuizAssignment(userId, quizId)
+      const updatedAssignments = await quizService.getAllQuizAssignments()
+      setQuizAssignments(updatedAssignments)
+    } catch (err) {
+      console.error('Error removing user quiz assignment:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
   // Get quiz by ID
   const getQuizById = useCallback(async (id) => {
     try {
@@ -336,6 +370,7 @@ export const useDatabase = () => {
     userQuizAttempts,
     allQuizAttempts,
     userStats,
+    users,
     
     // Actions
     loadData,
@@ -355,6 +390,8 @@ export const useDatabase = () => {
     removePacketsFromQuiz,
     assignQuizToProfiles,
     removeQuizAssignment,
+    assignQuizToUsers,
+    removeUserQuizAssignment,
     getQuizById,
     getQuizPackets,
     

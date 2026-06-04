@@ -37,6 +37,7 @@ import HomeIcon from '@mui/icons-material/Home'
 import HistoryIcon from '@mui/icons-material/History'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import InsightsIcon from '@mui/icons-material/Insights'
+import DeleteIcon from '@mui/icons-material/Delete'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
@@ -101,6 +102,8 @@ function App() {
     removePacketsFromQuiz,
     assignQuizToProfiles,
     removeQuizAssignment,
+    assignQuizToUsers,
+    removeUserQuizAssignment,
     getQuizPackets,
     loadData,
     quizAssignments,
@@ -108,7 +111,8 @@ function App() {
     loadUserQuizAttempts,
     loadUserStats,
     userQuizAttempts,
-    userStats
+    userStats,
+    users
   } = useDatabase()
 
   // UI state
@@ -118,6 +122,43 @@ function App() {
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Assign Quizzes widget state
+  const [formQuizId, setFormQuizId] = useState('')
+  const [formTargetType, setFormTargetType] = useState('profile') // 'profile' or 'user'
+  const [formSelectedProfiles, setFormSelectedProfiles] = useState([])
+  const [formSelectedUsers, setFormSelectedUsers] = useState([])
+
+  const handleFormAssign = async () => {
+    if (!formQuizId) {
+      alert('Please select a quiz.')
+      return
+    }
+    try {
+      if (formTargetType === 'profile') {
+        if (formSelectedProfiles.length === 0) {
+          alert('Please select at least one profile.')
+          return
+        }
+        await assignQuizToProfiles(formQuizId, formSelectedProfiles)
+        alert('Quiz successfully assigned to selected profiles!')
+        setFormSelectedProfiles([])
+      } else {
+        if (formSelectedUsers.length === 0) {
+          alert('Please select at least one user.')
+          return
+        }
+        await assignQuizToUsers(formQuizId, formSelectedUsers)
+        alert('Quiz successfully assigned to selected users!')
+        setFormSelectedUsers([])
+      }
+      setFormQuizId('')
+      await loadData()
+    } catch (err) {
+      console.error('Error in handleFormAssign:', err)
+      alert('Failed to assign quiz. Please try again.')
+    }
+  }
 
   // Get navigation items based on user type
   const navItems = isAdmin ? adminNavItems : userNavItems
@@ -500,6 +541,7 @@ function App() {
                           addPacketsToQuiz={addPacketsToQuiz}
                           removePacketsFromQuiz={removePacketsFromQuiz}
                           assignQuiz={assignQuiz}
+                          assignQuizToProfiles={assignQuizToProfiles}
                           removeQuizAssignment={removeQuizAssignment}
                           quizAssignments={quizAssignments}
                           onDataChange={loadData}
@@ -508,40 +550,189 @@ function App() {
                       </Box>
                     )}
                     {tab === 4 && (
-                      <Box sx={{ width: '100%' }}>
-                        {profiles.length === 0 && <Typography>No profiles created.</Typography>}
-                        <Grid container spacing={3} sx={{ width: '100%' }}>
+                      <Box sx={{ width: '100%', mb: 4 }}>
+                        {/* Assign Quiz Card */}
+                        <Card variant="outlined" sx={{ mb: 4, p: 3, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)' }}>
+                          <CardContent sx={{ p: 0 }}>
+                            <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                              Assign Quizzes
+                            </Typography>
+                            
+                            <Grid container spacing={3} alignItems="flex-start">
+                              {/* 1. Select Quiz */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Select Quiz
+                                </Typography>
+                                <select
+                                  className="form-input"
+                                  value={formQuizId}
+                                  onChange={(e) => setFormQuizId(e.target.value)}
+                                  style={{ width: '100%', height: '42px', padding: '0 12px' }}
+                                >
+                                  <option value="">-- Select Quiz --</option>
+                                  {savedQuizzes.map((quiz) => (
+                                    <option key={quiz.id} value={quiz.id}>
+                                      {quiz.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Grid>
+
+                              {/* 2. Choose Target Type */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Assign Target Type
+                                </Typography>
+                                <select
+                                  className="form-input"
+                                  value={formTargetType}
+                                  onChange={(e) => setFormTargetType(e.target.value)}
+                                  style={{ width: '100%', height: '42px', padding: '0 12px' }}
+                                >
+                                  <option value="profile">By Profile Type</option>
+                                  <option value="user">By Specific User</option>
+                                </select>
+                              </Grid>
+
+                              {/* 3. Checkbox Checklist */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Select Recipients
+                                </Typography>
+                                <div
+                                  style={{
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    padding: '10px',
+                                    maxHeight: '150px',
+                                    overflowY: 'auto',
+                                    background: 'var(--color-bg)'
+                                  }}
+                                >
+                                  {formTargetType === 'profile' ? (
+                                    profiles.map((profile) => {
+                                      const isChecked = formSelectedProfiles.includes(profile.id);
+                                      return (
+                                        <label key={profile.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setFormSelectedProfiles([...formSelectedProfiles, profile.id]);
+                                              } else {
+                                                setFormSelectedProfiles(formSelectedProfiles.filter(id => id !== profile.id));
+                                              }
+                                            }}
+                                          />
+                                          {profile.name}
+                                        </label>
+                                      );
+                                    })
+                                  ) : (
+                                    users.filter(u => u.role !== 'admin').map((u) => {
+                                      const isChecked = formSelectedUsers.includes(u.id);
+                                      return (
+                                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setFormSelectedUsers([...formSelectedUsers, u.id]);
+                                              } else {
+                                                setFormSelectedUsers(formSelectedUsers.filter(id => id !== u.id));
+                                              }
+                                            }}
+                                          />
+                                          {u.user_name || u.email} ({u.profile || 'No Profile'})
+                                        </label>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </Grid>
+                            </Grid>
+                            
+                            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                              <Button
+                                variant="contained"
+                                onClick={handleFormAssign}
+                                disabled={
+                                  !formQuizId ||
+                                  (formTargetType === 'profile' && formSelectedProfiles.length === 0) ||
+                                  (formTargetType === 'user' && formSelectedUsers.length === 0)
+                                }
+                                sx={{
+                                  background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
+                                  fontWeight: 700
+                                }}
+                              >
+                                Assign Quiz
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+
+                        {/* Title for profile assignments */}
+                        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+                          Assignments by Profile
+                        </Typography>
+
+                        {profiles.length === 0 && <Typography color="text.secondary">No profiles created.</Typography>}
+                        <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
                           {profiles.map(profile => (
                             <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                               <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                                 <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
-                                  <Typography variant="h6" sx={{ mb: 1 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
+                                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 700 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
                                   <List sx={{ alignItems: 'flex-start' }}>
-                                    {quizAssignments.filter(aq => aq.profile_id === profile.id).length === 0 && (
+                                    {quizAssignments.filter(aq => aq.profile_id === profile.id && !aq.user_id).length === 0 && (
                                       <ListItem><ListItemText primary="No quizzes assigned." /></ListItem>
                                     )}
-                                    {quizAssignments.filter(aq => aq.profile_id === profile.id).map(aq => {
+                                    {quizAssignments.filter(aq => aq.profile_id === profile.id && !aq.user_id).map(aq => {
                                       const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
                                       return quiz ? (
-                                        <ListItem key={aq.quiz_id} alignItems="flex-start" secondaryAction={
-                                          <Tooltip title="Copy shareable link">
-                                            <IconButton
-                                              color="primary"
-                                              onClick={async () => {
-                                                const link = `${window.location.origin}/attempt/${quiz.id}`
-                                                const success = await copyToClipboard(link)
-                                                showClipboardFeedback(success, 'Quiz link copied to clipboard!')
-                                              }}
-                                              edge="end"
-                                              sx={{ ml: 1 }}
-                                            >
-                                              <ShareIcon />
-                                            </IconButton>
-                                          </Tooltip>
-                                        }>
+                                        <ListItem 
+                                          key={aq.id} 
+                                          alignItems="center" 
+                                          sx={{ pr: '80px' }}
+                                          secondaryAction={
+                                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                              <Tooltip title="Copy shareable link">
+                                                <IconButton
+                                                  color="primary"
+                                                  onClick={async () => {
+                                                    const link = `${window.location.origin}/attempt/${quiz.id}`
+                                                    const success = await copyToClipboard(link)
+                                                    showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                                  }}
+                                                  size="small"
+                                                >
+                                                  <ShareIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                              <Tooltip title="Remove assignment">
+                                                <IconButton
+                                                  color="error"
+                                                  onClick={async () => {
+                                                    if (window.confirm(`Are you sure you want to remove assignment of ${quiz.name} from profile ${profile.name}?`)) {
+                                                      await removeQuizAssignment(profile.id, quiz.id)
+                                                      await loadData()
+                                                    }
+                                                  }}
+                                                  size="small"
+                                                >
+                                                  <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            </Box>
+                                          }
+                                        >
                                           <ListItemText
                                             primary={
-                                              <Typography noWrap sx={{ maxWidth: 160 }}>
+                                              <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
                                                 {quiz.name}
                                               </Typography>
                                             }
@@ -555,6 +746,83 @@ function App() {
                             </Grid>
                           ))}
                         </Grid>
+
+                        {/* Direct User Assignments Section */}
+                        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+                          Assignments by User
+                        </Typography>
+                        
+                        {quizAssignments.filter(aq => aq.user_id).length === 0 ? (
+                          <Typography color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+                            No user-specific assignments created yet.
+                          </Typography>
+                        ) : (
+                          <Grid container spacing={3} sx={{ width: '100%' }}>
+                            {users.filter(u => quizAssignments.some(aq => aq.user_id === u.id)).map(userItem => (
+                              <Grid item xs={12} sm={6} md={4} key={userItem.id} sx={{ display: 'flex' }}>
+                                <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
+                                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 700 }}>{userItem.user_name || userItem.email}</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                      Email: {userItem.email} | Profile Type: {userItem.profile || 'General'}
+                                    </Typography>
+                                    <List sx={{ alignItems: 'flex-start' }}>
+                                      {quizAssignments.filter(aq => aq.user_id === userItem.id).map(aq => {
+                                        const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
+                                        return quiz ? (
+                                          <ListItem 
+                                            key={aq.id} 
+                                            alignItems="center" 
+                                            sx={{ pr: '80px' }}
+                                            secondaryAction={
+                                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                <Tooltip title="Copy shareable link">
+                                                  <IconButton
+                                                    color="primary"
+                                                    onClick={async () => {
+                                                      const link = `${window.location.origin}/attempt/${quiz.id}`
+                                                      const success = await copyToClipboard(link)
+                                                      showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                                    }}
+                                                    size="small"
+                                                  >
+                                                    <ShareIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Remove assignment">
+                                                  <IconButton
+                                                    color="error"
+                                                    onClick={async () => {
+                                                      if (window.confirm(`Are you sure you want to remove assignment of ${quiz.name} from user ${userItem.user_name || userItem.email}?`)) {
+                                                        await removeUserQuizAssignment(userItem.id, quiz.id)
+                                                        await loadData()
+                                                      }
+                                                    }}
+                                                    size="small"
+                                                  >
+                                                    <DeleteIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
+                                              </Box>
+                                            }
+                                          >
+                                            <ListItemText
+                                              primary={
+                                                <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
+                                                  {quiz.name}
+                                                </Typography>
+                                              }
+                                            />
+                                          </ListItem>
+                                        ) : null
+                                      })}
+                                    </List>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        )}
                       </Box>
                     )}
                     {tab === 5 && <AssessmentResults />}

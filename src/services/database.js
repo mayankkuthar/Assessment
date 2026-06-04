@@ -37,7 +37,9 @@ export const quizService = {
   deleteQuiz: quizApi.deleteQuiz,
   getAllQuizAssignments: quizApi.getAllQuizAssignments,
   assignQuizToProfiles: quizApi.assignQuizToProfiles,
-  removeQuizAssignment: quizApi.removeQuizAssignment
+  removeQuizAssignment: quizApi.removeQuizAssignment,
+  assignQuizToUsers: quizApi.assignQuizToUsers,
+  removeUserQuizAssignment: quizApi.removeUserQuizAssignment
 };
 
 export const quizPacketService = {
@@ -47,6 +49,7 @@ export const quizPacketService = {
 };
 
 export const userService = {
+  getAllUsers: userApi.getAllUsers,
   getUserQuizAttempts: userApi.getUserQuizAttempts,
   getAllQuizAttempts: userApi.getAllQuizAttempts,
   getUserStats: userApi.getUserStats,

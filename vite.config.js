@@ -11,9 +11,9 @@ export default defineConfig({
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
       '/api': {
-        target: 'https://gnome-clarity-reality-calculate.trycloudflare.com',
+        target: 'http://65.1.6.81:3001',
         changeOrigin: true,
-        secure: true
+        secure: false
       }
     }
   }

@@ -322,7 +322,7 @@ const PDFTemplateConfig = () => {
 
     setIsAutoSaving(true);
     try {
-      const response = await fetch(`http://65.1.6.81:3001/api/pdf-templates/${selectedQuiz}`, {
+      const response = await fetch(`/api/pdf-templates/${selectedQuiz}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(template),
@@ -368,7 +368,7 @@ const PDFTemplateConfig = () => {
 
   const loadQuizzes = async () => {
     try {
-      const response = await fetch('http://65.1.6.81:3001/api/quizzes');
+      const response = await fetch('/api/quizzes');
       const data = await response.json();
       setQuizzes(data);
     } catch (error) {
@@ -378,7 +378,7 @@ const PDFTemplateConfig = () => {
 
   const loadQuizPackets = async (quizId) => {
     try {
-      const response = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`);
+      const response = await fetch(`/api/quiz-packets/${quizId}`);
       const packets = await response.json();
       setAvailablePackets(packets);
       
@@ -457,7 +457,7 @@ const PDFTemplateConfig = () => {
 
     const loadTemplate = async (quizId) => {
     try {
-      const response = await fetch(`http://65.1.6.81:3001/api/pdf-templates/${quizId}`);
+      const response = await fetch(`/api/pdf-templates/${quizId}`);
       if (response.ok) {
         const data = await response.json();
         console.log('Loading template for quiz:', quizId, data);
@@ -486,7 +486,7 @@ const PDFTemplateConfig = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`http://65.1.6.81:3001/api/pdf-templates/${selectedQuiz}`, {
+      const response = await fetch(`/api/pdf-templates/${selectedQuiz}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(template),

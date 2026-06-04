@@ -28,7 +28,7 @@ const AssessmentResults = () => {
         const entries = await Promise.all(
           quizzes.map(async (quiz) => {
             try {
-              const response = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quiz.id}`);
+              const response = await fetch(`/api/quiz-packets/${quiz.id}`);
               if (!response.ok) return [quiz.id, 0];
               const packetsData = await response.json();
               const count = packetsData.reduce(
@@ -62,13 +62,13 @@ const AssessmentResults = () => {
     
     try {
       // First get the quiz packets to know what columns to show
-      const packetsResponse = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`);
+      const packetsResponse = await fetch(`/api/quiz-packets/${quizId}`);
       if (packetsResponse.ok) {
         const quizPacketsData = await packetsResponse.json();
         setQuizPackets(quizPacketsData);
       }
 
-      const response = await fetch(`http://65.1.6.81:3001/api/quiz-attempts`);
+      const response = await fetch(`/api/quiz-attempts`);
       if (!response.ok) {
         throw new Error('Failed to fetch quiz attempts');
       }
@@ -85,7 +85,7 @@ const AssessmentResults = () => {
             // Fetch actual user data for each attempt
             let userData = null;
             if (attempt.user_id) {
-              const userResponse = await fetch(`http://65.1.6.81:3001/api/users/${attempt.user_id}`);
+              const userResponse = await fetch(`/api/users/${attempt.user_id}`);
               if (userResponse.ok) {
                 userData = await userResponse.json();
               }

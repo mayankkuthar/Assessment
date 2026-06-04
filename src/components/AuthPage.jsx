@@ -22,7 +22,7 @@ function AuthPage() {
     const fetchProfiles = async () => {
       setLoadingProfiles(true)
       try {
-        const response = await fetch('http://65.1.6.81:3001/api/profiles')
+        const response = await fetch('/api/profiles')
         if (response.ok) {
           const profilesData = await response.json()
           setProfiles(profilesData)
@@ -77,7 +77,7 @@ function AuthPage() {
         console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization })
         
         // Sign up using the API directly
-        const response = await fetch('http://65.1.6.81:3001/api/auth/signup', {
+        const response = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -130,7 +130,7 @@ function AuthPage() {
         }
       } else {
         // Sign in using the API directly
-        const response = await fetch('http://65.1.6.81:3001/api/auth/signin', {
+        const response = await fetch('/api/auth/signin', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

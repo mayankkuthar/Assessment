@@ -1,5 +1,5 @@
 // API service to replace direct SQLite calls in the browser
-const API_BASE = 'http://65.1.6.81:3001/api';
+const API_BASE = '/api';
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -173,6 +173,19 @@ export const quizApi = {
     return await apiCall(`/quiz-assignments/profile/${profileId}/quiz/${quizId}`, {
       method: 'DELETE',
     });
+  },
+
+  async assignQuizToUsers(quizId, userIds) {
+    return await apiCall('/quiz-assignments', {
+      method: 'POST',
+      body: JSON.stringify({ quizId, userIds }),
+    });
+  },
+
+  async removeUserQuizAssignment(userId, quizId) {
+    return await apiCall(`/quiz-assignments/user/${userId}/quiz/${quizId}`, {
+      method: 'DELETE',
+    });
   }
 };
 
@@ -199,6 +212,10 @@ export const quizPacketApi = {
 
 // User API
 export const userApi = {
+  async getAllUsers() {
+    return await apiCall('/users');
+  },
+
   async getUserQuizAttempts(userId) {
     return await apiCall(`/users/${userId}/quiz-attempts`);
   },

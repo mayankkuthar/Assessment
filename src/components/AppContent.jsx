@@ -178,25 +178,30 @@ const AppContent = ({
                       {quizAssignments.filter(aq => aq.profile_id === profile.id).map(aq => {
                         const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
                         return quiz ? (
-                          <ListItem key={aq.quiz_id} alignItems="flex-start" secondaryAction={
-                            <Tooltip title="Copy shareable link">
-                              <IconButton
-                                color="primary"
-                                onClick={async () => {
-                                  const link = `${window.location.origin}/attempt/${quiz.id}`
-                                  const success = await copyToClipboard(link)
-                                  showClipboardFeedback(success, 'Quiz link copied to clipboard!')
-                                }}
-                                edge="end"
-                                sx={{ ml: 1 }}
-                              >
-                                <ShareIcon />
-                              </IconButton>
-                            </Tooltip>
-                          }>
+                          <ListItem 
+                            key={aq.quiz_id} 
+                            alignItems="center" 
+                            sx={{ pr: '56px' }}
+                            secondaryAction={
+                              <Tooltip title="Copy shareable link">
+                                <IconButton
+                                  color="primary"
+                                  onClick={async () => {
+                                    const link = `${window.location.origin}/attempt/${quiz.id}`
+                                    const success = await copyToClipboard(link)
+                                    showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                  }}
+                                  edge="end"
+                                  sx={{ ml: 1 }}
+                                >
+                                  <ShareIcon />
+                                </IconButton>
+                              </Tooltip>
+                            }
+                          >
                             <ListItemText
                               primary={
-                                <Typography noWrap sx={{ maxWidth: 160 }}>
+                                <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
                                   {quiz.name}
                                 </Typography>
                               }
