@@ -64,25 +64,47 @@
 
 [data-theme="dark"], body.dark {
   --color-primary: #A68AF9;
-  --color-primary-fg: #2C1060;
-  --color-secondary: #727279;
+  --color-primary-fg: #1A0B3D;
+  --color-secondary: #A1A1AA;
   --color-secondary-fg: #FAFAFA;
-  --color-tertiary: #37075F;
-  --color-accent-fg: #BF83FC;
-  --color-bg: #18181B;
+  --color-tertiary: #2A1052;
+  --color-accent-fg: #C9A6FF;
+
+  /* Layered neutrals: bg (deepest) < card < surface for visible depth */
+  --color-bg: #161618;
   --color-fg: #FAFAFA;
-  --color-card: #252527;
-  --color-popover: #3F3F46;
-  --color-muted: #727279;
-  --color-border: #505058;
-  --color-input: #505058;
-  --color-destructive: #EF4343;
+  --color-card: #1F1F23;
+  --color-surface: #27272B;
+  --color-popover: #2A2A30;
+  --color-muted: #34343A;
+  --color-muted-fg: #A1A1AA;
+  --color-border: #34343A;
+  --color-input: #34343A;
+
+  --color-destructive: #F87171;
+  --color-destructive-fg: #2A1212;
   --color-ring: #A68AF9;
+
+  /* Shadows need higher opacity to read against dark surfaces */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
+  --shadow-focus: 0 0 0 3px rgba(166, 138, 249, 0.35);
 }
 
 /* Base Resets */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+/* The brand logo is a dark/colored PNG on a transparent background, so it
+   disappears on dark surfaces. In dark mode, sit it on a white chip (via a
+   box-shadow spread, which adds the backdrop without resizing the image or
+   shifting layout). Harmless where the logo already sits on a light area. */
+body.dark img[src*="happimynd_logo"] {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 6px #ffffff;
 }
 
 body {

@@ -34,10 +34,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   // Scoring Scale System State
   const [scoringScaleDialog, setScoringScaleDialog] = useState(false);
   const [scoringScale, setScoringScale] = useState([
-    { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
-    { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
-    { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
-    { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+    { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "📚", largeText: "Keep practicing! You're making progress." },
+    { min: 3, max: 5, label: "Average", color: "#895BF5", image: "📊", largeText: "Good effort! You're on the right track." },
+    { min: 6, max: 8, label: "Good", color: "#895BF5", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+    { min: 9, max: 15, label: "Excellent", color: "#895BF5", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
   ]);
   const [enableScoringScale, setEnableScoringScale] = useState(false);
 
@@ -232,9 +232,9 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
             label: i === 0 ? "Needs Improvement" : 
                    i === 1 ? "Average" : 
                    i === 2 ? "Good" : "Excellent",
-            color: i === 0 ? "#ff6b6b" : 
-                   i === 1 ? "#ffd93d" : 
-                   i === 2 ? "#6bcf7f" : "#4ecdc4",
+            color: i === 0 ? "#895BF5" : 
+                   i === 1 ? "#895BF5" : 
+                   i === 2 ? "#895BF5" : "#895BF5",
             image: i === 0 ? "📚" : 
                    i === 1 ? "📊" : 
                    i === 2 ? "🎯" : "🏆",
@@ -477,10 +477,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
       } else {
         // Reset to default scale if no custom scale found
         setScoringScale([
-          { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
-          { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
-          { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
-          { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+          { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "📚", largeText: "Keep practicing! You're making progress." },
+          { min: 3, max: 5, label: "Average", color: "#895BF5", image: "📊", largeText: "Good effort! You're on the right track." },
+          { min: 6, max: 8, label: "Good", color: "#895BF5", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+          { min: 9, max: 15, label: "Excellent", color: "#895BF5", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
         ]);
         setEnableScoringScale(false);
         console.log('🔄 Reset to default scoring scale');
@@ -1309,7 +1309,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                               className="form-input"
                               value={range.color}
                               onChange={(e) => updateScoringScaleRange(index, 'color', e.target.value)}
-                              placeholder="#ff6b6b"
+                              placeholder="#895BF5"
                             />
                           </div>
                           <div className="form-group image-upload-group">

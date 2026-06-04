@@ -207,7 +207,7 @@ const AssessmentReport = () => {
               template.packetConfigs[packetId] = {
                 borderRadius: '8px',
                 borderWidth: '1px',
-                borderColor: '#e5e7eb',
+                borderColor: '#E4E4E7',
                 backgroundColor: '#ffffff',
                 fontSize: '14px',
                 fontWeight: 'normal',
@@ -389,7 +389,7 @@ const AssessmentReport = () => {
               >
                 <div className="report-quiz-card__header">
                   <div className="report-quiz-card__icon">
-                    <AssessmentIcon />
+                    <img src="/happimynd_logo.png" alt="HappiMynd" />
                   </div>
                   <h3 className="report-quiz-card__name">{quiz.name}</h3>
                 </div>
@@ -454,6 +454,21 @@ const AssessmentReport = () => {
               <option value="completed">Completed</option>
               <option value="in-progress">In Progress</option>
             </select>
+          </div>
+
+          <div className="report-summary-box">
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Total Attempts</p>
+              <p className="report-summary-box__value">{quizAttempts.length}</p>
+            </div>
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Completed Attempts</p>
+              <p className="report-summary-box__value">{quizAttempts.filter(a => a.status === 'completed').length}</p>
+            </div>
+            <div className="report-summary-box__item">
+              <p className="report-summary-box__label">Packets</p>
+              <p className="report-summary-box__value">{quizPackets.length}</p>
+            </div>
           </div>
 
           <div className="report-table-container">
@@ -536,27 +551,12 @@ const AssessmentReport = () => {
             <div className="report-empty">
               <h3>No attempts found</h3>
               <p>
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'No attempts found matching your criteria.' 
+                {searchTerm || filterStatus !== 'all'
+                  ? 'No attempts found matching your criteria.'
                   : 'No attempts found for this quiz.'}
               </p>
             </div>
           )}
-
-          <div className="report-summary-box">
-            <div className="report-summary-box__item">
-              <p className="report-summary-box__label">Total Attempts</p>
-              <p className="report-summary-box__value">{quizAttempts.length}</p>
-            </div>
-            <div className="report-summary-box__item">
-              <p className="report-summary-box__label">Completed Attempts</p>
-              <p className="report-summary-box__value">{quizAttempts.filter(a => a.status === 'completed').length}</p>
-            </div>
-            <div className="report-summary-box__item">
-              <p className="report-summary-box__label">Packets</p>
-              <p className="report-summary-box__value">{quizPackets.length}</p>
-            </div>
-          </div>
         </div>
       )}
     </div>

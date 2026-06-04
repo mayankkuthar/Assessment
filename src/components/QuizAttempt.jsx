@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CheckCircle from '@mui/icons-material/CheckCircle';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import ArrowForward from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import './QuizAttempt.css';
 
@@ -37,6 +38,15 @@ const QuizAttempt = () => {
   const [showQuizDescription, setShowQuizDescription] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+
+  // Pending auto-advance timers, so manual navigation can cancel them
+  const advanceTimers = useRef([]);
+  const clearAdvance = () => {
+    advanceTimers.current.forEach(clearTimeout);
+    advanceTimers.current = [];
+  };
+  // Cancel any pending timers on unmount
+  useEffect(() => () => clearAdvance(), []);
 
   useEffect(() => {
     // Get current user from localStorage
@@ -175,28 +185,51 @@ const QuizAttempt = () => {
 
   const handleChange = (qid, value) => {
     setSelectedOption(value);
-    setAnswers({ ...answers, [qid]: value });
-    
+    setAnswers(prev => ({ ...prev, [qid]: value }));
+
     // Only auto-advance if not on the last question
     if (currentQuestionIndex < questions.length - 1) {
-      setTimeout(() => {
+      clearAdvance();
+      const t1 = setTimeout(() => {
         setIsTransitioning(true);
-        
-        setTimeout(() => {
+
+        const t2 = setTimeout(() => {
           const nextIndex = currentQuestionIndex + 1;
           setCurrentQuestionIndex(nextIndex);
           setQuestionAnimationKey(prev => prev + 1);
           setIsTransitioning(false);
           setSelectedOption('');
-          
+
           // Show motivational notification after every 10 questions
           showMotivationalNotification(nextIndex);
         }, 400);
+        advanceTimers.current.push(t2);
       }, 500);
+      advanceTimers.current.push(t1);
     } else {
       setSelectedOption('');
     }
   };
+
+  // Navigate between questions (with the same transition animation as auto-advance)
+  // so users can go back to review/change earlier answers and move forward again.
+  // Cancels any pending auto-advance so manual navigation always wins.
+  const goToQuestion = (index) => {
+    if (index < 0 || index > questions.length - 1) return;
+    clearAdvance();
+    setIsTransitioning(true);
+    const t = setTimeout(() => {
+      setCurrentQuestionIndex(index);
+      setQuestionAnimationKey(prev => prev + 1);
+      setIsTransitioning(false);
+      setSelectedOption('');
+      showMotivationalNotification(index);
+    }, 300);
+    advanceTimers.current.push(t);
+  };
+
+  const handlePrevious = () => goToQuestion(currentQuestionIndex - 1);
+  const handleNext = () => goToQuestion(currentQuestionIndex + 1);
 
   const handleSubmit = async () => {
     try {
@@ -649,17 +682,41 @@ const QuizAttempt = () => {
           </div>
         )}
 
-        {/* Submit Button - Only show on last question */}
-        {!showQuizDescription && isLastQuestion && (
-          <div className="quiz-attempt__submit-area">
+        {/* Question navigation: go back to change answers, move forward, or submit */}
+        {!showQuizDescription && (
+          <div className="quiz-attempt__nav">
             <button
-              className="quiz-attempt__submit-btn"
-              onClick={handleSubmit}
-              disabled={Object.keys(answers).length < questions.length}
+              className="quiz-attempt__nav-btn"
+              onClick={handlePrevious}
+              disabled={currentQuestionIndex === 0 || isTransitioning}
             >
-              Submit Quiz
-              <CheckCircle style={{ width: 20, height: 20 }} />
+              <ArrowBack style={{ width: 18, height: 18 }} />
+              Previous
             </button>
+
+            <span className="quiz-attempt__nav-counter">
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </span>
+
+            {isLastQuestion ? (
+              <button
+                className="quiz-attempt__submit-btn"
+                onClick={handleSubmit}
+                disabled={Object.keys(answers).length < questions.length}
+              >
+                Submit Quiz
+                <CheckCircle style={{ width: 20, height: 20 }} />
+              </button>
+            ) : (
+              <button
+                className="quiz-attempt__nav-btn quiz-attempt__nav-btn--next"
+                onClick={handleNext}
+                disabled={isTransitioning}
+              >
+                Next
+                <ArrowForward style={{ width: 18, height: 18 }} />
+              </button>
+            )}
           </div>
         )}
         

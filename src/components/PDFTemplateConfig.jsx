@@ -308,12 +308,12 @@ const PDFTemplateConfig = () => {
   // Auto-save functionality with debouncing
   const autoSaveTemplate = useCallback(async () => {
     if (!selectedQuiz || !hasUnsavedChanges) {
-      console.log('🔄 Auto-save skipped:', { selectedQuiz, hasUnsavedChanges });
+      console.log('Auto-save skipped:', { selectedQuiz, hasUnsavedChanges });
       return;
     }
 
-    console.log('🚀 Starting auto-save for quiz:', selectedQuiz);
-    console.log('📋 Template data to save:', {
+    console.log('Starting auto-save for quiz:', selectedQuiz);
+    console.log('Template data to save:', {
       hasPacketConfigs: !!(template && template.packetConfigs),
       packetConfigsCount: template && template.packetConfigs ? Object.keys(template.packetConfigs).length : 0,
       packetIds: template && template.packetConfigs ? Object.keys(template.packetConfigs) : [],
@@ -330,15 +330,15 @@ const PDFTemplateConfig = () => {
 
       if (response.ok) {
         setHasUnsavedChanges(false);
-        console.log('✅ Template auto-saved successfully for quiz:', selectedQuiz);
-        console.log('📁 Saved template data:', JSON.stringify(template, null, 2));
+        console.log('Template auto-saved successfully for quiz:', selectedQuiz);
+        console.log('Saved template data:', JSON.stringify(template, null, 2));
       } else {
-        console.error('❌ Auto-save failed with status:', response.status);
+        console.error('Auto-save failed with status:', response.status);
         const errorText = await response.text();
-        console.error('❌ Error response:', errorText);
+        console.error('Error response:', errorText);
       }
     } catch (error) {
-      console.error('❌ Auto-save error:', error);
+      console.error('Auto-save error:', error);
     } finally {
       setIsAutoSaving(false);
     }
@@ -460,21 +460,21 @@ const PDFTemplateConfig = () => {
       const response = await fetch(`http://65.1.6.81:3001/api/pdf-templates/${quizId}`);
       if (response.ok) {
         const data = await response.json();
-        console.log('🔄 Loading template for quiz:', quizId, data);
+        console.log('Loading template for quiz:', quizId, data);
         
         // The API returns { template: {...} }, so we need to extract the template
         if (data.template) {
           setTemplate(data.template);
           setHasUnsavedChanges(false); // Reset unsaved changes flag when loading
-          console.log('✅ Template loaded successfully');
+          console.log('Template loaded successfully');
         } else {
-          console.log('ℹ️ No template found in response, keeping current template');
+          console.log('ℹNo template found in response, keeping current template');
         }
       } else {
-        console.log('ℹ️ No saved template found for quiz:', quizId);
+        console.log('ℹNo saved template found for quiz:', quizId);
       }
     } catch (error) {
-      console.error('❌ Error loading template:', error);
+      console.error('Error loading template:', error);
     }
   };
 
@@ -602,9 +602,9 @@ const PDFTemplateConfig = () => {
     }
     
     if (issues.length === 0) {
-      alert('✅ Template validation passed! All settings look good.');
+      alert('Template validation passed! All settings look good.');
     } else {
-      alert(`⚠️ Template validation found ${issues.length} issue(s):\n\n${issues.join('\n')}`);
+      alert(`Template validation found ${issues.length} issue(s):\n\n${issues.join('\n')}`);
     }
   };
 
@@ -633,9 +633,9 @@ const PDFTemplateConfig = () => {
       });
       
       if (differences.length === 0) {
-        alert('✅ Templates are identical!');
+        alert('Templates are identical!');
       } else {
-        alert(`🔄 Found ${differences.length} differences:\n\n${differences.slice(0, 10).join('\n')}${differences.length > 10 ? '\n...and more' : ''}`);
+        alert(`Found ${differences.length} differences:\n\n${differences.slice(0, 10).join('\n')}${differences.length > 10 ? '\n...and more' : ''}`);
       }
     } catch (error) {
       alert('Error comparing templates. Please try importing again.');
@@ -676,24 +676,24 @@ const PDFTemplateConfig = () => {
   };
 
   const movePacket = (packetId, direction) => {
-    console.log('🔄 movePacket called:', { packetId, direction });
+    console.log('movePacket called:', { packetId, direction });
     
     // Use the same sorting logic as the display - include all packets that have configs
     const sortedPackets = availablePackets
       .filter(packet => template.packetConfigs?.[packet.id])
       .sort((a, b) => (template.packetConfigs[a.id]?.order || 0) - (template.packetConfigs[b.id]?.order || 0));
     
-    console.log('📋 Current sorted packets:', sortedPackets.map(p => ({ id: p.id, name: p.name, order: template.packetConfigs[p.id]?.order })));
+    console.log('Current sorted packets:', sortedPackets.map(p => ({ id: p.id, name: p.name, order: template.packetConfigs[p.id]?.order })));
     
     const currentIndex = sortedPackets.findIndex(packet => packet.id === packetId);
-    console.log('📍 Current index:', currentIndex);
+    console.log('Current index:', currentIndex);
     
     if (direction === 'up' && currentIndex > 0) {
       const newTemplate = { ...template };
       const currentPacket = sortedPackets[currentIndex];
       const previousPacket = sortedPackets[currentIndex - 1];
       
-      console.log('⬆️ Moving up:', { 
+      console.log('Moving up:', { 
         current: { id: currentPacket.id, order: newTemplate.packetConfigs[currentPacket.id].order },
         previous: { id: previousPacket.id, order: newTemplate.packetConfigs[previousPacket.id].order }
       });
@@ -703,20 +703,20 @@ const PDFTemplateConfig = () => {
       newTemplate.packetConfigs[currentPacket.id].order = newTemplate.packetConfigs[previousPacket.id].order;
       newTemplate.packetConfigs[previousPacket.id].order = temp;
       
-      console.log('✅ After swap:', { 
+      console.log('After swap:', { 
         current: { id: currentPacket.id, order: newTemplate.packetConfigs[currentPacket.id].order },
         previous: { id: previousPacket.id, order: newTemplate.packetConfigs[previousPacket.id].order }
       });
       
       setTemplate(newTemplate);
       setHasUnsavedChanges(true);
-      console.log('🔄 Template updated and marked as unsaved');
+      console.log('Template updated and marked as unsaved');
     } else if (direction === 'down' && currentIndex < sortedPackets.length - 1) {
       const newTemplate = { ...template };
       const currentPacket = sortedPackets[currentIndex];
       const nextPacket = sortedPackets[currentIndex + 1];
       
-      console.log('⬇️ Moving down:', { 
+      console.log('Moving down:', { 
         current: { id: currentPacket.id, order: newTemplate.packetConfigs[currentPacket.id].order },
         next: { id: nextPacket.id, order: newTemplate.packetConfigs[nextPacket.id].order }
       });
@@ -726,16 +726,16 @@ const PDFTemplateConfig = () => {
       newTemplate.packetConfigs[currentPacket.id].order = newTemplate.packetConfigs[nextPacket.id].order;
       newTemplate.packetConfigs[nextPacket.id].order = temp;
       
-      console.log('✅ After swap:', { 
+      console.log('After swap:', { 
         current: { id: currentPacket.id, order: newTemplate.packetConfigs[currentPacket.id].order },
         next: { id: nextPacket.id, order: newTemplate.packetConfigs[nextPacket.id].order }
       });
       
       setTemplate(newTemplate);
       setHasUnsavedChanges(true);
-      console.log('🔄 Template updated and marked as unsaved');
+      console.log('Template updated and marked as unsaved');
     } else {
-      console.log('❌ Move not possible:', { direction, currentIndex, totalPackets: sortedPackets.length });
+      console.log('Move not possible:', { direction, currentIndex, totalPackets: sortedPackets.length });
     }
   };
 
@@ -930,7 +930,7 @@ const PDFTemplateConfig = () => {
 
       <Card elevation={3} sx={{ borderRadius: 3 }}>
         <CardHeader
-          avatar={<Avatar sx={{ bgcolor: 'success.main' }}><ArticleIcon /></Avatar>}
+          avatar={<Avatar sx={{ bgcolor: 'var(--color-primary)' }}><ArticleIcon /></Avatar>}
           title="Typography"
           subheader="Configure fonts and text styling"
           sx={{ pb: 1 }}
@@ -1065,7 +1065,7 @@ const PDFTemplateConfig = () => {
               {/* Content Settings */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
-                  📝 Content Settings
+                  Content Settings
                 </Typography>
               </Grid>
               
@@ -1095,7 +1095,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'secondary.main' }}>
-                  🖼️ Logo Settings
+                  Logo Settings
                 </Typography>
               </Grid>
 
@@ -1131,7 +1131,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'info.main' }}>
-                  🎨 Color Settings
+                  Color Settings
                 </Typography>
               </Grid>
 
@@ -1184,7 +1184,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'warning.main' }}>
-                  ✍️ Typography Settings
+                  Typography Settings
                 </Typography>
               </Grid>
 
@@ -1233,8 +1233,8 @@ const PDFTemplateConfig = () => {
               {/* Layout Settings */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'success.main' }}>
-                  📐 Layout Settings
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'var(--color-primary)' }}>
+                  Layout Settings
                 </Typography>
               </Grid>
 
@@ -1327,7 +1327,7 @@ const PDFTemplateConfig = () => {
               {/* Layout Settings */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'warning.main' }}>
-                  📊 Layout Settings
+                  Layout Settings
                 </Typography>
               </Grid>
               
@@ -1362,7 +1362,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'info.main' }}>
-                  📏 Chart Dimensions
+                  Chart Dimensions
                 </Typography>
               </Grid>
 
@@ -1392,7 +1392,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'secondary.main' }}>
-                  ✍️ Typography Settings
+                  Typography Settings
                 </Typography>
               </Grid>
 
@@ -1441,8 +1441,8 @@ const PDFTemplateConfig = () => {
               {/* Spacing & Layout */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'success.main' }}>
-                  📐 Spacing & Layout
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'var(--color-primary)' }}>
+                  Spacing & Layout
                 </Typography>
               </Grid>
 
@@ -1472,7 +1472,7 @@ const PDFTemplateConfig = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'error.main' }}>
-                  🎨 Border & Effects
+                  Border & Effects
                 </Typography>
               </Grid>
 
@@ -1519,7 +1519,7 @@ const PDFTemplateConfig = () => {
     if (!selectedQuiz || availablePackets.length === 0) {
       return (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-          <Typography variant="h2" sx={{ mb: 2 }}>📦</Typography>
+          <InventoryIcon sx={{ fontSize: '3rem', color: 'var(--color-primary)', opacity: 0.45, mb: 1 }} />
           <Typography variant="h6" sx={{ mb: 1 }}>No Packets Available</Typography>
           <Typography variant="body2" color="text.disabled">
             {!selectedQuiz ? 'Select a quiz to configure packet settings' : 'This quiz has no packets assigned'}
@@ -1753,7 +1753,7 @@ const PDFTemplateConfig = () => {
                       <Grid item xs={12}>
                         <Divider sx={{ my: 2 }} />
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
-                          📊 Custom Scoring Scale Display
+                          Custom Scoring Scale Display
                         </Typography>
                       </Grid>
 
@@ -1897,7 +1897,7 @@ const PDFTemplateConfig = () => {
                       {/* Advanced Scoring Scale Options */}
                       <Grid item xs={12}>
                         <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 2, mt: 2 }}>
-                          🎯 Advanced Scale Options
+                          Advanced Scale Options
                         </Typography>
                       </Grid>
                       <Grid item xs={12} md={6}>
@@ -1952,7 +1952,7 @@ const PDFTemplateConfig = () => {
                       <Grid item xs={12}>
                         <Divider sx={{ my: 2 }} />
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
-                          🎨 Styling Settings
+                          Styling Settings
                         </Typography>
                       </Grid>
 
@@ -2226,7 +2226,7 @@ const PDFTemplateConfig = () => {
           <Box sx={{ mt: 4 }}>
             <Divider sx={{ mb: 3 }} />
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'secondary.main' }}>
-              🎨 Color Palette Presets
+              Color Palette Presets
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
@@ -2340,7 +2340,7 @@ const PDFTemplateConfig = () => {
               >
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    🎯 Professional
+                    Professional
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Clean, corporate style with blue theme
@@ -2369,7 +2369,7 @@ const PDFTemplateConfig = () => {
               >
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    🎨 Creative
+                    Creative
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Vibrant colors with modern design
@@ -2398,7 +2398,7 @@ const PDFTemplateConfig = () => {
               >
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    ⚪ Minimal
+                    Minimal
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Simple, clean design with focus on content
@@ -2427,7 +2427,7 @@ const PDFTemplateConfig = () => {
               >
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    📚 Academic
+                    Academic
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Formal layout suitable for research
@@ -2517,7 +2517,7 @@ const PDFTemplateConfig = () => {
             {/* Template Actions */}
             <Paper elevation={1} sx={{ p: 3, backgroundColor: 'info.light', color: 'info.contrastText' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                🔄 Template Actions
+                Template Actions
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button
@@ -2572,7 +2572,7 @@ const PDFTemplateConfig = () => {
     if (!selectedQuiz) {
       return (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-          <Typography variant="h2" sx={{ mb: 2 }}>📚</Typography>
+          <HistoryIcon sx={{ fontSize: '3rem', color: 'var(--color-primary)', opacity: 0.45, mb: 1 }} />
           <Typography variant="body2">Select a quiz to view version history</Typography>
         </Box>
       );
@@ -2581,7 +2581,7 @@ const PDFTemplateConfig = () => {
     if (templateHistory.length === 0) {
       return (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-          <Typography variant="h2" sx={{ mb: 2 }}>🆕</Typography>
+          <HistoryIcon sx={{ fontSize: '3rem', color: 'var(--color-primary)', opacity: 0.45, mb: 1 }} />
           <Typography variant="body2" sx={{ mb: 1 }}>No versions saved yet</Typography>
           <Typography variant="caption" color="text.disabled">
             Save your first version to get started
@@ -2657,7 +2657,7 @@ const PDFTemplateConfig = () => {
     }, 0);
 
     const stats = [
-      { label: 'Active Sections', value: enabledSections, color: 'success.main', icon: <ViewModuleIcon /> },
+      { label: 'Active Sections', value: enabledSections, color: 'var(--color-primary)', icon: <ViewModuleIcon /> },
       { label: 'Total Settings', value: totalSettings, color: 'primary.main', icon: <SettingsIcon /> },
       { label: 'Versions', value: templateHistory.length, color: 'secondary.main', icon: <HistoryIcon /> },
       { label: 'Page Size', value: template.page.size, color: 'warning.main', icon: <AssessmentIcon /> },
@@ -2696,11 +2696,8 @@ const PDFTemplateConfig = () => {
     <Box sx={{ minHeight: 400 }}>
       {!selectedQuiz ? (
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-          <Box sx={{ position: 'relative', mb: 4 }}>
-            <Typography variant="h1" sx={{ fontSize: '6rem', opacity: 0.2, mb: 3 }}>📄</Typography>
-            <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography variant="h1" sx={{ fontSize: '4rem', animation: 'pulse 2s infinite' }}>✨</Typography>
-            </Box>
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+            <ArticleIcon sx={{ fontSize: '5rem', color: 'var(--color-primary)', opacity: 0.45 }} />
           </Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2, color: 'text.primary' }}>
             Select a Quiz
@@ -2840,7 +2837,7 @@ const PDFTemplateConfig = () => {
                       '&:hover': { transform: 'scale(1.05)' },
                     }}
                   >
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>📊 Bar Chart</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Bar Chart</Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -2856,7 +2853,7 @@ const PDFTemplateConfig = () => {
                       '&:hover': { transform: 'scale(1.05)' },
                     }}
                   >
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>🎯 Gauge Chart</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Gauge Chart</Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -2872,7 +2869,7 @@ const PDFTemplateConfig = () => {
                       '&:hover': { transform: 'scale(1.05)' },
                     }}
                   >
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>🥧 Pie Chart</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Pie Chart</Typography>
                   </Paper>
                 </Grid>
               </Grid>
@@ -2898,9 +2895,9 @@ const PDFTemplateConfig = () => {
               </Typography>
               <Stack spacing={2}>
                 {[
-                  { name: '📦 Depression', score: '85% - Excellent', color: 'primary.main' },
-                  { name: '📦 Anxiety', score: '72% - Good', color: 'success.main' },
-                  { name: '📦 Stress', score: '68% - Average', color: 'warning.main' },
+                  { name: 'Depression', score: '85% - Excellent', color: 'primary.main' },
+                  { name: 'Anxiety', score: '72% - Good', color: 'success.main' },
+                  { name: 'Stress', score: '68% - Average', color: 'warning.main' },
                 ].map((packet, index) => (
                   <Paper
                     key={index}
@@ -2940,7 +2937,7 @@ const PDFTemplateConfig = () => {
             >
               <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3, color: 'text.primary', display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box sx={{ p: 1, bgcolor: 'secondary.main', borderRadius: '50%', color: 'white' }}>
-                  📦
+                  
                 </Box>
                 Individual Packet Configurations
               </Typography>
@@ -3041,9 +3038,9 @@ const PDFTemplateConfig = () => {
                               }}>
                                 {config.showScalingImage && (
                                   <Box sx={{ mb: 1 }}>
-                                    {config.imageDisplayStyle === 'large' && <Typography sx={{ fontSize: '2rem' }}>🎯</Typography>}
-                                    {config.imageDisplayStyle === 'medium' && <Typography sx={{ fontSize: '1.5rem' }}>🎯</Typography>}
-                                    {config.imageDisplayStyle === 'icon' && <Typography sx={{ fontSize: '1rem' }}>🎯</Typography>}
+                                    {config.imageDisplayStyle === 'large' && <Typography sx={{ fontSize: '2rem' }}></Typography>}
+                                    {config.imageDisplayStyle === 'medium' && <Typography sx={{ fontSize: '1.5rem' }}></Typography>}
+                                    {config.imageDisplayStyle === 'icon' && <Typography sx={{ fontSize: '1rem' }}></Typography>}
                                   </Box>
                                 )}
                                 {config.showScalingLabel && (
@@ -3096,9 +3093,9 @@ const PDFTemplateConfig = () => {
                                   Sample Questions:
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                  • Question 1: What is the capital of France? ✓<br/>
-                                  • Question 2: How many continents are there? ✗<br/>
-                                  • Question 3: What is 2 + 2? ✓
+                                  • Question 1: What is the capital of France? (Correct)<br/>
+                                  • Question 2: How many continents are there? (Incorrect)<br/>
+                                  • Question 3: What is 2 + 2? (Correct)
                                 </Typography>
                               </Box>
                             </Grid>
@@ -3108,14 +3105,14 @@ const PDFTemplateConfig = () => {
                             <Grid item xs={12}>
                               <Box sx={{ p: 2, backgroundColor: '#eff6ff', borderRadius: 2, border: '1px solid #3b82f6' }}>
                                 <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                                  💡 Recommendations:
+                                  Recommendations:
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
                                   Focus on improving knowledge in geography and basic mathematics.
                                 </Typography>
                                 {config.showImprovementSuggestions && (
                                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                                    💡 Try practicing similar questions to reach the next level.
+                                    Try practicing similar questions to reach the next level.
                                   </Typography>
                                 )}
                               </Box>
@@ -3127,7 +3124,7 @@ const PDFTemplateConfig = () => {
                             <Grid item xs={12}>
                               <Box sx={{ p: 2, backgroundColor: '#f8fafc', borderRadius: 2, border: '1px solid #e5e7eb' }}>
                                 <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 2 }}>
-                                  📊 All Performance Levels:
+                                  All Performance Levels:
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                   <Chip label="Needs Improvement" size="small" sx={{ backgroundColor: '#fee2e2', color: '#dc2626' }} />
@@ -3152,7 +3149,7 @@ const PDFTemplateConfig = () => {
                             <Grid item xs={12}>
                               <Box sx={{ p: 2, backgroundColor: '#fdf2f8', borderRadius: 2, border: '1px solid #ec4899' }}>
                                 <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                                  📈 Comparison with Other Levels:
+                                  Comparison with Other Levels:
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
                                   You are 15 points away from "Excellent" level (95+ points).
@@ -3173,7 +3170,7 @@ const PDFTemplateConfig = () => {
                                        config.textDisplayPosition === 'separate' ? 999 : 'initial'
                               }}>
                                 <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                                  📝 Custom Scale Text:
+                                  Custom Scale Text:
                                 </Typography>
                                 <Typography variant="body1" color="text.primary" sx={{ fontStyle: 'italic' }}>
                                   "Well done! You're showing strong understanding in this area."
@@ -3192,10 +3189,10 @@ const PDFTemplateConfig = () => {
                             Chart Type: {config.chartType}
                           </Typography>
                           <Box sx={{ height: 60, backgroundColor: 'white', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {config.chartType === 'bar' && <Typography>📊</Typography>}
-                            {config.chartType === 'pie' && <Typography>🥧</Typography>}
-                            {config.chartType === 'gauge' && <Typography>⏲️</Typography>}
-                            {config.chartType === 'radar' && <Typography>🕸️</Typography>}
+                            {config.chartType === 'bar' && <Typography></Typography>}
+                            {config.chartType === 'pie' && <Typography></Typography>}
+                            {config.chartType === 'gauge' && <Typography></Typography>}
+                            {config.chartType === 'radar' && <Typography></Typography>}
                           </Box>
                         </Box>
                       </Paper>
@@ -3224,7 +3221,7 @@ const PDFTemplateConfig = () => {
       {/* Header Section */}
       <div className="pdf-config-header">
         <h1 className="pdf-config-header__title">
-          📄 PDF Template Configuration
+          PDF Template Configuration
         </h1>
         <p className="pdf-config-header__subtitle">
           Design and customize your assessment report templates
@@ -3344,8 +3341,8 @@ const PDFTemplateConfig = () => {
 
           <div className="pdf-config-panel-content">
             {searchTerm && (
-              <div className="rv-alert-error" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe', marginBottom: '16px' }}>
-                🔍 Filtering settings for: <strong>"{searchTerm}"</strong>
+              <div style={{ backgroundColor: 'var(--color-tertiary)', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', borderRadius: 'var(--radius-base)', padding: '12px 16px', marginBottom: '16px' }}>
+                Filtering settings for: <strong>"{searchTerm}"</strong>
               </div>
             )}
             {tabs.find(tab => tab.id === activeTab)?.component()}

@@ -191,7 +191,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                 <option value="">-- Select --</option>
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.type})
+                    {profile.name}{profile.type ? ` (${profile.type})` : ''}
                   </option>
                 ))}
               </select>

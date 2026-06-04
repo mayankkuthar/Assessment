@@ -37,7 +37,7 @@ const alpha = (color, opacity) => {
 const defaultTemplate = {
   header: {
     enabled: true,
-    backgroundColor: 'linear-gradient(135deg, #895BF5 0%, #3730a3 100%)',
+    backgroundColor: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
     textColor: '#ffffff',
     title: 'Emotional Intelligence Report',
     subtitle: 'You can book a guidance session with our expert',
@@ -47,28 +47,28 @@ const defaultTemplate = {
   userInfo: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
+    borderColor: '#E4E4E7',
     borderRadius: '16px',
     padding: '24px'
   },
   overallScore: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
+    borderColor: '#E4E4E7',
     borderRadius: '16px',
     padding: '24px'
   },
   charts: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
+    borderColor: '#E4E4E7',
     borderRadius: '16px',
     padding: '24px'
   },
   sectionAnalysis: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
+    borderColor: '#E4E4E7',
     borderRadius: '16px',
     padding: '24px'
   }
@@ -78,8 +78,8 @@ const FALLBACK_SCALE = [
   {
     min: 0, max: 2,
     label: 'Needs Improvement',
-    color: '#ef4444',
-    lightColor: '#fef2f2',
+    color: '#DB2424',
+    lightColor: '#FEF1F1',
     image: '',
     largeText: "Keep practicing! You're making progress. Focus on building fundamental skills.",
     icon: ''
@@ -87,8 +87,8 @@ const FALLBACK_SCALE = [
   {
     min: 3, max: 5,
     label: 'Developing',
-    color: '#f59e0b',
-    lightColor: '#fffbeb',
+    color: '#895BF5',
+    lightColor: '#E9D5FF',
     image: '',
     largeText: "Good effort! You're on the right track. Continue building on your foundation.",
     icon: ''
@@ -96,8 +96,8 @@ const FALLBACK_SCALE = [
   {
     min: 6, max: 8,
     label: 'Proficient',
-    color: '#10b981',
-    lightColor: '#f0fdf4',
+    color: '#895BF5',
+    lightColor: '#E9D5FF',
     image: '',
     largeText: "Well done! You're showing strong understanding and solid skills.",
     icon: ''
@@ -105,7 +105,7 @@ const FALLBACK_SCALE = [
   {
     min: 9, max: 12,
     label: 'Excellent',
-    color: '#8b5cf6',
+    color: '#895BF5',
     lightColor: '#faf5ff',
     image: '',
     largeText: "Outstanding! You've mastered this material with exceptional performance!",
@@ -153,7 +153,7 @@ const ModernBarChart = ({ data, height = 200 }) => {
     <div style={{ height: `${height}px`, display: 'flex', alignItems: 'flex-end', gap: '16px', paddingLeft: '16px', paddingRight: '16px' }}>
       {data.map((item, index) => {
         const heightPercent = (item.rank / maxRank) * 100;
-        const color = item.level?.color || '#3b82f6';
+        const color = item.level?.color || '#895BF5';
         
         return (
           <div key={item.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -217,7 +217,7 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
   const circumference = 2 * Math.PI * 45;
   const percentage = totalMarks > 0 ? (marks / totalMarks) * 100 : 0;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
-  const color = level?.color || '#3b82f6';
+  const color = level?.color || '#895BF5';
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -761,7 +761,7 @@ const ReportViewer = () => {
                 </h3>
                 <div className="rv-parameter-list">
                   {filteredPacketScores.map(score => {
-                    const scoreColor = score.level?.color || '#3b82f6';
+                    const scoreColor = score.level?.color || '#895BF5';
                     return (
                       <div className="rv-parameter-item" key={score.id}>
                         <div className="rv-parameter-meta">
@@ -879,7 +879,7 @@ const ReportViewer = () => {
             )}
 
             {!primaryPersonality && !secondaryPersonality && (
-              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
+              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#FEF1F1', color: '#DB2424', border: '1px solid #DB2424' }}>
                 Personality analysis requires at least one completed section.
               </div>
             )}
@@ -893,8 +893,8 @@ const ReportViewer = () => {
           <h2 className="rv-card__title">🔍 Analysis</h2>
           <div className="rv-analysis-grid rv-analysis-grid--2cols">
             {filteredPacketScores.map(p => {
-              const pColor = p.level?.color || '#3b82f6';
-              const lightBg = p.level?.lightColor || '#f8fafc';
+              const pColor = p.level?.color || '#895BF5';
+              const lightBg = p.level?.lightColor || '#FFFFFF';
               return (
                 <div 
                   className="rv-analysis-card" 

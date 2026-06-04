@@ -83,7 +83,7 @@ const QuizAssignmentGraph = ({
           type: 'default',
           position: { x: 400, y: 100 + index * 120 },
           data: { 
-            label: `${profile.name} (${profile.type})`,
+            label: `${profile.name}${profile.type ? ` (${profile.type})` : ''}`,
             profile: profile,
             type: 'profile'
           },
@@ -350,7 +350,7 @@ const QuizAssignmentGraph = ({
             border: '1px solid rgba(166, 85, 247, 0.2)' 
           }}>
             <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-              {profile.name} ({profile.type})
+              {profile.name}{profile.type ? ` (${profile.type})` : ''}
             </span>
           </div>
         ))}

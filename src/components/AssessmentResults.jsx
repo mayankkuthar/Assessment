@@ -13,8 +13,47 @@ const AssessmentResults = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [quizPackets, setQuizPackets] = useState([]);
+  const [questionCounts, setQuestionCounts] = useState({});
 
   const { quizzes, packets, profiles, loading: dataLoading, error: dataError } = useDatabase();
+
+  // Fetch the number of questions for each quiz (sum of questions across its packets)
+  useEffect(() => {
+    if (!quizzes || quizzes.length === 0) return;
+
+    let cancelled = false;
+
+    const loadQuestionCounts = async () => {
+      try {
+        const entries = await Promise.all(
+          quizzes.map(async (quiz) => {
+            try {
+              const response = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quiz.id}`);
+              if (!response.ok) return [quiz.id, 0];
+              const packetsData = await response.json();
+              const count = packetsData.reduce(
+                (sum, packet) => sum + (packet.questions ? packet.questions.length : 0),
+                0
+              );
+              return [quiz.id, count];
+            } catch {
+              return [quiz.id, 0];
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setQuestionCounts(Object.fromEntries(entries));
+        }
+      } catch (err) {
+        console.warn('Failed to load question counts:', err);
+      }
+    };
+
+    loadQuestionCounts();
+
+    return () => { cancelled = true; };
+  }, [quizzes]);
 
   // Fetch attempts for a specific quiz
   const fetchQuizAttempts = async (quizId) => {
@@ -118,6 +157,19 @@ const AssessmentResults = () => {
     setQuizPackets([]);
   };
 
+  // Estimate the time needed to complete a quiz based on its question count.
+  // Each question is assumed to take up to 40 seconds to answer.
+  // The exact estimate is rounded to the nearest 5-minute boundary and shown
+  // as a fuzzy range (e.g. 7 min -> "<5 mins", 34 min -> ">30 mins").
+  const estimateTimeLimit = (questionCount) => {
+    if (!questionCount || questionCount <= 0) return 'N/A';
+    const maxMinutes = Math.ceil((questionCount * 40) / 60);
+    let rounded = Math.round(maxMinutes / 5) * 5;
+    if (rounded < 5) rounded = 5;
+    if (rounded >= 30) return '<30 mins';
+    return `<${rounded} mins`;
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Not submitted';
     const date = new Date(dateString);
@@ -147,10 +199,10 @@ const AssessmentResults = () => {
     }
     
     const defaultScale = [
-      { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "" },
-      { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "" },
-      { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "" },
-      { min: 9, max: 12, label: "Excellent", color: "#4ecdc4", image: "" }
+      { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "" },
+      { min: 3, max: 5, label: "Average", color: "#895BF5", image: "" },
+      { min: 6, max: 8, label: "Good", color: "#895BF5", image: "" },
+      { min: 9, max: 12, label: "Excellent", color: "#895BF5", image: "" }
     ];
     
     const level = defaultScale.find(range => marks >= range.min && marks <= range.max);
@@ -232,8 +284,8 @@ const AssessmentResults = () => {
           <div>
             <h3>Quiz Details</h3>
             <p><strong>Description:</strong> {selectedQuiz.description || 'No description'}</p>
-            <p><strong>Time Limit:</strong> {selectedQuiz.time_limit ? `${selectedQuiz.time_limit} minutes` : 'No time limit'}</p>
-            <p><strong>Passing Score:</strong> {selectedQuiz.passing_score ? `${selectedQuiz.passing_score}%` : 'Not set'}</p>
+            <p><strong>Time Limit:</strong> {estimateTimeLimit(quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0))}</p>
+            <p><strong>No. of Questions:</strong> {quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0)}</p>
           </div>
           <div>
             <h3>Statistics</h3>
@@ -361,7 +413,7 @@ const AssessmentResults = () => {
             >
               <div className="results-quiz-card__header">
                 <div className="results-quiz-card__icon">
-                  <QuizIcon />
+                  <img src="/happimynd_logo.png" alt="HappiMynd" />
                 </div>
                 <h3 className="results-quiz-card__name">{quiz.name}</h3>
               </div>
@@ -374,11 +426,11 @@ const AssessmentResults = () => {
                 <div className="results-quiz-card__meta">
                   <div>
                     <span className="results-quiz-card__meta-label">Time Limit</span>
-                    <span className="results-quiz-card__meta-value">{quiz.time_limit ? `${quiz.time_limit} min` : 'No limit'}</span>
+                    <span className="results-quiz-card__meta-value">{questionCounts[quiz.id] != null ? estimateTimeLimit(questionCounts[quiz.id]) : '—'}</span>
                   </div>
                   <div>
-                    <span className="results-quiz-card__meta-label">Passing Score</span>
-                    <span className="results-quiz-card__meta-value">{quiz.passing_score ? `${quiz.passing_score}%` : 'Not set'}</span>
+                    <span className="results-quiz-card__meta-label">No. of Questions</span>
+                    <span className="results-quiz-card__meta-value">{questionCounts[quiz.id] ?? '—'}</span>
                   </div>
                 </div>
                 

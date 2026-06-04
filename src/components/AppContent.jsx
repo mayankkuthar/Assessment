@@ -170,7 +170,7 @@ const AppContent = ({
               <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                 <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>{profile.name} <Typography component="span" color="text.secondary">({profile.type})</Typography></Typography>
+                    <Typography variant="h6" sx={{ mb: 1 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
                     <List sx={{ alignItems: 'flex-start' }}>
                       {quizAssignments.filter(aq => aq.profile_id === profile.id).length === 0 && (
                         <ListItem><ListItemText primary="No quizzes assigned." /></ListItem>

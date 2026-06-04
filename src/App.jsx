@@ -36,6 +36,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment'
 import HomeIcon from '@mui/icons-material/Home'
 import HistoryIcon from '@mui/icons-material/History'
 import VisibilityIcon from '@mui/icons-material/Visibility'
+import InsightsIcon from '@mui/icons-material/Insights'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
@@ -50,6 +51,7 @@ import UserDashboard from './components/UserDashboard/UserDashboard'
 import AdminDashboard from './components/AdminDashboard'
 import PasswordReset from './components/PasswordReset'
 import PDFTemplateConfig from './components/PDFTemplateConfig'
+import ActiveTracking from './components/ActiveTracking'
 
 
 const drawerWidth = 220
@@ -63,6 +65,7 @@ const adminNavItems = [
   { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon /> },
   { label: 'Assessment Results', icon: <AssessmentIcon /> },
   { label: 'Assessment Report', icon: <AssessmentIcon /> },
+  { label: 'Active Tracking', icon: <InsightsIcon /> },
   { label: 'PDF Templates', icon: <ShareIcon /> },
 ]
 
@@ -109,7 +112,7 @@ function App() {
   } = useDatabase()
 
   // UI state
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true')
   const [tab, setTab] = useState(0)
   const [howToOpen, setHowToOpen] = useState(false)
   const [user, setUser] = useState(null)
@@ -119,13 +122,14 @@ function App() {
   // Get navigation items based on user type
   const navItems = isAdmin ? adminNavItems : userNavItems
 
-  // Sync darkMode with body class
+  // Sync darkMode with body class and persist the choice
   useEffect(() => {
     if (darkMode) {
       document.body.classList.add('dark')
     } else {
       document.body.classList.remove('dark')
     }
+    localStorage.setItem('darkMode', String(darkMode))
   }, [darkMode])
 
   // Auth state management - using local storage
@@ -317,7 +321,7 @@ function App() {
   const theme = createTheme({
     palette: {
       mode: darkMode ? 'dark' : 'light',
-      primary: { main: '#2563eb' },
+      primary: { main: '#895BF5' },
     },
     typography: {
       fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
@@ -396,7 +400,8 @@ function App() {
           <div className="app-layout">
             <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
               <div className="sidebar__header">
-                Assessment Tool
+                <img src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png" alt="HappiMynd" className="sidebar__logo" />
+                <span className="sidebar__title">Assessment Tool</span>
               </div>
               <nav className="sidebar__nav">
                 {navItems.map((item, idx) => (
@@ -510,7 +515,7 @@ function App() {
                             <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                               <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                                 <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
-                                  <Typography variant="h6" sx={{ mb: 1 }}>{profile.name} <Typography component="span" color="text.secondary">({profile.type})</Typography></Typography>
+                                  <Typography variant="h6" sx={{ mb: 1 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
                                   <List sx={{ alignItems: 'flex-start' }}>
                                     {quizAssignments.filter(aq => aq.profile_id === profile.id).length === 0 && (
                                       <ListItem><ListItemText primary="No quizzes assigned." /></ListItem>
@@ -554,7 +559,8 @@ function App() {
                     )}
                     {tab === 5 && <AssessmentResults />}
                     {tab === 6 && <AssessmentReport />}
-                    {tab === 7 && <PDFTemplateConfig />}
+                    {tab === 7 && <ActiveTracking />}
+                    {tab === 8 && <PDFTemplateConfig />}
                   </>
                 ) : (
                   // User Mode
@@ -598,9 +604,9 @@ function App() {
                                       onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
                                       fullWidth
                                       sx={{ 
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
                                         '&:hover': {
-                                          background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                                          background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)'
                                         }
                                       }}
                                     >

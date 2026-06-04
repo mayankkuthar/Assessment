@@ -260,10 +260,10 @@ function AuthPage() {
             </div>
             
             {error && <div className="alert alert--error">{error}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #34d399', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
             
             {resetEmailSent && (
-              <div className="alert" style={{ backgroundColor: '#e0f2fe', color: '#075985', border: '1px solid #bae6fd', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+              <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
                 <strong>Check your email!</strong> We've sent a password reset link to {email}. Click the link in the email to reset your password.
               </div>
             )}
@@ -274,7 +274,7 @@ function AuthPage() {
           // Login / Sign Up Tabs
           <form onSubmit={(e) => { e.preventDefault(); handleAuth(tab === 1); }}>
             {error && <div className="alert alert--error">{error}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #34d399', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
             
             {tab === 1 && (
               <div className="form-group">
@@ -363,7 +363,7 @@ function AuthPage() {
             </button>
 
             {tab === 1 && (
-              <div className="alert" style={{ backgroundColor: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+              <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
                 <strong>Note:</strong> Your profile selection enables us to guide you better in the expert sessions. Make sure to select the correct profile that matches your role.
               </div>
             )}

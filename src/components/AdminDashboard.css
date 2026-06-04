@@ -15,7 +15,7 @@
 .admin-header {
   padding: var(--space-6);
   margin-bottom: var(--space-8);
-  background: linear-gradient(135deg, var(--color-primary) 0%, #3730a3 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #895BF5 100%);
   color: var(--color-primary-fg);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
@@ -76,6 +76,105 @@
 .admin-stat-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-md);
+}
+.admin-stat-card--clickable {
+  cursor: pointer;
+}
+.admin-stat-card--clickable:hover {
+  border-color: #895BF5;
+}
+
+/* Active Users by Profile modal */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+.admin-modal {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-modal__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-fg);
+}
+.admin-modal__title svg {
+  color: #895BF5;
+}
+.admin-modal__close {
+  border: none;
+  background: none;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-muted-fg);
+  padding: 0 var(--space-2);
+}
+.admin-modal__close:hover {
+  color: var(--color-fg);
+}
+.admin-modal__body {
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  overflow-y: auto;
+}
+.admin-modal__empty {
+  color: var(--color-muted-fg);
+  text-align: center;
+  margin: var(--space-4) 0;
+}
+.admin-profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.admin-profile-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-base);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+.admin-profile-list__name {
+  font-weight: 600;
+  color: var(--color-fg);
+}
+.admin-profile-list__count {
+  font-weight: 800;
+  color: #895BF5;
+  background-color: rgba(137, 91, 245, 0.12);
+  border-radius: var(--radius-full);
+  padding: 2px 12px;
+  min-width: 32px;
+  text-align: center;
 }
 
 .admin-stat-card__value {
@@ -218,4 +317,163 @@
 }
 .coming-soon p {
   color: var(--color-muted-fg);
+}
+
+/* ── User Summary ───────────────────────────────────────── */
+.admin-table__row--clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.admin-table__row--clickable:hover {
+  background-color: rgba(137, 91, 245, 0.06);
+}
+.admin-user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-user-cell__name {
+  font-weight: 600;
+  color: var(--color-fg);
+}
+.admin-user-cell__email {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--color-muted-fg);
+}
+
+/* Larger modal for the user drill-down */
+.admin-modal--lg {
+  max-width: 720px;
+}
+.admin-modal__subtitle {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-muted-fg);
+  margin-top: 2px;
+}
+.admin-modal__section {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-fg);
+  margin: var(--space-5) 0 var(--space-3);
+}
+.admin-user-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+.admin-user-stat {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+}
+.admin-user-stat__value {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: #895BF5;
+}
+.admin-user-stat__label {
+  font-size: var(--text-sm);
+  color: var(--color-muted-fg);
+  margin-top: 2px;
+}
+@media (max-width: 640px) {
+  .admin-user-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Quiz Analytics ─────────────────────────────────────── */
+.admin-score-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 120px;
+}
+.admin-score-bar__track {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border);
+  overflow: hidden;
+}
+.admin-score-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background-color: #895BF5;
+}
+.admin-score-bar__val {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-fg);
+  min-width: 36px;
+  text-align: right;
+}
+.admin-modal__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.admin-rowlimit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.admin-rowlimit label {
+  font-size: var(--text-sm);
+  color: var(--color-muted-fg);
+}
+.admin-rowlimit__select {
+  font-size: var(--text-sm);
+  padding: 4px 10px;
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-fg);
+  cursor: pointer;
+}
+.admin-dist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.admin-dist__row {
+  display: grid;
+  grid-template-columns: 180px 1fr 90px;
+  align-items: center;
+  gap: var(--space-3);
+}
+.admin-dist__label {
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+}
+.admin-dist__bar {
+  height: 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border);
+  overflow: hidden;
+}
+.admin-dist__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+.admin-dist__fill--excellent { background-color: #895BF5; }
+.admin-dist__fill--good { background-color: #A68AF9; }
+.admin-dist__fill--low { background-color: #BF83FC; }
+.admin-dist__val {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-muted-fg);
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .admin-dist__row {
+    grid-template-columns: 120px 1fr 70px;
+  }
 }
