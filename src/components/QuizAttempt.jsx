@@ -39,6 +39,9 @@ const QuizAttempt = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
 
+  // Timestamp captured when the user actually starts the quiz
+  const startedAtRef = useRef(null);
+
   // Pending auto-advance timers, so manual navigation can cancel them
   const advanceTimers = useRef([]);
   const clearAdvance = () => {
@@ -170,7 +173,13 @@ const QuizAttempt = () => {
         
         setQuiz(quizData);
         setQuestions(questionsData);
-        
+
+        // Fallback start time: ensures started_at is recorded even if the
+        // description screen is skipped. The Start button refines this.
+        if (!startedAtRef.current) {
+          startedAtRef.current = new Date().toISOString();
+        }
+
         console.log('Quiz and questions set successfully');
       } catch (err) {
         console.error('Error loading quiz:', err);
@@ -380,8 +389,11 @@ const QuizAttempt = () => {
         packet_marks: formattedPacketMarks,
         answers: answers,
         status: 'completed',
-        started_at: currentTime,
+        started_at: startedAtRef.current || currentTime,
         completed_at: currentTime,
+        time_taken: startedAtRef.current
+          ? Math.max(0, Math.round((new Date(currentTime) - new Date(startedAtRef.current)) / 1000))
+          : null,
         created_at: currentTime,
         updated_at: currentTime
       };
@@ -654,7 +666,10 @@ const QuizAttempt = () => {
 
                 <button
                   className="quiz-attempt__start-btn"
-                  onClick={() => setShowQuizDescription(false)}
+                  onClick={() => {
+                    startedAtRef.current = new Date().toISOString();
+                    setShowQuizDescription(false);
+                  }}
                 >
                   Start
                 </button>

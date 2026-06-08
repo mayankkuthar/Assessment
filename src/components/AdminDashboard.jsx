@@ -23,6 +23,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState(null)
   const [userMap, setUserMap] = useState({})
   const [showProfileBreakdown, setShowProfileBreakdown] = useState(false)
+  const [showOthersBreakdown, setShowOthersBreakdown] = useState(false)
   const [userSearch, setUserSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [quizSearch, setQuizSearch] = useState('')
@@ -102,7 +103,24 @@ const AdminDashboard = () => {
 
   // Count unique active users grouped by their profile
   const usersByProfile = useMemo(() => {
+    // Define profiles to show individually
+    const displayedProfiles = [
+      'Salaried',
+      'Self Employed',
+      'Home Maker',
+      'Senior Citizen',
+      'Student(School)',
+      'Student(school)', // lowercase variant
+      'Student(College/University)',
+      'Student(college/university)', // lowercase variant
+      'Entrepreneur',
+      'Jobseeker',
+      'Frontline Warrior',
+      'Working Woman'
+    ]
+    
     const profileToUsers = {}
+    const othersBreakdown = {}
     const seen = new Set()
 
     ;(allQuizAttempts || []).forEach(attempt => {
@@ -111,13 +129,27 @@ const AdminDashboard = () => {
       seen.add(userId)
 
       const userData = userMap[userId]
-      const profileName = (userData && userData.profile) || 'Unassigned'
+      let profileName = (userData && userData.profile) || 'Unassigned'
+      
+      // Group profiles not in the displayed list into "Others"
+      if (!displayedProfiles.includes(profileName)) {
+        othersBreakdown[profileName] = (othersBreakdown[profileName] || 0) + 1
+        profileName = 'Others'
+      }
+      
       profileToUsers[profileName] = (profileToUsers[profileName] || 0) + 1
     })
 
-    return Object.entries(profileToUsers)
+    const profiles = Object.entries(profileToUsers)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
+    
+    // Attach others breakdown for later use
+    profiles.othersBreakdown = Object.entries(othersBreakdown)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+
+    return profiles
   }, [allQuizAttempts, userMap])
 
   // One row per user, aggregating their attempts into headline metrics plus the
@@ -524,7 +556,6 @@ const AdminDashboard = () => {
                     <th>Profile</th>
                     <th>Score</th>
                     <th>Status</th>
-                    <th>Started</th>
                     <th>Completed</th>
                   </tr>
                 </thead>
@@ -566,7 +597,6 @@ const AdminDashboard = () => {
                           </span>
                         )}
                       </td>
-                      <td style={{ fontSize: 'var(--text-sm)' }}>{formatDate(attempt.started_at)}</td>
                       <td style={{ fontSize: 'var(--text-sm)' }}>{attempt.completed_at ? formatDate(attempt.completed_at) : '—'}</td>
                     </tr>
                   ))}
@@ -968,6 +998,48 @@ const AdminDashboard = () => {
               ) : (
                 <ul className="admin-profile-list">
                   {usersByProfile.map(({ name, count }) => (
+                    <li 
+                      key={name} 
+                      className={`admin-profile-list__item ${name === 'Others' ? 'admin-profile-list__item--clickable' : ''}`}
+                      onClick={() => name === 'Others' && setShowOthersBreakdown(true)}
+                      style={name === 'Others' ? { cursor: 'pointer' } : {}}
+                    >
+                      <span className="admin-profile-list__name">
+                        {name}
+                        {name === 'Others' && <span style={{ marginLeft: '8px', fontSize: '0.85em', color: 'var(--color-primary)' }}>▸</span>}
+                      </span>
+                      <span className="admin-profile-list__count">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOthersBreakdown && (
+        <div className="admin-modal-overlay" onClick={() => setShowOthersBreakdown(false)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal__header">
+              <div className="admin-modal__title">
+                <PeopleAltIcon />
+                <span>Others - Profile Breakdown</span>
+              </div>
+              <button
+                className="admin-modal__close"
+                onClick={() => setShowOthersBreakdown(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="admin-modal__body">
+              {!usersByProfile.othersBreakdown || usersByProfile.othersBreakdown.length === 0 ? (
+                <p className="admin-modal__empty">No other profiles.</p>
+              ) : (
+                <ul className="admin-profile-list">
+                  {usersByProfile.othersBreakdown.map(({ name, count }) => (
                     <li key={name} className="admin-profile-list__item">
                       <span className="admin-profile-list__name">{name}</span>
                       <span className="admin-profile-list__count">{count}</span>

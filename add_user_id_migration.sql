@@ -17,3 +17,4 @@ CREATE POLICY "Allow users to update their own quiz attempts" ON quiz_attempts
 -- Allow admins to view all attempts (you can customize this based on your admin role logic)
 CREATE POLICY "Allow admins to view all quiz attempts" ON quiz_attempts
     FOR ALL USING (auth.role() = 'authenticated'); 
+    

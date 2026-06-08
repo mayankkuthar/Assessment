@@ -162,6 +162,12 @@
   border-radius: var(--radius-base);
   background-color: var(--color-bg);
   border: 1px solid var(--color-border);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.admin-profile-list__item--clickable:hover {
+  background-color: rgba(137, 91, 245, 0.06);
+  border-color: #895BF5;
+  transform: translateX(4px);
 }
 .admin-profile-list__name {
   font-weight: 600;

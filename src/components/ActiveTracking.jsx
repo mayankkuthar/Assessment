@@ -61,6 +61,12 @@ const PDF_MUTED = [114, 114, 121]  // secondary text
 const PDF_FAINT = [161, 161, 170]  // footer / captions
 const PDF_HAIRLINE = [228, 228, 231]
 
+// Convert a #rrggbb hex string to an [r, g, b] tuple for jsPDF setters.
+const hexToRgb = (hex) => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '')
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [137, 91, 245]
+}
+
 // Preload an image so it can be drawn into the PDF; resolves null on failure
 // (logo is optional — a missing asset shouldn't break the export).
 const loadImage = (src) =>
@@ -167,6 +173,10 @@ const ActiveTracking = () => {
   // ── Date-range bounds ─────────────────────────────────────
   const rangeBounds = useMemo(() => {
     const now = new Date()
+    if (dateRange === '7d') {
+      const from = new Date(now); from.setDate(now.getDate() - 7)
+      return { from: from.getTime(), to: now.getTime() }
+    }
     if (dateRange === '30d') {
       const from = new Date(now); from.setDate(now.getDate() - 30)
       return { from: from.getTime(), to: now.getTime() }
@@ -243,9 +253,18 @@ const ActiveTracking = () => {
   )
 
   const performanceDistribution = useMemo(() => {
-    const counts = { Excellent: 0, Good: 0, 'Needs Improvement': 0 }
-    viewAttempts.forEach(a => { counts[scoreBand(a.score)] += 1 })
-    return Object.entries(counts)
+    // Group each employee by their AVERAGE score band (one person = one count)
+    const empAvg = {}
+    viewAttempts.forEach(a => {
+      if (!empAvg[a.employee]) empAvg[a.employee] = { total: 0, count: 0 }
+      empAvg[a.employee].total += a.score
+      empAvg[a.employee].count += 1
+    })
+    const bandCounts = { Excellent: 0, Good: 0, 'Needs Improvement': 0 }
+    Object.values(empAvg).forEach(({ total, count }) => {
+      bandCounts[scoreBand(Math.round(total / count))] += 1
+    })
+    return Object.entries(bandCounts)
       .map(([name, value]) => ({ name, value }))
       .filter(d => d.value > 0)
   }, [viewAttempts])
@@ -365,6 +384,7 @@ const ActiveTracking = () => {
 
   // ── Exports ───────────────────────────────────────────────
   const periodLabel = useMemo(() => {
+    if (dateRange === '7d') return 'Last 7 days'
     if (dateRange === '30d') return 'Last 30 days'
     if (dateRange === 'quarter') return 'This quarter'
     if (dateRange === 'custom') return `${customFrom || '…'} to ${customTo || '…'}`
@@ -396,79 +416,113 @@ const ActiveTracking = () => {
       const pdf = new jsPDF('p', 'mm', 'a4')
       const pageW = pdf.internal.pageSize.getWidth()
       const pageH = pdf.internal.pageSize.getHeight()
-      const margin = 12
+      const margin = 14
       const contentW = pageW - margin * 2
 
-      // Reserved zones for the repeating header band and footer, so captured
-      // cards never collide with the branding.
-      const HEADER_H = 20           // band height on every page
+      // Reserved zones for the repeating header band and footer so content
+      // never collides with the branding.
+      const HEADER_H = 22           // band height on content pages
       const FOOTER_H = 14           // footer strip height on every page
-      const COVER_EXTRA = anonymized ? 26 : 20  // title block height on page 1
-      const contentTop = HEADER_H + 6
-      const firstContentTop = HEADER_H + COVER_EXTRA
-      const contentBottom = pageH - FOOTER_H
-      const maxBlockH = contentBottom - contentTop
+      const contentTop = HEADER_H + 8
+      const contentBottom = pageH - FOOTER_H - 2
 
       const viewLabel = anonymized ? 'Company View' : 'Internal Team View'
-      const generatedAt = new Date().toLocaleString()
+      const generatedAt = new Date().toLocaleString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
       const logo = await loadImage('/happimynd_logo.png')
       const logoAspect = logo && logo.naturalHeight ? logo.naturalWidth / logo.naturalHeight : 4
 
-      // ── Capture each card as its own image so charts are never split ──
-      const blocks = [
-        dashboardRef.current.querySelector('.at-stats'),
-        ...dashboardRef.current.querySelectorAll('.at-chart-card')
-      ].filter(Boolean)
-
-      let cursorY = firstContentTop
-      for (const el of blocks) {
-        // Expand any inner scroll area so the full chart is captured
-        const scroll = el.querySelector('.at-chart-scroll')
-        const prevMaxH = scroll ? scroll.style.maxHeight : null
-        if (scroll) scroll.style.maxHeight = 'none'
-
-        const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
-
-        if (scroll) scroll.style.maxHeight = prevMaxH
-
-        let drawW = contentW
-        let drawH = (canvas.height * drawW) / canvas.width
-        // Shrink to fit a single page if a card is taller than the usable area
-        if (drawH > maxBlockH) {
-          drawH = maxBlockH
-          drawW = (canvas.width * drawH) / canvas.height
-        }
-        // Start a new page if this card won't fit in the remaining space
-        if (cursorY + drawH > contentBottom) {
-          pdf.addPage()
-          cursorY = contentTop
-        }
-        const x = margin + (contentW - drawW) / 2
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, cursorY, drawW, drawH)
-        cursorY += drawH + 7
+      // Truncate a string so it fits within maxW at the current font size.
+      const fitText = (str, maxW) => {
+        let s = String(str ?? '')
+        if (pdf.getTextWidth(s) <= maxW) return s
+        while (s.length > 1 && pdf.getTextWidth(`${s}…`) > maxW) s = s.slice(0, -1)
+        return `${s}…`
       }
 
-      // ── Stamp the branded header + footer onto every page ──
-      // Done after content so we know the final page count for "Page X of Y".
+      // ── 1. Cover page ──────────────────────────────────────
+      const drawCover = () => {
+        // Full-width brand band across the top
+        pdf.setFillColor(...PDF_BRAND)
+        pdf.rect(0, 0, pageW, 4, 'F')
+
+        // Centered logo
+        if (logo) {
+          const h = 16
+          const w = h * logoAspect
+          pdf.addImage(logo, 'PNG', (pageW - w) / 2, 56, w, h)
+        }
+
+        // Eyebrow label
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(11)
+        pdf.setTextColor(...PDF_BRAND)
+        pdf.text('ACTIVE TRACKING REPORT', pageW / 2, 92, { align: 'center' })
+
+        // Organization (main title)
+        pdf.setFontSize(30)
+        pdf.setTextColor(...PDF_INK)
+        pdf.text(fitText(selectedOrg, contentW), pageW / 2, 108, { align: 'center' })
+
+        // Accent rule under the title
+        pdf.setFillColor(...PDF_BRAND)
+        pdf.rect(pageW / 2 - 16, 114, 32, 1.2, 'F')
+
+        // Metadata box
+        const boxW = 130
+        const boxX = (pageW - boxW) / 2
+        const boxY = 130
+        const rows = [
+          ['View', viewLabel],
+          ['Period', periodLabel],
+          ['Generated', generatedAt]
+        ]
+        const rowH = 11
+        const boxH = rows.length * rowH + 8
+        pdf.setFillColor(249, 248, 254)
+        pdf.setDrawColor(...PDF_HAIRLINE)
+        pdf.setLineWidth(0.3)
+        pdf.roundedRect(boxX, boxY, boxW, boxH, 3, 3, 'FD')
+        rows.forEach(([label, value], i) => {
+          const ry = boxY + 8 + i * rowH
+          pdf.setFont('helvetica', 'bold')
+          pdf.setFontSize(8.5)
+          pdf.setTextColor(...PDF_MUTED)
+          pdf.text(label.toUpperCase(), boxX + 8, ry)
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(10)
+          pdf.setTextColor(...PDF_INK)
+          pdf.text(fitText(value, boxW - 52), boxX + 40, ry)
+        })
+
+        if (anonymized) {
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(9)
+          pdf.setTextColor(...PDF_BRAND)
+          pdf.text(
+            'Employee identities have been anonymized in this report.',
+            pageW / 2, boxY + boxH + 12, { align: 'center' }
+          )
+        }
+      }
+
+      // ── 2. Repeating header / footer on content pages ──────
       const drawHeader = () => {
-        // Accent bar flush to the top edge
         pdf.setFillColor(...PDF_BRAND)
         pdf.rect(0, 0, pageW, 2.5, 'F')
-        // Logo (left), sized by its natural aspect ratio
         if (logo) {
           const h = 8
-          pdf.addImage(logo, 'PNG', margin, 7, h * logoAspect, h)
+          pdf.addImage(logo, 'PNG', margin, 8, h * logoAspect, h)
         }
-        // Report label (right)
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(9)
         pdf.setTextColor(...PDF_BRAND)
-        pdf.text('ACTIVE TRACKING REPORT', pageW - margin, 12, { align: 'right' })
+        pdf.text(`Active Tracking · ${fitText(selectedOrg, 70)}`, pageW - margin, 13, { align: 'right' })
         pdf.setFont('helvetica', 'normal')
-        // Hairline divider under the band
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
-        pdf.line(margin, HEADER_H - 2, pageW - margin, HEADER_H - 2)
+        pdf.line(margin, HEADER_H - 3, pageW - margin, HEADER_H - 3)
       }
 
       const drawFooter = (pageNum, totalPages) => {
@@ -476,6 +530,7 @@ const ActiveTracking = () => {
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
         pdf.line(margin, y, pageW - margin, y)
+        pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(8)
         pdf.setTextColor(...PDF_FAINT)
         pdf.text(
@@ -485,30 +540,157 @@ const ActiveTracking = () => {
         pdf.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, y + 5, { align: 'right' })
       }
 
-      const drawCover = () => {
-        let y = HEADER_H + 8
+      // Draw a section heading (vector text + accent underline) at cursorY,
+      // returning the y position right below it.
+      const drawSectionTitle = (title, note, y) => {
         pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(18)
+        pdf.setFontSize(13)
         pdf.setTextColor(...PDF_INK)
-        pdf.text(`Active Tracking — ${selectedOrg}`, margin, y)
-        pdf.setFont('helvetica', 'normal')
-        y += 6
-        pdf.setFontSize(10)
-        pdf.setTextColor(...PDF_MUTED)
-        pdf.text(`${viewLabel}   •   Period: ${periodLabel}   •   Generated ${generatedAt}`, margin, y)
-        if (anonymized) {
-          y += 6
-          pdf.setTextColor(...PDF_BRAND)
-          pdf.setFontSize(9)
-          pdf.text('Employee identities have been anonymized in this report.', margin, y)
+        pdf.text(title, margin, y)
+        pdf.setFillColor(...PDF_BRAND)
+        pdf.rect(margin, y + 2.5, 18, 1, 'F')
+        let next = y + 7
+        if (note) {
+          pdf.setFont('helvetica', 'normal')
+          pdf.setFontSize(8.5)
+          pdf.setTextColor(...PDF_MUTED)
+          pdf.text(fitText(note, contentW), margin, next)
+          next += 4
         }
+        return next
       }
 
+      // ── Cover ──
+      drawCover()
+
+      // ── 3. Executive summary (native, crisp vector) ────────
+      pdf.addPage()
+      let cursorY = drawSectionTitle('Executive Summary', '', contentTop) + 4
+
+      // KPI tiles
+      const tiles = [
+        { value: String(summary.employees), label: anonymized ? 'Users' : 'Employees' },
+        { value: String(summary.totalAttempts), label: 'Total Attempts' },
+        { value: `${summary.avgScore}%`, label: 'Average Score' },
+        { value: summary.top ? summary.top.name : '—', label: 'Top Performer', small: true }
+      ]
+      const gap = 4
+      const tileW = (contentW - gap * (tiles.length - 1)) / tiles.length
+      const tileH = 24
+      tiles.forEach((t, i) => {
+        const x = margin + i * (tileW + gap)
+        pdf.setFillColor(255, 255, 255)
+        pdf.setDrawColor(...PDF_HAIRLINE)
+        pdf.setLineWidth(0.3)
+        pdf.roundedRect(x, cursorY, tileW, tileH, 2.5, 2.5, 'FD')
+        // Left accent bar
+        pdf.setFillColor(...PDF_BRAND)
+        pdf.rect(x, cursorY + 3, 1.4, tileH - 6, 'F')
+        const tx = x + 6
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(t.small ? 11 : 18)
+        pdf.setTextColor(...(t.small ? PDF_INK : PDF_BRAND))
+        pdf.text(fitText(t.value, tileW - 9), tx, cursorY + (t.small ? 12 : 13))
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(8)
+        pdf.setTextColor(...PDF_MUTED)
+        pdf.text(
+          t.label + (t.small && summary.top ? ` (${summary.top.avgScore}%)` : ''),
+          tx, cursorY + 18.5
+        )
+      })
+      cursorY += tileH + 10
+
+      // Performance-band legend with counts
+      const distMap = Object.fromEntries(performanceDistribution.map(d => [d.name, d.value]))
+      cursorY = drawSectionTitle('Performance Distribution', '', cursorY) + 3
+      const bands = ['Excellent', 'Good', 'Needs Improvement']
+      let chipX = margin
+      pdf.setFontSize(9)
+      bands.forEach((b) => {
+        const count = distMap[b] || 0
+        const text = `${b}: ${count}`
+        pdf.setFont('helvetica', 'bold')
+        const tw = pdf.getTextWidth(text)
+        const chipW = tw + 12
+        if (chipX + chipW > margin + contentW) { chipX = margin; cursorY += 9 }
+        pdf.setFillColor(...(BAND_COLORS[b] ? hexToRgb(BAND_COLORS[b]) : PDF_BRAND))
+        pdf.circle(chipX + 3, cursorY - 1.2, 1.6, 'F')
+        pdf.setTextColor(...PDF_INK)
+        pdf.text(text, chipX + 7, cursorY)
+        chipX += chipW + 6
+      })
+      cursorY += 11
+
+      // Key insights
+      const strongest = packetAverages[0]
+      const weakest = packetAverages.length > 1 ? packetAverages[packetAverages.length - 1] : null
+      const insights = []
+      insights.push(`Average score across ${summary.totalAttempts} attempt${summary.totalAttempts === 1 ? '' : 's'} by ${summary.employees} ${anonymized ? 'user' : 'employee'}${summary.employees === 1 ? '' : 's'} is ${summary.avgScore}%.`)
+      if (summary.top) insights.push(`Top performer is ${summary.top.name} with an average of ${summary.top.avgScore}%.`)
+      insights.push(`Performance bands: ${distMap['Excellent'] || 0} Excellent, ${distMap['Good'] || 0} Good, ${distMap['Needs Improvement'] || 0} Needs Improvement.`)
+      if (strongest) insights.push(`Strongest area: ${strongest.name} (${strongest.avgScore}%).`)
+      if (weakest && weakest.name !== strongest?.name) insights.push(`Area to focus on: ${weakest.name} (${weakest.avgScore}%).`)
+
+      cursorY = drawSectionTitle('Key Insights', '', cursorY) + 3
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(9.5)
+      insights.forEach((line) => {
+        pdf.setFillColor(...PDF_BRAND)
+        pdf.circle(margin + 1.4, cursorY - 1.1, 1, 'F')
+        pdf.setTextColor(...PDF_INK)
+        const wrapped = pdf.splitTextToSize(line, contentW - 7)
+        pdf.text(wrapped, margin + 6, cursorY)
+        cursorY += wrapped.length * 5 + 2.5
+      })
+
+      // ── 4. Chart sections ──────────────────────────────────
+      // Capture only the chart graphic (titles are drawn natively above),
+      // so the export is free of the on-screen card chrome and double titles.
+      const cards = [...dashboardRef.current.querySelectorAll('.at-chart-card')]
+      for (const card of cards) {
+        const titleEl = card.querySelector('.at-chart-card__title')
+        const noteEl = card.querySelector('.at-chart-card__note')
+        const note = noteEl ? noteEl.textContent.replace(/^[\s—·-]+/, '').trim() : ''
+        let title = titleEl ? titleEl.textContent.trim() : 'Chart'
+        if (note && noteEl) title = title.replace(noteEl.textContent, '').trim()
+
+        const chartEl = card.querySelector('.recharts-responsive-container') || card
+        const scroll = card.querySelector('.at-chart-scroll')
+        const prevMaxH = scroll ? scroll.style.maxHeight : null
+        if (scroll) scroll.style.maxHeight = 'none'
+
+        const canvas = await html2canvas(chartEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+        if (scroll) scroll.style.maxHeight = prevMaxH
+
+        const titleBlockH = note ? 11 : 9
+        let drawW = contentW
+        let drawH = (canvas.height * drawW) / canvas.width
+        const maxImgH = contentBottom - contentTop - titleBlockH
+        if (drawH > maxImgH) {
+          drawH = maxImgH
+          drawW = (canvas.width * drawH) / canvas.height
+        }
+
+        // New page if the title + chart won't fit in remaining space
+        if (cursorY + titleBlockH + drawH > contentBottom) {
+          pdf.addPage()
+          cursorY = contentTop
+        } else {
+          cursorY += 6
+        }
+
+        cursorY = drawSectionTitle(title, note, cursorY)
+        const x = margin + (contentW - drawW) / 2
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, cursorY, drawW, drawH)
+        cursorY += drawH
+      }
+
+      // ── 5. Stamp header/footer (cover keeps its own top band) ──
       const total = pdf.getNumberOfPages()
       for (let i = 1; i <= total; i++) {
         pdf.setPage(i)
-        drawHeader()
-        if (i === 1) drawCover()
+        if (i > 1) drawHeader()
         drawFooter(i, total)
       }
 
@@ -584,6 +766,7 @@ const ActiveTracking = () => {
                 onChange={(e) => setDateRange(e.target.value)}
               >
                 <option value="all">All time</option>
+                <option value="7d">Last 7 days</option>
                 <option value="30d">Last 30 days</option>
                 <option value="quarter">This quarter</option>
                 <option value="custom">Custom…</option>
@@ -768,7 +951,9 @@ const ActiveTracking = () => {
                           <Cell key={entry.name} fill={BAND_COLORS[entry.name]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip
+                        formatter={(value, name) => [`${value} ${value === 1 ? 'person' : 'people'}`, name]}
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
