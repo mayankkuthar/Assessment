@@ -17,6 +17,51 @@ function AuthPage() {
   const [resetEmailSent, setResetEmailSent] = useState(false)
   const [profiles, setProfiles] = useState([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
+
+  // Onboarding Code State
+  const [onboardingCode, setOnboardingCode] = useState('')
+  const [isIndividual, setIsIndividual] = useState(false)
+  const [verifyingCode, setVerifyingCode] = useState(false)
+  const [verifiedOrgName, setVerifiedOrgName] = useState('')
+  const [codeVerificationError, setCodeVerificationError] = useState('')
+
+  // Verify onboarding code with debounce
+  useEffect(() => {
+    if (isIndividual || !onboardingCode.trim()) {
+      setVerifiedOrgName('')
+      setCodeVerificationError('')
+      setVerifyingCode(false)
+      return
+    }
+
+    const verifyCode = async () => {
+      setVerifyingCode(true)
+      setCodeVerificationError('')
+      setVerifiedOrgName('')
+      try {
+        const response = await fetch(`/api/auth/verify-code?code=${encodeURIComponent(onboardingCode.trim().toUpperCase())}`)
+        if (response.ok) {
+          const data = await response.json()
+          setVerifiedOrgName(data.name)
+        } else {
+          const errData = await response.json()
+          setCodeVerificationError(errData.error || 'Invalid organization code')
+        }
+      } catch (err) {
+        console.error('Error verifying code:', err)
+        setCodeVerificationError('Failed to connect to verification service')
+      } finally {
+        setVerifyingCode(false)
+      }
+    }
+
+    const debounceTimer = setTimeout(() => {
+      verifyCode()
+    }, 500)
+
+    return () => clearTimeout(debounceTimer)
+  }, [onboardingCode, isIndividual])
+
   // Fetch available profiles from the database
   useEffect(() => {
     const fetchProfiles = async () => {
@@ -68,13 +113,21 @@ function AuthPage() {
     try {
       if (isSignUp) {
         // Validate required fields for signup
-        if (!userName.trim() || !email.trim() || !profile || !password.trim() || !organization) {
+        if (!isIndividual && (!onboardingCode.trim() || !verifiedOrgName)) {
+          setError('A valid onboarding code is required to join an organization. Otherwise, select "Register as an Individual"');
+          hasError = true;
+          setLoading(false);
+          return;
+        }
+        if (!userName.trim() || !email.trim() || !profile || !password.trim()) {
           setError('All fields are required for signup');
           hasError = true;
+          setLoading(false);
           return;
         }
         
-        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization })
+        const targetOrgName = isIndividual ? 'Individual' : verifiedOrgName;
+        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: targetOrgName, onboardingCode })
         
         // Sign up using the API directly
         const response = await fetch('/api/auth/signup', {
@@ -86,9 +139,11 @@ function AuthPage() {
             email,
             password,
             role: userRole,
+            userName: userName,
             user_name: userName,
             profile: profile,
-            organization: organization // Include organization in signup request
+            onboardingCode: isIndividual ? '' : onboardingCode.trim().toUpperCase(),
+            organization: targetOrgName
           })
         });
 
@@ -119,6 +174,10 @@ function AuthPage() {
             setUserName('');
             setProfile('');
             setOrganization(''); // Clear organization field
+            setOnboardingCode('');
+            setIsIndividual(false);
+            setVerifiedOrgName('');
+            setCodeVerificationError('');
             setUserRole('user');
             setSuccess('');
             setLoading(false); // Turn off loading after redirect
@@ -324,21 +383,68 @@ function AuthPage() {
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Organization</label>
-                  <select
-                    className="form-input"
-                    value={organization}
-                    onChange={(e) => setOrganization(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>Select an organization</option>
-                    <option value="HappiMynd">HappiMynd</option>
-                    <option value="Individual">Individual</option>
-                    <option value="PCI">PCI</option>
-                    <option value="Sparsh Hospital">Sparsh Hospital</option>
-                  </select>
+                {/* Individual Checkbox */}
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                  <input
+                    type="checkbox"
+                    id="is-individual-checkbox"
+                    checked={isIndividual}
+                    onChange={(e) => {
+                      setIsIndividual(e.target.checked);
+                      if (e.target.checked) {
+                        setOnboardingCode('');
+                        setVerifiedOrgName('');
+                        setCodeVerificationError('');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                  />
+                  <label htmlFor="is-individual-checkbox" style={{ fontSize: 'var(--text-sm)', cursor: 'pointer', userSelect: 'none', fontWeight: 500 }}>
+                    Register as an Individual (Not joining a company)
+                  </label>
                 </div>
+
+                {/* Onboarding Code Input */}
+                {!isIndividual ? (
+                  <div className="form-group">
+                    <label className="form-label">Organization Onboarding Code *</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={onboardingCode}
+                      onChange={(e) => setOnboardingCode(e.target.value)}
+                      placeholder="e.g. ACME1234"
+                      required
+                      style={{ textTransform: 'uppercase' }}
+                    />
+                    
+                    {/* Real-time verification display */}
+                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
+                      {verifyingCode && (
+                        <span style={{ color: 'var(--color-muted-fg)' }}>Resolving organization...</span>
+                      )}
+                      {verifiedOrgName && (
+                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                          ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
+                        </span>
+                      )}
+                      {codeVerificationError && (
+                        <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
+                          ❌ {codeVerificationError}
+                        </span>
+                      )}
+                      {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
+                        <span style={{ color: 'var(--color-muted-fg)' }}>
+                          Please enter the onboarding code shared by your company.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="alert" style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-3)', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted-fg)', marginBottom: 'var(--space-4)' }}>
+                    ℹ️ Individual registration. You will not be linked to any corporate organization.
+                  </div>
+                )}
               </>
             )}
             
@@ -357,7 +463,16 @@ function AuthPage() {
               type="submit"
               className="btn btn--primary"
               style={{ width: '100%', marginBottom: 'var(--space-4)' }}
-              disabled={loading || (tab === 1 && (!userName.trim() || !email.trim() || !profile || !password.trim() || !organization))}
+              disabled={
+                loading || 
+                (tab === 1 && (
+                  !userName.trim() || 
+                  !email.trim() || 
+                  !profile || 
+                  !password.trim() || 
+                  (!isIndividual && (!onboardingCode.trim() || !verifiedOrgName))
+                ))
+              }
             >
               {loading ? (tab === 1 ? 'Signing Up...' : 'Logging In...') : (tab === 0 ? 'Login' : 'Sign Up')}
             </button>

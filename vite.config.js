@@ -10,6 +10,21 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
+      '/api/organizations': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/auth': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/employees': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      },
       '/api': {
         target: 'http://65.1.6.81:3001',
         changeOrigin: true,

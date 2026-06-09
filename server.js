@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { 
   profileService,
+  organizationService,
+  employeeService,
   packetService,
   questionService,
   quizService,
@@ -11,6 +13,7 @@ import {
   userService
 } from './src/services/sqlite-database.js';
 import { authService } from './src/services/auth.js';
+import { db, generateId } from './src/database/sqlite.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,9 +32,64 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // Auth Routes
+app.get('/api/auth/verify-code', asyncHandler(async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  const org = await userService.findOrganizationByCode(code.trim().toUpperCase());
+  if (!org) {
+    return res.status(404).json({ error: 'Invalid onboarding code' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+  res.json({ id: org.id, name: org.name });
+}));
+
 app.post('/api/auth/signup', asyncHandler(async (req, res) => {
-  const { email, password, role = 'user' } = req.body;
-  const result = await authService.signUp(email, password, role);
+  const { email, password, role = 'user', userName, onboardingCode } = req.body;
+  
+  let organizationId = null;
+  
+  if (onboardingCode) {
+    const org = await userService.findOrganizationByCode(onboardingCode.trim().toUpperCase());
+    if (!org) {
+      return res.status(400).json({ error: 'Invalid onboarding code' });
+    }
+    if (org.status !== 'active') {
+      return res.status(400).json({ error: 'This organization is currently inactive' });
+    }
+    organizationId = org.id;
+
+    // Cross-organization validation: check if email is registered under another org
+    const checkOtherOrgStmt = db.prepare('SELECT organization_id FROM employees WHERE LOWER(email) = ?');
+    const existingEmp = checkOtherOrgStmt.get(email.trim().toLowerCase());
+    if (existingEmp && existingEmp.organization_id !== organizationId) {
+      return res.status(400).json({ error: 'This email is already registered under a different organization.' });
+    }
+  }
+
+  // Create User
+  const result = await authService.signUp(email, password, role, organizationId);
+  
+  if (result.user && onboardingCode && organizationId) {
+    // Check if employee record already exists for this organization and email
+    const checkStmt = db.prepare('SELECT id FROM employees WHERE organization_id = ? AND LOWER(email) = ?');
+    const existing = checkStmt.get(organizationId, email.trim().toLowerCase());
+    
+    if (!existing) {
+      // Create employee entry automatically
+      const insertStmt = db.prepare(`
+        INSERT INTO employees (id, organization_id, name, email, metadata)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      const empId = generateId();
+      const metadataStr = JSON.stringify({ joined_via: 'onboarding_code' });
+      insertStmt.run(empId, organizationId, userName || email.split('@')[0], email.trim(), metadataStr);
+    }
+  }
+
   res.json(result);
 }));
 
@@ -69,6 +127,48 @@ app.put('/api/profiles/:id', asyncHandler(async (req, res) => {
 
 app.delete('/api/profiles/:id', asyncHandler(async (req, res) => {
   await profileService.deleteProfile(req.params.id);
+  res.json({ success: true });
+}));
+
+// Organization Routes
+app.get('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.getAllOrganizations();
+  res.json(data);
+}));
+
+app.post('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.createOrganization(req.body);
+  res.json(data);
+}));
+
+app.put('/api/organizations/:id', asyncHandler(async (req, res) => {
+  const data = await organizationService.updateOrganization(req.params.id, req.body);
+  res.json(data);
+}));
+
+app.delete('/api/organizations/:id', asyncHandler(async (req, res) => {
+  await organizationService.deleteOrganization(req.params.id);
+  res.json({ success: true });
+}));
+
+app.post('/api/organizations/:id/regenerate-code', asyncHandler(async (req, res) => {
+  const data = await organizationService.regenerateOnboardingCode(req.params.id);
+  res.json(data);
+}));
+
+// Employee Routes
+app.get('/api/organizations/:orgId/employees', asyncHandler(async (req, res) => {
+  const data = await employeeService.getEmployeesByOrg(req.params.orgId);
+  res.json(data);
+}));
+
+app.post('/api/organizations/:orgId/employees/import', asyncHandler(async (req, res) => {
+  const data = await employeeService.importEmployees(req.params.orgId, req.body.employees);
+  res.json(data);
+}));
+
+app.delete('/api/employees/:id', asyncHandler(async (req, res) => {
+  await employeeService.deleteEmployee(req.params.id);
   res.json({ success: true });
 }));
 

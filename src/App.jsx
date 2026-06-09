@@ -38,6 +38,7 @@ import HistoryIcon from '@mui/icons-material/History'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import InsightsIcon from '@mui/icons-material/Insights'
 import DeleteIcon from '@mui/icons-material/Delete'
+import BusinessIcon from '@mui/icons-material/Business'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
@@ -53,6 +54,7 @@ import AdminDashboard from './components/AdminDashboard'
 import PasswordReset from './components/PasswordReset'
 import PDFTemplateConfig from './components/PDFTemplateConfig'
 import ActiveTracking from './components/ActiveTracking'
+import OrganizationManager from './components/OrganizationManager'
 
 
 const drawerWidth = 220
@@ -60,6 +62,7 @@ const drawerWidth = 220
 // Admin navigation items
 const adminNavItems = [
   { label: 'Admin Dashboard', icon: <PersonIcon /> },
+  { label: 'Organization Management', icon: <BusinessIcon /> },
   { label: 'Profile Management', icon: <PeopleIcon /> },
   { label: 'Packet Management', icon: <CategoryIcon /> },
   { label: 'Quiz Builder', icon: <QuizIcon /> },
@@ -112,7 +115,16 @@ function App() {
     loadUserStats,
     userQuizAttempts,
     userStats,
-    users
+    users,
+    organizations,
+    addOrganization,
+    updateOrganization,
+    deleteOrganization,
+    regenerateOnboardingCode,
+    employees,
+    loadEmployees,
+    importEmployees,
+    deleteEmployee
   } = useDatabase()
 
   // UI state
@@ -503,6 +515,19 @@ function App() {
                   <>
                     {tab === 0 && <AdminDashboard />}
                     {tab === 1 && (
+                      <OrganizationManager 
+                        organizations={organizations} 
+                        addOrganization={addOrganization}
+                        updateOrganization={updateOrganization}
+                        deleteOrganization={deleteOrganization}
+                        regenerateOnboardingCode={regenerateOnboardingCode}
+                        employees={employees}
+                        loadEmployees={loadEmployees}
+                        importEmployees={importEmployees}
+                        deleteEmployee={deleteEmployee}
+                      />
+                    )}
+                    {tab === 2 && (
                       <ProfileManager 
                         profiles={profiles} 
                         addProfile={addProfile}
@@ -510,7 +535,7 @@ function App() {
                         deleteProfile={deleteProfile}
                       />
                     )}
-                    {tab === 2 && (
+                    {tab === 3 && (
                       <PacketManager 
                         packets={packets} 
                         addPacket={addPacket}
@@ -522,7 +547,7 @@ function App() {
                         onDataChange={loadData}
                       />
                     )}
-                    {tab === 3 && (
+                    {tab === 4 && (
                       <Box sx={{ width: '100%' }}>
                         <Box sx={{ mb: 2 }}>
                           <Button variant="contained" onClick={exportQuizzes}>Export Quizzes</Button>
@@ -549,7 +574,7 @@ function App() {
                         />
                       </Box>
                     )}
-                    {tab === 4 && (
+                    {tab === 5 && (
                       <Box sx={{ width: '100%', mb: 4 }}>
                         {/* Assign Quiz Card */}
                         <Card variant="outlined" sx={{ mb: 4, p: 3, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)' }}>
@@ -825,10 +850,10 @@ function App() {
                         )}
                       </Box>
                     )}
-                    {tab === 5 && <AssessmentResults />}
-                    {tab === 6 && <AssessmentReport />}
-                    {tab === 7 && <ActiveTracking />}
-                    {tab === 8 && <PDFTemplateConfig />}
+                    {tab === 6 && <AssessmentResults />}
+                    {tab === 7 && <AssessmentReport />}
+                    {tab === 8 && <ActiveTracking />}
+                    {tab === 9 && <PDFTemplateConfig />}
                   </>
                 ) : (
                   // User Mode

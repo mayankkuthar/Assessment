@@ -4,6 +4,36 @@ import path from 'path';
 
 const DB_PATH = path.join(process.cwd(), 'assessment.db');
 
+export function generateOnboardingCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    // Check if code already exists in DB (only if db is initialized)
+    if (db) {
+      try {
+        const stmt = db.prepare('SELECT COUNT(*) as count FROM organizations WHERE onboarding_code = ?');
+        const result = stmt.get(code);
+        if (result.count === 0) {
+          isUnique = true;
+        }
+      } catch (e) {
+        // Table or column might not exist yet during initial schema run
+        isUnique = true;
+      }
+    } else {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Initialize database connection
 let db;
 try {
@@ -24,6 +54,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('user', 'admin')) DEFAULT 'user',
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,6 +68,29 @@ CREATE TABLE IF NOT EXISTS user_roles (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id)
+);
+
+-- Create organizations table
+CREATE TABLE IF NOT EXISTS organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
+    onboarding_code TEXT UNIQUE NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create employees table
+CREATE TABLE IF NOT EXISTS employees (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    metadata TEXT, -- JSON stored as text
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(organization_id, email)
 );
 
 -- Create profiles table
@@ -139,6 +193,9 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_employees_organization_id ON employees(organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_onboarding_code ON organizations(onboarding_code);
+CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id);
 
 -- Triggers for updated_at timestamp
 CREATE TRIGGER IF NOT EXISTS update_users_updated_at
@@ -151,6 +208,18 @@ CREATE TRIGGER IF NOT EXISTS update_user_roles_updated_at
     AFTER UPDATE ON user_roles
     BEGIN
         UPDATE user_roles SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_organizations_updated_at
+    AFTER UPDATE ON organizations
+    BEGIN
+        UPDATE organizations SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_employees_updated_at
+    AFTER UPDATE ON employees
+    BEGIN
+        UPDATE employees SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_profiles_updated_at
@@ -195,6 +264,38 @@ INSERT OR IGNORE INTO packets (id, name, description) VALUES
     ('${uuidv4()}', 'Technical Skills', 'Technical knowledge and problem solving');
 `;
 
+function runMigrations() {
+  try {
+    // 1. Check/Add onboarding_code to organizations table
+    const tableInfoOrgs = db.prepare("PRAGMA table_info(organizations)").all();
+    const hasOnboardingCode = tableInfoOrgs.some(c => c.name === 'onboarding_code');
+    if (!hasOnboardingCode) {
+      console.log('⚠️ Migrating database: Adding onboarding_code column to organizations...');
+      db.exec(`ALTER TABLE organizations ADD COLUMN onboarding_code TEXT;`);
+      
+      // Populate unique codes for any existing organizations that have NULL onboarding_code
+      const orgsWithoutCode = db.prepare('SELECT id FROM organizations WHERE onboarding_code IS NULL').all();
+      const updateCode = db.prepare('UPDATE organizations SET onboarding_code = ? WHERE id = ?');
+      for (const org of orgsWithoutCode) {
+        const code = generateOnboardingCode();
+        updateCode.run(code, org.id);
+      }
+      console.log(`✅ Migrated onboarding_code for ${orgsWithoutCode.length} existing organizations.`);
+    }
+
+    // 2. Check/Add organization_id to users table
+    const tableInfoUsers = db.prepare("PRAGMA table_info(users)").all();
+    const hasOrgId = tableInfoUsers.some(c => c.name === 'organization_id');
+    if (!hasOrgId) {
+      console.log('⚠️ Migrating database: Adding organization_id column to users...');
+      db.exec(`ALTER TABLE users ADD COLUMN organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL;`);
+      console.log('✅ Migrated organization_id column for users.');
+    }
+  } catch (error) {
+    console.error('❌ Error running database migrations:', error);
+  }
+}
+
 // Initialize database with schema
 export function initializeDatabase() {
   try {
@@ -203,6 +304,9 @@ export function initializeDatabase() {
     // Execute schema creation
     db.exec(SCHEMA_SQL);
     console.log('✅ Database schema created successfully');
+    
+    // Run migrations
+    runMigrations();
     
     // Check if we need to insert sample data
     const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get();

@@ -38,9 +38,9 @@ export const authService = {
   },
 
   // Sign up new user
-  async signUp(email, password, role = 'user') {
+  async signUp(email, password, role = 'user', organizationId = null) {
     try {
-      const user = await userService.createUser(email, password, role);
+      const user = await userService.createUser(email, password, role, organizationId);
       
       // Auto login after signup
       const session = await userService.createSession(user.id);
@@ -169,10 +169,10 @@ export function useAuth() {
     initializeAuth();
   }, []);
 
-  const signUp = async (email, password, role) => {
+  const signUp = async (email, password, role, organizationId = null) => {
     setLoading(true);
     try {
-      const result = await authService.signUp(email, password, role);
+      const result = await authService.signUp(email, password, role, organizationId);
       if (result.user) {
         setUser(result.user);
       }

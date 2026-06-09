@@ -36,11 +36,15 @@ async function apiCall(endpoint, options = {}) {
 
 // Auth API
 export const authApi = {
-  async signUp(email, password, role = 'user', user_name, profile) {
+  async signUp(email, password, role = 'user', user_name, profile, onboardingCode) {
     return await apiCall('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role, user_name, profile }),
+      body: JSON.stringify({ email, password, role, user_name, profile, onboardingCode }),
     });
+  },
+
+  async verifyOnboardingCode(code) {
+    return await apiCall(`/auth/verify-code?code=${encodeURIComponent(code)}`);
   },
 
   async signIn(email, password) {
@@ -81,6 +85,53 @@ export const profileApi = {
 
   async deleteProfile(id) {
     return await apiCall(`/profiles/${id}`, { method: 'DELETE' });
+  }
+};
+
+// Organization API
+export const organizationApi = {
+  async getAllOrganizations() {
+    return await apiCall('/organizations');
+  },
+
+  async createOrganization(org) {
+    return await apiCall('/organizations', {
+      method: 'POST',
+      body: JSON.stringify(org),
+    });
+  },
+
+  async updateOrganization(id, updates) {
+    return await apiCall(`/organizations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deleteOrganization(id) {
+    return await apiCall(`/organizations/${id}`, { method: 'DELETE' });
+  },
+
+  async regenerateOnboardingCode(id) {
+    return await apiCall(`/organizations/${id}/regenerate-code`, { method: 'POST' });
+  }
+};
+
+// Employee API
+export const employeeApi = {
+  async getEmployeesByOrg(orgId) {
+    return await apiCall(`/organizations/${orgId}/employees`);
+  },
+
+  async importEmployees(orgId, employees) {
+    return await apiCall(`/organizations/${orgId}/employees/import`, {
+      method: 'POST',
+      body: JSON.stringify({ employees })
+    });
+  },
+
+  async deleteEmployee(id) {
+    return await apiCall(`/employees/${id}`, { method: 'DELETE' });
   }
 };
 

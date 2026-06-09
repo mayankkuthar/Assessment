@@ -1,4 +1,4 @@
-import { db, generateId } from '../database/sqlite.js';
+import { db, generateId, generateOnboardingCode } from '../database/sqlite.js';
 import crypto from 'crypto';
 
 // Helper function to hash passwords
@@ -82,6 +82,148 @@ export const profileService = {
     } catch (error) {
       console.error('Error deleting profile:', error);
       throw new Error('Failed to delete profile');
+    }
+  }
+};
+
+// Organization Service
+export const organizationService = {
+  async getAllOrganizations() {
+    try {
+      const stmt = db.prepare('SELECT * FROM organizations ORDER BY created_at DESC');
+      return stmt.all();
+    } catch (error) {
+      console.error('Error getting organizations:', error);
+      throw new Error('Failed to fetch organizations');
+    }
+  },
+
+  async createOrganization(org) {
+    try {
+      const id = generateId();
+      const status = org.status || 'active';
+      const code = generateOnboardingCode();
+      const stmt = db.prepare(`
+        INSERT INTO organizations (id, name, description, status, onboarding_code)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      stmt.run(id, org.name, org.description || null, status, code);
+      
+      const getStmt = db.prepare('SELECT * FROM organizations WHERE id = ?');
+      return getStmt.get(id);
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      throw new Error('Failed to create organization');
+    }
+  },
+
+  async updateOrganization(id, updates) {
+    try {
+      const fields = Object.keys(updates).filter(key => key !== 'id');
+      const setClause = fields.map(field => `${field} = ?`).join(', ');
+      const values = fields.map(field => updates[field]);
+      
+      const stmt = db.prepare(`UPDATE organizations SET ${setClause} WHERE id = ?`);
+      stmt.run(...values, id);
+      
+      const getStmt = db.prepare('SELECT * FROM organizations WHERE id = ?');
+      return getStmt.get(id);
+    } catch (error) {
+      console.error('Error updating organization:', error);
+      throw new Error('Failed to update organization');
+    }
+  },
+
+  async deleteOrganization(id) {
+    try {
+      const stmt = db.prepare('DELETE FROM organizations WHERE id = ?');
+      const result = stmt.run(id);
+      
+      if (result.changes === 0) {
+        throw new Error('Organization not found');
+      }
+    } catch (error) {
+      console.error('Error deleting organization:', error);
+      throw new Error('Failed to delete organization');
+    }
+  },
+
+  async regenerateOnboardingCode(orgId) {
+    try {
+      const code = generateOnboardingCode();
+      const stmt = db.prepare('UPDATE organizations SET onboarding_code = ? WHERE id = ?');
+      const result = stmt.run(code, orgId);
+      if (result.changes === 0) {
+        throw new Error('Organization not found');
+      }
+      return { onboarding_code: code };
+    } catch (error) {
+      console.error('Error regenerating onboarding code:', error);
+      throw new Error('Failed to regenerate onboarding code');
+    }
+  }
+};
+
+// Employee Service
+export const employeeService = {
+  async getEmployeesByOrg(orgId) {
+    try {
+      const stmt = db.prepare('SELECT * FROM employees WHERE organization_id = ? ORDER BY created_at DESC');
+      const rows = stmt.all(orgId);
+      // Parse metadata from JSON strings back to objects
+      return rows.map(r => ({
+        ...r,
+        metadata: r.metadata ? JSON.parse(r.metadata) : {}
+      }));
+    } catch (error) {
+      console.error('Error getting employees:', error);
+      throw new Error('Failed to fetch employees');
+    }
+  },
+
+  async importEmployees(orgId, employeesList) {
+    const insertTransaction = db.transaction((list) => {
+      const stmt = db.prepare(`
+        INSERT INTO employees (id, organization_id, name, email, metadata)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      const imported = [];
+      for (const emp of list) {
+        const id = uuidv4();
+        const metadataStr = JSON.stringify(emp.metadata || {});
+        stmt.run(id, orgId, emp.name, emp.email, metadataStr);
+        imported.push({
+          id,
+          organization_id: orgId,
+          name: emp.name,
+          email: emp.email,
+          metadata: emp.metadata || {}
+        });
+      }
+      return imported;
+    });
+
+    try {
+      return insertTransaction(employeesList);
+    } catch (error) {
+      console.error('Error importing employees:', error);
+      throw new Error(error.message || 'Failed to import employees');
+    }
+  },
+
+  async deleteEmployee(id) {
+    try {
+      const stmt = db.prepare('DELETE FROM employees WHERE id = ?');
+      const result = stmt.run(id);
+      if (result.changes === 0) {
+        throw new Error('Employee not found');
+      }
+      return true;
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      throw new Error('Failed to delete employee');
     }
   }
 };
@@ -492,17 +634,17 @@ export const quizPacketService = {
 
 // User Service
 export const userService = {
-  async createUser(email, password, role = 'user') {
+  async createUser(email, password, role = 'user', organizationId = null) {
     try {
       const id = generateId();
       const passwordHash = hashPassword(password);
       
       const stmt = db.prepare(`
-        INSERT INTO users (id, email, password_hash, role)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO users (id, email, password_hash, role, organization_id)
+        VALUES (?, ?, ?, ?, ?)
       `);
       
-      stmt.run(id, email, passwordHash, role);
+      stmt.run(id, email, passwordHash, role, organizationId);
       
       // Also create user_roles entry for compatibility
       const roleStmt = db.prepare(`
@@ -513,7 +655,7 @@ export const userService = {
       roleStmt.run(generateId(), id, role, email);
       
       // Return user without password hash
-      return { id, email, role };
+      return { id, email, role, organization_id: organizationId };
     } catch (error) {
       if (error.message.includes('UNIQUE constraint failed')) {
         throw new Error('User with this email already exists');
@@ -541,7 +683,8 @@ export const userService = {
       return {
         id: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        organization_id: user.organization_id
       };
     } catch (error) {
       console.error('Error validating user:', error);
@@ -572,7 +715,7 @@ export const userService = {
   async validateSession(sessionId) {
     try {
       const stmt = db.prepare(`
-        SELECT s.*, u.id as user_id, u.email, u.role
+        SELECT s.*, u.id as user_id, u.email, u.role, u.organization_id
         FROM sessions s
         JOIN users u ON s.user_id = u.id
         WHERE s.id = ? AND datetime(s.expires_at) > datetime('now')
@@ -583,6 +726,27 @@ export const userService = {
     } catch (error) {
       console.error('Error validating session:', error);
       return null;
+    }
+  },
+
+  async findOrganizationByCode(code) {
+    try {
+      const stmt = db.prepare('SELECT id, name, status FROM organizations WHERE onboarding_code = ?');
+      return stmt.get(code) || null;
+    } catch (error) {
+      console.error('Error finding organization by code:', error);
+      return null;
+    }
+  },
+
+  async linkUserToOrganization(userId, orgId) {
+    try {
+      const stmt = db.prepare('UPDATE users SET organization_id = ? WHERE id = ?');
+      const result = stmt.run(orgId, userId);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('Error linking user to organization:', error);
+      throw new Error('Failed to link user to organization');
     }
   },
 

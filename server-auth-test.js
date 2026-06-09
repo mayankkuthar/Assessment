@@ -29,6 +29,8 @@ function loadData() {
       return {
         users: data.users || [],
         profiles: data.profiles || [],
+        organizations: data.organizations || [],
+        employees: data.employees || [],
         packets: data.packets || [],
         questions: data.questions || [],
         quizzes: data.quizzes || [],
@@ -69,6 +71,7 @@ function loadData() {
         created_at: new Date().toISOString()
       }
     ],
+    organizations: [],
     packets: [
       { 
         id: '1755719317656', 
@@ -342,7 +345,8 @@ function loadData() {
          updated_at: new Date().toISOString()
        }
      ],
-                   quizAttempts: []
+                    quizAttempts: [],
+                    employees: []
   };
 }
 
@@ -355,8 +359,40 @@ function saveData(data) {
   }
 }
 
+function generateOnboardingCode(organizations = []) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const exists = organizations.some(o => o.onboarding_code === code);
+    if (!exists) {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Load initial data
 let mockData = loadData();
+
+// Migrate mockData organizations to add onboarding_code
+if (mockData.organizations) {
+  let migrated = false;
+  mockData.organizations.forEach(o => {
+    if (!o.onboarding_code) {
+      o.onboarding_code = generateOnboardingCode(mockData.organizations);
+      migrated = true;
+    }
+  });
+  if (migrated) {
+    console.log('⚠️ Migrating mockData: Assigned onboarding codes to existing organizations');
+    saveData(mockData);
+  }
+}
 console.log('📂 Loaded persistent data:', {
   users: mockData.users.length,
   profiles: mockData.profiles.length,
@@ -395,8 +431,28 @@ app.post('/api/auth/signin', (req, res) => {
   }
 });
 
+app.get('/api/auth/verify-code', (req, res) => {
+  const { code } = req.query;
+  console.log(`🔑 Verify onboarding code: ${code}`);
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  const org = mockData.organizations.find(o => o.onboarding_code === code.trim().toUpperCase());
+  if (!org) {
+    return res.status(404).json({ error: 'Invalid onboarding code' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+  res.json({ id: org.id, name: org.name });
+});
+
 app.post('/api/auth/signup', (req, res) => {
-  const { email, password, role = 'user', user_name, profile, organization } = req.body;
+  const { email, password, role = 'user', userName, user_name, profile, onboardingCode } = req.body;
+  const targetUserName = userName || user_name;
   console.log(`📝 Sign up attempt: ${email} as ${role}`);
   
   // Check if user already exists
@@ -418,6 +474,32 @@ app.post('/api/auth/signup', (req, res) => {
       error: `Profile "${profile}" does not exist. Please select from available profiles.`
     });
   }
+
+  let organizationId = null;
+  let organizationName = 'Individual';
+
+  if (onboardingCode) {
+    if (!mockData.organizations) {
+      mockData.organizations = [];
+    }
+    const org = mockData.organizations.find(o => o.onboarding_code === onboardingCode.trim().toUpperCase());
+    if (!org) {
+      return res.status(400).json({ error: 'Invalid onboarding code' });
+    }
+    if (org.status !== 'active') {
+      return res.status(400).json({ error: 'This organization is currently inactive' });
+    }
+    organizationId = org.id;
+    organizationName = org.name;
+
+    // Cross-organization validation: check if email is registered under another org
+    if (mockData.employees) {
+      const existingEmp = mockData.employees.find(e => e.email.toLowerCase() === email.trim().toLowerCase());
+      if (existingEmp && existingEmp.organization_id !== organizationId) {
+        return res.status(400).json({ error: 'This email is already registered under a different organization.' });
+      }
+    }
+  }
   
   // Create new user
   const userId = String(Date.now());
@@ -426,11 +508,33 @@ app.post('/api/auth/signup', (req, res) => {
     email,
     password,
     role,
-    user_name: user_name || email.split('@')[0],
-    profile: profile, // Store the profile name for reference
-    organization: organization // Store the organization for reference
+    user_name: targetUserName || email.split('@')[0],
+    profile: profile,
+    organization_id: organizationId,
+    organization: organizationName
   };
   mockData.users.push(newUser);
+
+  if (onboardingCode && organizationId) {
+    if (!mockData.employees) {
+      mockData.employees = [];
+    }
+    const existing = mockData.employees.find(
+      e => e.organization_id === organizationId && e.email.toLowerCase() === email.trim().toLowerCase()
+    );
+    if (!existing) {
+      const empId = String(Date.now() + Math.random());
+      mockData.employees.push({
+        id: empId,
+        organization_id: organizationId,
+        name: targetUserName || email.split('@')[0],
+        email: email.trim(),
+        metadata: { joined_via: 'onboarding_code' },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
   
   // Save data
   saveData(mockData);
@@ -548,6 +652,190 @@ app.delete('/api/profiles/:id', (req, res) => {
     message: `Profile ${profileId} deleted successfully`,
     deleted_id: profileId
   });
+});
+
+// Organization CRUD operations
+app.get('/api/organizations', (req, res) => {
+  console.log('🏢 Get organizations');
+  res.json(mockData.organizations || []);
+});
+
+app.post('/api/organizations', (req, res) => {
+  const org = req.body;
+  console.log('🏢 Create organization', org);
+  
+  if (!org.name) {
+    return res.status(400).json({ error: 'Organization name is required' });
+  }
+
+  const exists = (mockData.organizations || []).some(o => o.name.toLowerCase() === org.name.toLowerCase());
+  if (exists) {
+    return res.status(400).json({ error: 'Organization name already exists' });
+  }
+
+  const newOrg = {
+    id: String(Date.now()),
+    name: org.name,
+    description: org.description || '',
+    status: org.status || 'active',
+    onboarding_code: generateOnboardingCode(mockData.organizations || []),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  
+  mockData.organizations.push(newOrg);
+  saveData(mockData);
+
+  res.status(201).json(newOrg);
+});
+
+app.put('/api/organizations/:id', (req, res) => {
+  const orgId = req.params.id;
+  const updates = req.body;
+  console.log(`🏢 Update organization ${orgId}`, updates);
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+
+  const orgIndex = mockData.organizations.findIndex(o => o.id === orgId);
+  if (orgIndex === -1) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+
+  if (updates.name && updates.name.toLowerCase() !== mockData.organizations[orgIndex].name.toLowerCase()) {
+    const exists = mockData.organizations.some(o => o.name.toLowerCase() === updates.name.toLowerCase());
+    if (exists) {
+      return res.status(400).json({ error: 'Organization name already exists' });
+    }
+  }
+
+  const updatedOrg = {
+    ...mockData.organizations[orgIndex],
+    ...updates,
+    updated_at: new Date().toISOString()
+  };
+
+  mockData.organizations[orgIndex] = updatedOrg;
+  saveData(mockData);
+
+  res.json(updatedOrg);
+});
+
+app.delete('/api/organizations/:id', (req, res) => {
+  const orgId = req.params.id;
+  console.log(`🏢 Delete organization ${orgId}`);
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+
+  const orgIndex = mockData.organizations.findIndex(o => o.id === orgId);
+  if (orgIndex === -1) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+
+  mockData.organizations.splice(orgIndex, 1);
+  saveData(mockData);
+
+  res.json({
+    success: true,
+    message: `Organization ${orgId} deleted successfully`,
+    deleted_id: orgId
+  });
+});
+
+app.post('/api/organizations/:id/regenerate-code', (req, res) => {
+  const orgId = req.params.id;
+  console.log(`🏢 Regenerate onboarding code for organization ${orgId}`);
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  const org = mockData.organizations.find(o => o.id === orgId);
+  if (!org) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const code = generateOnboardingCode(mockData.organizations);
+  org.onboarding_code = code;
+  org.updated_at = new Date().toISOString();
+  saveData(mockData);
+  res.json({ onboarding_code: code });
+});
+
+// Employees CRUD and Bulk Import operations
+app.get('/api/organizations/:orgId/employees', (req, res) => {
+  const orgId = req.params.orgId;
+  console.log(`👥 Get employees for organization ${orgId}`);
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const orgEmployees = mockData.employees.filter(e => e.organization_id === orgId);
+  res.json(orgEmployees);
+});
+
+app.post('/api/organizations/:orgId/employees/import', (req, res) => {
+  const orgId = req.params.orgId;
+  console.log(`👥 Import employees for organization ${orgId}`);
+  const { employees } = req.body;
+
+  if (!employees || !Array.isArray(employees)) {
+    return res.status(400).json({ error: 'Invalid payload: employees array is required' });
+  }
+
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+
+  const existingEmails = mockData.employees
+    .filter(e => e.organization_id === orgId)
+    .map(e => e.email.toLowerCase());
+
+  const imported = [];
+  for (const emp of employees) {
+    if (!emp.name || !emp.email) {
+      return res.status(400).json({ error: 'Name and Email are mandatory fields' });
+    }
+    if (existingEmails.includes(emp.email.toLowerCase())) {
+      return res.status(400).json({ error: `Email ${emp.email} already exists in this organization` });
+    }
+    
+    const newEmp = {
+      id: String(Date.now() + Math.random()),
+      organization_id: orgId,
+      name: emp.name.trim(),
+      email: emp.email.trim(),
+      metadata: emp.metadata || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    imported.push(newEmp);
+    existingEmails.push(newEmp.email.toLowerCase());
+  }
+
+  mockData.employees.push(...imported);
+  saveData(mockData);
+
+  res.json(imported);
+});
+
+app.delete('/api/employees/:id', (req, res) => {
+  const { id } = req.params;
+  console.log(`👥 Delete employee ${id}`);
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const index = mockData.employees.findIndex(e => e.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+  mockData.employees.splice(index, 1);
+  saveData(mockData);
+  res.json({ success: true, message: `Employee ${id} deleted successfully` });
 });
 
 // Packets CRUD operations

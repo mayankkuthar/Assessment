@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { 
   profileService, 
+  organizationService,
+  employeeService,
   packetService, 
   questionService, 
   quizService, 
@@ -10,6 +12,8 @@ import {
 
 export const useDatabase = () => {
   const [profiles, setProfiles] = useState([])
+  const [organizations, setOrganizations] = useState([])
+  const [employees, setEmployees] = useState([])
   const [packets, setPackets] = useState([])
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -27,14 +31,16 @@ export const useDatabase = () => {
       setError(null)
       
       // Use SQLite database directly
-      const [profilesData, packetsData, quizzesData, quizAssignmentsData] = await Promise.all([
+      const [profilesData, organizationsData, packetsData, quizzesData, quizAssignmentsData] = await Promise.all([
         profileService.getAllProfiles(),
+        organizationService.getAllOrganizations(),
         packetService.getAllPackets(),
         quizService.getAllQuizzes(),
         quizService.getAllQuizAssignments()
       ])
       
       setProfiles(profilesData)
+      setOrganizations(organizationsData)
       setPackets(packetsData)
       setQuizzes(quizzesData)
       setQuizAssignments(quizAssignmentsData)
@@ -86,6 +92,98 @@ export const useDatabase = () => {
       setProfiles(prev => prev.filter(p => p.id !== id))
     } catch (err) {
       console.error('Error deleting profile:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  // Organization operations
+  const addOrganization = useCallback(async (org) => {
+    try {
+      const newOrg = await organizationService.createOrganization(org)
+      setOrganizations(prev => [...prev, newOrg])
+      return newOrg
+    } catch (err) {
+      console.error('Error adding organization:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  const updateOrganization = useCallback(async (id, updates) => {
+    try {
+      const updatedOrg = await organizationService.updateOrganization(id, updates)
+      setOrganizations(prev => prev.map(o => o.id === id ? updatedOrg : o))
+      return updatedOrg
+    } catch (err) {
+      console.error('Error updating organization:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  const deleteOrganization = useCallback(async (id) => {
+    try {
+      await organizationService.deleteOrganization(id)
+      setOrganizations(prev => prev.filter(o => o.id !== id))
+    } catch (err) {
+      console.error('Error deleting organization:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  const regenerateOnboardingCode = useCallback(async (id) => {
+    try {
+      const data = await organizationService.regenerateOnboardingCode(id)
+      setOrganizations(prev => prev.map(o => o.id === id ? { ...o, onboarding_code: data.onboarding_code } : o))
+      return data.onboarding_code
+    } catch (err) {
+      console.error('Error regenerating onboarding code:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  // Employee operations
+  const loadEmployees = useCallback(async (orgId) => {
+    try {
+      setError(null)
+      const data = await employeeService.getEmployeesByOrg(orgId)
+      setEmployees(data || [])
+      return data
+    } catch (err) {
+      console.error('Error loading employees:', err)
+      setError(err.message)
+      setEmployees([])
+    }
+  }, [])
+
+  const importEmployees = useCallback(async (orgId, employeesList) => {
+    try {
+      setError(null)
+      const imported = await employeeService.importEmployees(orgId, employeesList)
+      setEmployees(prev => {
+        // Filter out any newly imported employees that are already in state to prevent UI duplicate keys
+        const importedIds = new Set(imported.map(e => e.id));
+        const cleanPrev = prev.filter(e => !importedIds.has(e.id));
+        return [...cleanPrev, ...imported];
+      })
+      return imported
+    } catch (err) {
+      console.error('Error importing employees:', err)
+      setError(err.message)
+      throw err
+    }
+  }, [])
+
+  const deleteEmployee = useCallback(async (id) => {
+    try {
+      setError(null)
+      await employeeService.deleteEmployee(id)
+      setEmployees(prev => prev.filter(e => e.id !== id))
+    } catch (err) {
+      console.error('Error deleting employee:', err)
       setError(err.message)
       throw err
     }
@@ -371,12 +469,21 @@ export const useDatabase = () => {
     allQuizAttempts,
     userStats,
     users,
+    organizations,
+    employees,
     
     // Actions
     loadData,
     addProfile,
     updateProfile,
     deleteProfile,
+    addOrganization,
+    updateOrganization,
+    deleteOrganization,
+    regenerateOnboardingCode,
+    loadEmployees,
+    importEmployees,
+    deleteEmployee,
     addPacket,
     updatePacket,
     deletePacket,
@@ -401,4 +508,4 @@ export const useDatabase = () => {
     loadUserStats,
     getAssignedQuizzesForUser
   }
-} 
+}
