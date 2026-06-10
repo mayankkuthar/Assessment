@@ -30,8 +30,16 @@
   backdrop-filter: blur(10px);
 }
 .at-header__icon svg { width: 28px; height: 28px; color: #fff; }
+.at-header__text { flex: 1; }
 .at-header__text h1 { font-size: var(--text-2xl); font-weight: 800; margin: 0 0 var(--space-1); }
 .at-header__text p { font-size: var(--text-sm); opacity: 0.9; margin: 0; }
+.at-insights-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.at-insights-btn:hover { background: rgba(255, 255, 255, 0.3); }
 
 /* Org selector */
 .at-controls {

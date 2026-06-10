@@ -20,7 +20,9 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import CloseIcon from '@mui/icons-material/Close'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import { useDatabase } from '../hooks/useDatabase'
+import DetailedInsights from './DetailedInsights'
 import './ActiveTracking.css'
 
 const API_BASE = ''
@@ -95,6 +97,9 @@ const ActiveTracking = () => {
   // View mode: 'internal' shows real employee names (internal team monitoring),
   // 'company' anonymizes identities so companies see performance without names.
   const [viewMode, setViewMode] = useState('internal') // 'internal' | 'company'
+  // When true, replace the dashboard with the standalone Detailed Insights tool
+  // (upload a spreadsheet → filter by its attributes → build dynamic dashboards).
+  const [showInsights, setShowInsights] = useState(false)
 
   const dashboardRef = useRef(null)
 
@@ -141,6 +146,22 @@ const ActiveTracking = () => {
       }
     })
   }, [allQuizAttempts, quizzes, userMap])
+
+  // Flatten enriched attempts into a tabular dataset so Detailed Insights can
+  // analyze the live tracking data without requiring a spreadsheet upload.
+  const liveDataset = useMemo(() => ({
+    name: 'Active Tracking data',
+    columns: ['Organization', 'Employee', 'Quiz', 'Score (%)', 'Level', 'Status', 'Completed'],
+    rows: attempts.map(a => ({
+      Organization: a.organization,
+      Employee: a.employee,
+      Quiz: a.quizName,
+      'Score (%)': a.score,
+      Level: scoreBand(a.score),
+      Status: a.completed_at ? 'Completed' : 'In Progress',
+      Completed: a.completed_at ? new Date(a.completed_at).toLocaleDateString('en-US') : ''
+    }))
+  }), [attempts])
 
   // Organizations available in the data
   const organizations = useMemo(() => {
@@ -704,6 +725,12 @@ const ActiveTracking = () => {
   }
 
   // ── States ────────────────────────────────────────────────
+  // Detailed Insights is a self-contained tool; show it in place of the
+  // org dashboard until the user navigates back.
+  if (showInsights) {
+    return <DetailedInsights onBack={() => setShowInsights(false)} liveDataset={liveDataset} />
+  }
+
   if (loading) {
     return (
       <div className="at-spinner-wrap"><div className="at-spinner" /></div>
@@ -729,6 +756,13 @@ const ActiveTracking = () => {
           <h1>Active Tracking</h1>
           <p>Select an organization to visualize its employees' assessment performance</p>
         </div>
+        <button
+          className="btn btn--outline at-insights-btn"
+          onClick={() => setShowInsights(true)}
+          title="Upload a spreadsheet and build custom dashboards"
+        >
+          <QueryStatsIcon className="btn-icon" /> Detailed Insights
+        </button>
       </div>
 
       {organizations.length === 0 ? (
