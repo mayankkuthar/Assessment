@@ -1221,6 +1221,7 @@ const OrganizationManager = ({
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Name</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Email</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Additional Fields</th>
+                                  <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Status</th>
                                   <th style={{ padding: 'var(--space-3)', width: '60px' }}></th>
                                 </tr>
                               </thead>
@@ -1254,6 +1255,14 @@ const OrganizationManager = ({
                                           <span style={{ color: 'var(--color-muted-fg)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>None</span>
                                         )}
                                       </div>
+                                    </td>
+                                    <td style={{ padding: 'var(--space-3)' }}>
+                                      <span 
+                                        className={`badge badge--${emp.registered ? 'success' : 'neutral'}`} 
+                                        style={{ fontSize: '11px', padding: '2px 8px', fontWeight: 600 }}
+                                      >
+                                        {emp.registered ? 'Registered' : 'Pending'}
+                                      </span>
                                     </td>
                                     <td style={{ padding: 'var(--space-3)', textAlign: 'right' }}>
                                       <button

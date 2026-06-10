@@ -499,6 +499,14 @@ app.post('/api/auth/signup', (req, res) => {
         return res.status(400).json({ error: 'This email is already registered under a different organization.' });
       }
     }
+
+    // Verify email is pre-registered under this organization
+    const hasPreRegistered = mockData.employees && mockData.employees.some(
+      e => e.organization_id === organizationId && e.email.toLowerCase() === email.trim().toLowerCase()
+    );
+    if (!hasPreRegistered) {
+      return res.status(400).json({ error: 'This email is not pre-registered in the organization directory. Please contact your organization administrator.' });
+    }
   }
   
   // Create new user
@@ -514,27 +522,6 @@ app.post('/api/auth/signup', (req, res) => {
     organization: organizationName
   };
   mockData.users.push(newUser);
-
-  if (onboardingCode && organizationId) {
-    if (!mockData.employees) {
-      mockData.employees = [];
-    }
-    const existing = mockData.employees.find(
-      e => e.organization_id === organizationId && e.email.toLowerCase() === email.trim().toLowerCase()
-    );
-    if (!existing) {
-      const empId = String(Date.now() + Math.random());
-      mockData.employees.push({
-        id: empId,
-        organization_id: organizationId,
-        name: targetUserName || email.split('@')[0],
-        email: email.trim(),
-        metadata: { joined_via: 'onboarding_code' },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    }
-  }
   
   // Save data
   saveData(mockData);
@@ -574,6 +561,20 @@ app.get('/api/users', (req, res) => {
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   console.log(`👤 Get user ${userId}`);
+  
+  const user = mockData.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  // Return user data without password
+  const { password, ...userWithoutPassword } = user;
+  res.json(userWithoutPassword);
+});
+
+app.get('/api/local-users/:id', (req, res) => {
+  const userId = req.params.id;
+  console.log(`👤 Get local user ${userId}`);
   
   const user = mockData.users.find(u => u.id === userId);
   if (!user) {
@@ -774,7 +775,17 @@ app.get('/api/organizations/:orgId/employees', (req, res) => {
     mockData.employees = [];
   }
   const orgEmployees = mockData.employees.filter(e => e.organization_id === orgId);
-  res.json(orgEmployees);
+  const enriched = orgEmployees.map(emp => {
+    const isRegistered = mockData.users && mockData.users.some(u => 
+      u.email.toLowerCase() === emp.email.toLowerCase() && 
+      String(u.organization_id) === String(emp.organization_id)
+    );
+    return {
+      ...emp,
+      registered: isRegistered ? 1 : 0
+    };
+  });
+  res.json(enriched);
 });
 
 app.post('/api/organizations/:orgId/employees/import', (req, res) => {

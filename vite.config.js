@@ -25,6 +25,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '/api/local-users': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      },
       '/api': {
         target: 'http://65.1.6.81:3001',
         changeOrigin: true,

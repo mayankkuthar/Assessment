@@ -68,27 +68,17 @@ app.post('/api/auth/signup', asyncHandler(async (req, res) => {
     if (existingEmp && existingEmp.organization_id !== organizationId) {
       return res.status(400).json({ error: 'This email is already registered under a different organization.' });
     }
+
+    // Verify email is pre-registered under this organization
+    const checkEmpStmt = db.prepare('SELECT id FROM employees WHERE organization_id = ? AND LOWER(email) = ?');
+    const hasPreRegistered = checkEmpStmt.get(organizationId, email.trim().toLowerCase());
+    if (!hasPreRegistered) {
+      return res.status(400).json({ error: 'This email is not pre-registered in the organization directory. Please contact your organization administrator.' });
+    }
   }
 
   // Create User
   const result = await authService.signUp(email, password, role, organizationId);
-  
-  if (result.user && onboardingCode && organizationId) {
-    // Check if employee record already exists for this organization and email
-    const checkStmt = db.prepare('SELECT id FROM employees WHERE organization_id = ? AND LOWER(email) = ?');
-    const existing = checkStmt.get(organizationId, email.trim().toLowerCase());
-    
-    if (!existing) {
-      // Create employee entry automatically
-      const insertStmt = db.prepare(`
-        INSERT INTO employees (id, organization_id, name, email, metadata)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      const empId = generateId();
-      const metadataStr = JSON.stringify({ joined_via: 'onboarding_code' });
-      insertStmt.run(empId, organizationId, userName || email.split('@')[0], email.trim(), metadataStr);
-    }
-  }
 
   res.json(result);
 }));
@@ -272,6 +262,27 @@ app.delete('/api/quiz-packets/:quizId', asyncHandler(async (req, res) => {
 }));
 
 // User Routes
+app.get('/api/users', asyncHandler(async (req, res) => {
+  const data = await userService.getAllUsers();
+  res.json(data);
+}));
+
+app.get('/api/users/:id', asyncHandler(async (req, res) => {
+  const data = await userService.getUserById(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  res.json(data);
+}));
+
+app.get('/api/local-users/:id', asyncHandler(async (req, res) => {
+  const data = await userService.getUserById(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  res.json(data);
+}));
+
 app.get('/api/users/:id/quiz-attempts', asyncHandler(async (req, res) => {
   const data = await userService.getUserQuizAttempts(req.params.id);
   res.json(data);

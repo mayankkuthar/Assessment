@@ -169,7 +169,14 @@ export const organizationService = {
 export const employeeService = {
   async getEmployeesByOrg(orgId) {
     try {
-      const stmt = db.prepare('SELECT * FROM employees WHERE organization_id = ? ORDER BY created_at DESC');
+      const stmt = db.prepare(`
+        SELECT e.*, 
+               (CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END) as registered 
+        FROM employees e 
+        LEFT JOIN users u ON LOWER(e.email) = LOWER(u.email) AND e.organization_id = u.organization_id
+        WHERE e.organization_id = ?
+        ORDER BY e.created_at DESC
+      `);
       const rows = stmt.all(orgId);
       // Parse metadata from JSON strings back to objects
       return rows.map(r => ({
@@ -747,6 +754,58 @@ export const userService = {
     } catch (error) {
       console.error('Error linking user to organization:', error);
       throw new Error('Failed to link user to organization');
+    }
+  },
+
+  async getAllUsers() {
+    try {
+      const stmt = db.prepare(`
+        SELECT u.id, u.email, u.role, u.organization_id,
+               e.name as employee_name,
+               o.name as organization_name
+        FROM users u
+        LEFT JOIN employees e ON LOWER(u.email) = LOWER(e.email) AND u.organization_id = e.organization_id
+        LEFT JOIN organizations o ON u.organization_id = o.id
+      `);
+      const rows = stmt.all();
+      return rows.map(r => ({
+        id: r.id,
+        email: r.email,
+        role: r.role,
+        organization_id: r.organization_id,
+        user_name: r.employee_name || r.email.split('@')[0],
+        organization: r.organization_name || 'Individual'
+      }));
+    } catch (error) {
+      console.error('Error getting all users:', error);
+      throw new Error('Failed to fetch all users');
+    }
+  },
+
+  async getUserById(id) {
+    try {
+      const stmt = db.prepare(`
+        SELECT u.id, u.email, u.role, u.organization_id,
+               e.name as employee_name,
+               o.name as organization_name
+        FROM users u
+        LEFT JOIN employees e ON LOWER(u.email) = LOWER(e.email) AND u.organization_id = e.organization_id
+        LEFT JOIN organizations o ON u.organization_id = o.id
+        WHERE u.id = ?
+      `);
+      const r = stmt.get(id);
+      if (!r) return null;
+      return {
+        id: r.id,
+        email: r.email,
+        role: r.role,
+        organization_id: r.organization_id,
+        user_name: r.employee_name || r.email.split('@')[0],
+        organization: r.organization_name || 'Individual'
+      };
+    } catch (error) {
+      console.error('Error getting user by id:', error);
+      throw new Error('Failed to fetch user');
     }
   },
 

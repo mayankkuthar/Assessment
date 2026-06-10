@@ -81,7 +81,7 @@ const loadImage = (src) =>
   })
 
 const ActiveTracking = () => {
-  const { allQuizAttempts, loadAllQuizAttempts, quizzes } = useDatabase()
+  const { allQuizAttempts, loadAllQuizAttempts, quizzes, organizations: dbOrganizations, employees, loadEmployees, users } = useDatabase()
 
   const [userMap, setUserMap] = useState({})
   const [loading, setLoading] = useState(true)
@@ -116,7 +116,15 @@ const ActiveTracking = () => {
           userIds.map(async (id) => {
             try {
               const res = await fetch(`${API_BASE}/api/users/${id}`)
-              if (res.ok) return [id, await res.json()]
+              if (res.ok) {
+                return [id, await res.json()]
+              }
+              if (res.status === 404) {
+                const localRes = await fetch(`${API_BASE}/api/local-users/${id}`)
+                if (localRes.ok) {
+                  return [id, await localRes.json()]
+                }
+              }
             } catch (e) { /* ignore */ }
             return [id, null]
           })
@@ -163,10 +171,15 @@ const ActiveTracking = () => {
     }))
   }), [attempts])
 
-  // Organizations available in the data
+  // Organizations available in the data (combining database organizations and attempts)
   const organizations = useMemo(() => {
-    return [...new Set(attempts.map(a => a.organization))].sort((a, b) => a.localeCompare(b))
-  }, [attempts])
+    const dbNames = (dbOrganizations || [])
+      .filter(o => o.status === 'active')
+      .map(o => o.name);
+    const attemptNames = (attempts || []).map(a => a.organization);
+    const combined = new Set([...dbNames, ...attemptNames]);
+    return [...combined].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [dbOrganizations, attempts])
 
   // Default selection to the first organization once data is loaded
   useEffect(() => {
@@ -179,6 +192,74 @@ const ActiveTracking = () => {
     () => attempts.filter(a => a.organization === selectedOrg),
     [attempts, selectedOrg]
   )
+
+  // Find current organization object to get its ID
+  const currentOrg = useMemo(() => {
+    return (dbOrganizations || []).find(o => o.name === selectedOrg);
+  }, [dbOrganizations, selectedOrg])
+
+  // Load employee directory for selected organization
+  useEffect(() => {
+    if (currentOrg?.id) {
+      loadEmployees(currentOrg.id);
+    }
+  }, [currentOrg, loadEmployees])
+
+  // Calculate employee progress list for selected organization
+  const employeeProgress = useMemo(() => {
+    if (!selectedOrg) return [];
+    
+    // Get all pre-registered employees for this organization
+    const orgEmployees = currentOrg 
+      ? (employees || []).filter(e => e.organization_id === currentOrg.id) 
+      : [];
+      
+    // Create a map of attempts grouped by employee email
+    const emailAttempts = {};
+    attempts.forEach(a => {
+      // Find the user email for this attempt
+      const u = userMap[a.user_id];
+      if (u && u.email) {
+        const email = u.email.toLowerCase();
+        if (!emailAttempts[email]) emailAttempts[email] = [];
+        emailAttempts[email].push(a);
+      }
+    });
+
+    // Match each directory employee to user signup status & attempts
+    return orgEmployees.map(emp => {
+      const email = emp.email.toLowerCase();
+      
+      // Check if user is registered: either directly from the `users` state or if they have attempts, or check if emp.registered is 1
+      const isRegistered = emp.registered === 1 || (users || []).some(u => 
+        u.email.toLowerCase() === email && 
+        String(u.organization_id) === String(currentOrg?.id)
+      );
+
+      const empAttempts = emailAttempts[email] || [];
+      const attemptsCount = empAttempts.length;
+      
+      const avgScore = attemptsCount
+        ? Math.round(empAttempts.reduce((sum, a) => sum + a.score, 0) / attemptsCount)
+        : null;
+
+      // Find the user object in userMap for this email
+      const matchedUser = Object.values(userMap).find(u => u && u.email && u.email.toLowerCase() === email);
+      const baseEmployeeName = matchedUser 
+        ? (matchedUser.user_name || matchedUser.email || `User ${matchedUser.id || '?'}`) 
+        : null;
+
+      return {
+        id: emp.id,
+        name: emp.name,
+        email: emp.email,
+        registered: isRegistered,
+        attemptsCount,
+        avgScore,
+        baseEmployeeName
+      };
+    });
+  }, [selectedOrg, currentOrg, employees, attempts, userMap, users])
 
   const anonymized = viewMode === 'company'
 
@@ -725,6 +806,92 @@ const ActiveTracking = () => {
   }
 
   // ── States ────────────────────────────────────────────────
+  const renderEmployeeProgressTable = () => {
+    const registeredCount = employeeProgress.filter(e => e.registered).length;
+    const totalCount = employeeProgress.length;
+
+    return (
+      <div className="at-chart-card at-chart-card--wide" style={{ width: '100%', boxSizing: 'border-box' }}>
+        <div className="at-chart-card__head" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+          <h3 className="at-chart-card__title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+            <span>
+              Employee Progress Directory
+              <span className="at-chart-card__note">
+                {' '}— {registeredCount} of {totalCount} registered · track signup and assessment status
+              </span>
+            </span>
+          </h3>
+        </div>
+
+        {employeeProgress.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-muted-fg)' }}>
+            No pre-registered employees found in the directory for this organization.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="at-modal__table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Employee Name</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Email</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600, textAlign: 'center' }}>Quizzes Taken</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600, textAlign: 'center' }}>Avg Score</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', width: '100px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {employeeProgress.map((emp) => (
+                  <tr key={emp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 500 }}>{emp.name}</td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)' }}>{emp.email}</td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)' }}>
+                      <span 
+                        className={`badge badge--${emp.registered ? 'success' : 'neutral'}`}
+                        style={{ fontSize: '11px', padding: '2px 8px', display: 'inline-block', fontWeight: 600, borderRadius: '4px' }}
+                      >
+                        {emp.registered ? 'Registered' : 'Pending'}
+                      </span>
+                    </td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center', fontWeight: 600 }}>
+                      {emp.attemptsCount}
+                    </td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
+                      {emp.avgScore !== null ? (
+                        <strong style={{ color: 'var(--color-primary)' }}>{emp.avgScore}%</strong>
+                      ) : (
+                        <span style={{ color: 'var(--color-muted-fg)' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right' }}>
+                      {emp.attemptsCount > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn--outline"
+                          style={{ padding: '2px 8px', fontSize: 'var(--text-xs)', height: '24px' }}
+                          onClick={() => {
+                            const targetName = anonymized 
+                              ? (anonMap[emp.baseEmployeeName] || 'User') 
+                              : emp.baseEmployeeName;
+                            if (targetName) {
+                              setSelectedEmployee(targetName);
+                            }
+                          }}
+                        >
+                          Details
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Detailed Insights is a self-contained tool; show it in place of the
   // org dashboard until the user navigates back.
   if (showInsights) {
@@ -856,14 +1023,18 @@ const ActiveTracking = () => {
           )}
 
           {!hasData ? (
-            <div className="at-empty">
-              <InsightsIcon />
-              <h3>No attempts for {selectedOrg}</h3>
-              <p>{dateRange === 'all' ? 'This organization has no recorded quiz attempts yet.' : `No attempts in the selected period (${periodLabel}).`}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%' }}>
+              <div className="at-empty" style={{ padding: 'var(--space-6) var(--space-4)', marginBottom: 0 }}>
+                <InsightsIcon />
+                <h3>No attempts for {selectedOrg}</h3>
+                <p>{dateRange === 'all' ? 'This organization has no recorded quiz attempts yet.' : `No attempts in the selected period (${periodLabel}).`}</p>
+              </div>
+              {renderEmployeeProgressTable()}
             </div>
           ) : (
-            <div className="at-dashboard" ref={dashboardRef}>
-              {/* Summary cards */}
+            <div className="at-dashboard">
+              <div ref={dashboardRef} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                {/* Summary cards */}
               <div className="at-stats">
                 <div className="at-stat-card">
                   <div className="at-stat-card__icon"><GroupIcon /></div>
@@ -1083,6 +1254,10 @@ const ActiveTracking = () => {
                     </ResponsiveContainer>
                   </div>
                 )}
+              </div>
+              </div>
+              <div style={{ marginTop: 'var(--space-6)' }}>
+                {renderEmployeeProgressTable()}
               </div>
             </div>
           )}
