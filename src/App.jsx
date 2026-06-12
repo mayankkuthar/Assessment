@@ -575,7 +575,7 @@ function App() {
                           </Button>
                         </Box>
                         <QuizBuilder
-                          profiles={profiles}
+                          profiles={profiles.filter(p => p.name?.toUpperCase() !== 'SOLV')}
                           packets={packets}
                           savedQuizzes={savedQuizzes}
                           addQuiz={addQuiz}
@@ -654,7 +654,7 @@ function App() {
                                   }}
                                 >
                                   {formTargetType === 'profile' ? (
-                                    profiles.map((profile) => {
+                                    profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').map((profile) => {
                                       const isChecked = formSelectedProfiles.includes(profile.id);
                                       return (
                                         <label key={profile.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>
@@ -723,9 +723,9 @@ function App() {
                           Assignments by Profile
                         </Typography>
 
-                        {profiles.length === 0 && <Typography color="text.secondary">No profiles created.</Typography>}
+                        {profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').length === 0 && <Typography color="text.secondary">No profiles created.</Typography>}
                         <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
-                          {profiles.map(profile => (
+                          {profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').map(profile => (
                             <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                               <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                                 <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
