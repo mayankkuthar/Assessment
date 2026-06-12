@@ -538,6 +538,14 @@ const AssessmentReport = () => {
                           >
                             <AssessmentIcon />
                           </button>
+                          <button
+                            className="report-action-btn"
+                            title="Download PDF Report"
+                            disabled={generatingPDF}
+                            onClick={() => handleGeneratePDF(attempt)}
+                          >
+                            <DownloadIcon />
+                          </button>
                         </div>
                       </td>
                     </tr>

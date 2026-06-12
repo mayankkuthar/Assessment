@@ -316,7 +316,7 @@ const RadarChart = ({ scores, size = 660 }) => {
       <g key={`axis-${i}`}>
         <line x1={center} y1={center} x2={end[0]} y2={end[1]} stroke="var(--color-border)" strokeWidth={1} />
         <text x={lx} y={ly} textAnchor={textAnchor} fontSize={12} fill="var(--color-secondary)" dy={dy}>
-          {s.name}
+          {s.name} ({s.marks}/{s.totalMarks})
         </text>
       </g>
     );
@@ -325,16 +325,33 @@ const RadarChart = ({ scores, size = 660 }) => {
   const dots = scores.map((s, i) => {
     const point = getPoint((s.rank || 0) / Math.max(1, s.scaleLength || 1), i).split(',').map(Number);
     const color = s.level?.color || '#895BF5';
+    const angle = -Math.PI / 2 + angleStep * i;
+    const offsetDistance = 12;
+    const offsetX = offsetDistance * Math.cos(angle);
+    const offsetY = offsetDistance * Math.sin(angle);
+
     return (
-      <circle 
-        key={`dot-${i}`} 
-        cx={point[0]} 
-        cy={point[1]} 
-        r={3}
-        fill={color}
-        stroke={alpha(color, 0.5)}
-        strokeWidth={1}
-      />
+      <g key={`dot-${i}`}>
+        <circle 
+          cx={point[0]} 
+          cy={point[1]} 
+          r={4}
+          fill={color}
+          stroke={alpha(color, 0.5)}
+          strokeWidth={1.5}
+        />
+        <text
+          x={point[0] + offsetX}
+          y={point[1] + offsetY}
+          textAnchor="middle"
+          fontSize={10}
+          fontWeight="bold"
+          fill={color}
+          dy="0.35em"
+        >
+          {s.marks}
+        </text>
+      </g>
     );
   });
 
@@ -561,6 +578,81 @@ const ReportViewer = () => {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      // Prepare SVG elements for html2canvas by copy-inlining computed styles and fixing tspan offsets.
+      const prepareSvgForHtml2Canvas = (originalEl, clonedEl) => {
+        const originalSvgs = originalEl.querySelectorAll('svg')
+        const clonedSvgs = clonedEl.querySelectorAll('svg')
+
+        for (let i = 0; i < originalSvgs.length; i++) {
+          const origSvg = originalSvgs[i]
+          const clonedSvg = clonedSvgs[i]
+          if (!clonedSvg) continue
+
+          const rect = origSvg.getBoundingClientRect()
+          clonedSvg.setAttribute('width', String(rect.width || 600))
+          clonedSvg.setAttribute('height', String(rect.height || 300))
+
+          const originalChildren = origSvg.querySelectorAll('*')
+          const clonedChildren = clonedSvg.querySelectorAll('*')
+
+          for (let j = 0; j < originalChildren.length; j++) {
+            const origChild = originalChildren[j]
+            const clonedChild = clonedChildren[j]
+            if (!clonedChild) continue
+
+            const style = window.getComputedStyle(origChild)
+            if (style.fill && style.fill !== 'none') {
+              clonedChild.style.fill = style.fill
+            }
+            if (style.stroke && style.stroke !== 'none') {
+              clonedChild.style.stroke = style.stroke
+            }
+            if (style.strokeWidth) {
+              clonedChild.style.strokeWidth = style.strokeWidth
+            }
+            if (style.fontSize) {
+              clonedChild.style.fontSize = style.fontSize
+            }
+            if (style.fontFamily) {
+              clonedChild.style.fontFamily = style.fontFamily
+            }
+            if (style.fontWeight) {
+              clonedChild.style.fontWeight = style.fontWeight
+            }
+            if (style.opacity) {
+              clonedChild.style.opacity = style.opacity
+            }
+            if (origChild.getAttribute('transform')) {
+              clonedChild.setAttribute('transform', origChild.getAttribute('transform'))
+            }
+          }
+
+          const clonedTspans = clonedSvg.querySelectorAll('tspan')
+          clonedTspans.forEach(tspan => {
+            const parentText = tspan.closest('text')
+            if (parentText) {
+              if (!tspan.getAttribute('x') && parentText.getAttribute('x')) {
+                tspan.setAttribute('x', parentText.getAttribute('x'))
+              }
+              if (!tspan.getAttribute('y') && parentText.getAttribute('y')) {
+                let y = parseFloat(parentText.getAttribute('y') || '0')
+                const dy = tspan.getAttribute('dy')
+                if (dy) {
+                  if (dy.endsWith('em')) {
+                    const origTspan = origSvg.querySelectorAll('tspan')[Array.from(clonedTspans).indexOf(tspan)]
+                    const fontSize = origTspan ? parseFloat(window.getComputedStyle(origTspan).fontSize || '12') : 12
+                    y += parseFloat(dy) * fontSize
+                  } else {
+                    y += parseFloat(dy)
+                  }
+                }
+                tspan.setAttribute('y', String(y))
+              }
+            }
+          })
+        }
+      }
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -570,6 +662,8 @@ const ReportViewer = () => {
         foreignObjectRendering: false,
         imageTimeout: 15000,
         onclone: (clonedDoc) => {
+          prepareSvgForHtml2Canvas(element, clonedDoc.body);
+
           clonedDoc.querySelectorAll('img').forEach(img => {
             if (img.src && img.src.includes('happimynd.com')) {
               console.log('Found external image:', img.src);
@@ -806,9 +900,14 @@ const ReportViewer = () => {
                       <div className="rv-parameter-item" key={score.id}>
                         <div className="rv-parameter-meta">
                           <span className="rv-parameter-name">{score.name}</span>
-                          <span className="rv-badge" style={{ backgroundColor: scoreColor }}>
-                            {score.level?.label}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-fg)' }}>
+                              Score: {score.marks} / {score.totalMarks}
+                            </span>
+                            <span className="rv-badge" style={{ backgroundColor: scoreColor }}>
+                              {score.level?.label}
+                            </span>
+                          </div>
                         </div>
                         <div className="rv-progress-container" style={{ borderColor: alpha(scoreColor, 0.2), backgroundColor: alpha(scoreColor, 0.05) }}>
                           <div 
@@ -971,11 +1070,16 @@ const ReportViewer = () => {
                     </div>
                     <div>
                       <h3 className="rv-analysis-card__title">{p.name}</h3>
-                      {!showShortReportFeatures && (
-                        <span className="rv-badge" style={{ backgroundColor: pColor }}>
-                          {p.level?.label || 'Level'}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: pColor }}>
+                          Score: {p.marks} / {p.totalMarks}
                         </span>
-                      )}
+                        {!showShortReportFeatures && (
+                          <span className="rv-badge" style={{ backgroundColor: pColor }}>
+                            {p.level?.label || 'Level'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1016,7 +1120,7 @@ const ReportViewer = () => {
                             textShadow: (p.marks / p.totalMarks) > 0.4 ? '0 1px 2px rgba(0,0,0,0.4)' : 'none'
                           }}
                         >
-                          {p.level?.label}
+                          {p.level?.label} ({p.marks} / {p.totalMarks})
                         </span>
                       </div>
                     </div>

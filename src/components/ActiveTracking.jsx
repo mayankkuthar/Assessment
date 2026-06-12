@@ -5,10 +5,11 @@ import {
   LineChart, Line,
   PieChart, Pie, Cell,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList
 } from 'recharts'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import * as XLSX from 'xlsx'
 import BusinessIcon from '@mui/icons-material/Business'
 import InsightsIcon from '@mui/icons-material/Insights'
 import GroupIcon from '@mui/icons-material/Group'
@@ -511,6 +512,30 @@ const ActiveTracking = () => {
     URL.revokeObjectURL(url)
   }
 
+  const exportExcel = () => {
+    const headers = ['Organization', 'Employee', 'Quiz', 'Score (%)', 'Status', 'Completed At']
+    const rows = viewAttempts.map(a => [
+      selectedOrg,
+      a.employee,
+      a.quizName,
+      a.score,
+      a.completed_at ? 'Completed' : 'In Progress',
+      a.completed_at ? fmtDateTime(a.completed_at) : ''
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      { wch: 22 }, // Organization
+      { wch: 22 }, // Employee
+      { wch: 26 }, // Quiz
+      { wch: 12 }, // Score
+      { wch: 14 }, // Status
+      { wch: 20 }  // Completed At
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Active Tracking');
+    XLSX.writeFile(wb, `active-tracking-${selectedOrg}-${anonymized ? 'company' : 'internal'}-${fileStamp()}.xlsm`, { bookType: 'xlsm' });
+  }
+
   const exportPDF = async () => {
     if (!dashboardRef.current) return
     setExporting(true)
@@ -541,6 +566,81 @@ const ActiveTracking = () => {
         if (pdf.getTextWidth(s) <= maxW) return s
         while (s.length > 1 && pdf.getTextWidth(`${s}…`) > maxW) s = s.slice(0, -1)
         return `${s}…`
+      }
+
+      // Prepare SVG elements for html2canvas by copy-inlining computed styles and fixing tspan offsets.
+      const prepareSvgForHtml2Canvas = (originalEl, clonedEl) => {
+        const originalSvgs = originalEl.querySelectorAll('svg')
+        const clonedSvgs = clonedEl.querySelectorAll('svg')
+
+        for (let i = 0; i < originalSvgs.length; i++) {
+          const origSvg = originalSvgs[i]
+          const clonedSvg = clonedSvgs[i]
+          if (!clonedSvg) continue
+
+          const rect = origSvg.getBoundingClientRect()
+          clonedSvg.setAttribute('width', String(rect.width || 600))
+          clonedSvg.setAttribute('height', String(rect.height || 300))
+
+          const originalChildren = origSvg.querySelectorAll('*')
+          const clonedChildren = clonedSvg.querySelectorAll('*')
+
+          for (let j = 0; j < originalChildren.length; j++) {
+            const origChild = originalChildren[j]
+            const clonedChild = clonedChildren[j]
+            if (!clonedChild) continue
+
+            const style = window.getComputedStyle(origChild)
+            if (style.fill && style.fill !== 'none') {
+              clonedChild.style.fill = style.fill
+            }
+            if (style.stroke && style.stroke !== 'none') {
+              clonedChild.style.stroke = style.stroke
+            }
+            if (style.strokeWidth) {
+              clonedChild.style.strokeWidth = style.strokeWidth
+            }
+            if (style.fontSize) {
+              clonedChild.style.fontSize = style.fontSize
+            }
+            if (style.fontFamily) {
+              clonedChild.style.fontFamily = style.fontFamily
+            }
+            if (style.fontWeight) {
+              clonedChild.style.fontWeight = style.fontWeight
+            }
+            if (style.opacity) {
+              clonedChild.style.opacity = style.opacity
+            }
+            if (origChild.getAttribute('transform')) {
+              clonedChild.setAttribute('transform', origChild.getAttribute('transform'))
+            }
+          }
+
+          const clonedTspans = clonedSvg.querySelectorAll('tspan')
+          clonedTspans.forEach(tspan => {
+            const parentText = tspan.closest('text')
+            if (parentText) {
+              if (!tspan.getAttribute('x') && parentText.getAttribute('x')) {
+                tspan.setAttribute('x', parentText.getAttribute('x'))
+              }
+              if (!tspan.getAttribute('y') && parentText.getAttribute('y')) {
+                let y = parseFloat(parentText.getAttribute('y') || '0')
+                const dy = tspan.getAttribute('dy')
+                if (dy) {
+                  if (dy.endsWith('em')) {
+                    const origTspan = origSvg.querySelectorAll('tspan')[Array.from(clonedTspans).indexOf(tspan)]
+                    const fontSize = origTspan ? parseFloat(window.getComputedStyle(origTspan).fontSize || '12') : 12
+                    y += parseFloat(dy) * fontSize
+                  } else {
+                    y += parseFloat(dy)
+                  }
+                }
+                tspan.setAttribute('y', String(y))
+              }
+            }
+          })
+        }
       }
 
       // ── 1. Cover page ──────────────────────────────────────
@@ -762,7 +862,15 @@ const ActiveTracking = () => {
         const prevMaxH = scroll ? scroll.style.maxHeight : null
         if (scroll) scroll.style.maxHeight = 'none'
 
-        const canvas = await html2canvas(chartEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+        const canvas = await html2canvas(chartEl, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          onclone: (clonedDoc) => {
+            prepareSvgForHtml2Canvas(chartEl, clonedDoc.body)
+          }
+        })
+
         if (scroll) scroll.style.maxHeight = prevMaxH
 
         const titleBlockH = note ? 11 : 9
@@ -1007,6 +1115,9 @@ const ActiveTracking = () => {
               <button className="btn btn--outline" onClick={exportCSV} disabled={!hasData}>
                 <TableChartIcon className="btn-icon" /> CSV
               </button>
+              <button className="btn btn--outline" onClick={exportExcel} disabled={!hasData}>
+                <TableChartIcon className="btn-icon" /> Excel
+              </button>
               <button className="btn btn--primary" onClick={exportPDF} disabled={!hasData || exporting}>
                 <PictureAsPdfIcon className="btn-icon" /> {exporting ? 'Exporting…' : 'PDF'}
               </button>
@@ -1124,7 +1235,9 @@ const ActiveTracking = () => {
                             const name = d?.payload?.name ?? d?.name
                             if (name) setSelectedEmployee(name)
                           }}
-                        />
+                        >
+                          <LabelList dataKey="avgScore" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 11, fill: '#727279', fontWeight: 'bold' }} />
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1173,7 +1286,9 @@ const ActiveTracking = () => {
                       <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#727279' }} />
                       <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#727279' }} />
                       <Tooltip formatter={(v) => `${v}%`} />
-                      <Line type="monotone" dataKey="avgScore" name="Avg Score" stroke="#895BF5" strokeWidth={3} dot={{ r: 4, fill: '#895BF5' }} />
+                      <Line type="monotone" dataKey="avgScore" name="Avg Score" stroke="#895BF5" strokeWidth={3} dot={{ r: 4, fill: '#895BF5' }}>
+                        <LabelList dataKey="avgScore" position="top" formatter={(v) => `${v}%`} style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+                      </Line>
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -1198,6 +1313,7 @@ const ActiveTracking = () => {
                           {quizAverages.map((entry, i) => (
                             <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                           ))}
+                          <LabelList dataKey="avgScore" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1221,7 +1337,9 @@ const ActiveTracking = () => {
                             tickFormatter={(v) => (v.length > 22 ? `${v.slice(0, 21)}…` : v)}
                           />
                           <Tooltip formatter={(v) => `${v}%`} />
-                          <Bar dataKey="avgScore" name="Avg %" fill="#A68AF9" radius={[0, 6, 6, 0]} barSize={16} />
+                          <Bar dataKey="avgScore" name="Avg %" fill="#A68AF9" radius={[0, 6, 6, 0]} barSize={16}>
+                            <LabelList dataKey="avgScore" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -1245,7 +1363,11 @@ const ActiveTracking = () => {
                         <PolarAngleAxis
                           dataKey="name"
                           tick={{ fontSize: 11, fill: '#727279' }}
-                          tickFormatter={(v) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
+                          tickFormatter={(v) => {
+                            const item = packetRadar.find(p => p.name === v);
+                            const label = v.length > 16 ? `${v.slice(0, 15)}…` : v;
+                            return item ? `${label} (${item.avgScore}%)` : label;
+                          }}
                         />
                         <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: '#A1A1AA' }} />
                         <Radar name="Avg %" dataKey="avgScore" stroke="#895BF5" fill="#895BF5" fillOpacity={0.35} />

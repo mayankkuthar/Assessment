@@ -375,6 +375,7 @@ const BarChart = ({ data, labels, title }) => (
       {data.map((value, index) => (
         // FIX: Use defined barContainer style; keep bar height inside the container
         <View key={index} style={styles.barContainer}>
+          <Text style={{ fontSize: 8, color: '#374151', marginBottom: 2, fontWeight: 'bold' }}>{value}</Text>
           <View
             style={[
               styles.bar,
@@ -435,6 +436,7 @@ const SpiderChart = ({ data, labels, title }) => (
       <View style={styles.barChart}>
         {data.map((value, index) => (
           <View key={index} style={styles.barContainer}>
+            <Text style={{ fontSize: 8, color: '#374151', marginBottom: 2, fontWeight: 'bold' }}>{value}%</Text>
             <View
               style={[
                 styles.bar,

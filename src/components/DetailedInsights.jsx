@@ -7,7 +7,7 @@ import {
   BarChart, Bar,
   LineChart, Line,
   PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList
 } from 'recharts'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
@@ -510,6 +510,22 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
     URL.revokeObjectURL(url)
   }
 
+  const exportExcel = () => {
+    const headers = columns.map(c => c.name)
+    const body = filteredRows.map(r => headers.map(h => r[h]))
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...body]);
+    ws['!cols'] = headers.map((colName) => {
+      const maxLen = Math.max(
+        colName.length,
+        ...filteredRows.map(r => String(r[colName] ?? '').length)
+      );
+      return { wch: Math.min(40, Math.max(10, maxLen + 3)) };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Filtered Data');
+    XLSX.writeFile(wb, `${reportName}-${anonymized ? 'company' : 'internal'}-${fileStamp()}.xlsm`, { bookType: 'xlsm' });
+  }
+
   // Build a branded multi-page PDF of the dashboards, formatted to match the
   // Active Tracking report (cover → executive summary → key insights → charts).
   const exportPDF = async () => {
@@ -539,6 +555,81 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         if (pdf.getTextWidth(s) <= maxW) return s
         while (s.length > 1 && pdf.getTextWidth(`${s}…`) > maxW) s = s.slice(0, -1)
         return `${s}…`
+      }
+
+      // Prepare SVG elements for html2canvas by copy-inlining computed styles and fixing tspan offsets.
+      const prepareSvgForHtml2Canvas = (originalEl, clonedEl) => {
+        const originalSvgs = originalEl.querySelectorAll('svg')
+        const clonedSvgs = clonedEl.querySelectorAll('svg')
+
+        for (let i = 0; i < originalSvgs.length; i++) {
+          const origSvg = originalSvgs[i]
+          const clonedSvg = clonedSvgs[i]
+          if (!clonedSvg) continue
+
+          const rect = origSvg.getBoundingClientRect()
+          clonedSvg.setAttribute('width', String(rect.width || 600))
+          clonedSvg.setAttribute('height', String(rect.height || 300))
+
+          const originalChildren = origSvg.querySelectorAll('*')
+          const clonedChildren = clonedSvg.querySelectorAll('*')
+
+          for (let j = 0; j < originalChildren.length; j++) {
+            const origChild = originalChildren[j]
+            const clonedChild = clonedChildren[j]
+            if (!clonedChild) continue
+
+            const style = window.getComputedStyle(origChild)
+            if (style.fill && style.fill !== 'none') {
+              clonedChild.style.fill = style.fill
+            }
+            if (style.stroke && style.stroke !== 'none') {
+              clonedChild.style.stroke = style.stroke
+            }
+            if (style.strokeWidth) {
+              clonedChild.style.strokeWidth = style.strokeWidth
+            }
+            if (style.fontSize) {
+              clonedChild.style.fontSize = style.fontSize
+            }
+            if (style.fontFamily) {
+              clonedChild.style.fontFamily = style.fontFamily
+            }
+            if (style.fontWeight) {
+              clonedChild.style.fontWeight = style.fontWeight
+            }
+            if (style.opacity) {
+              clonedChild.style.opacity = style.opacity
+            }
+            if (origChild.getAttribute('transform')) {
+              clonedChild.setAttribute('transform', origChild.getAttribute('transform'))
+            }
+          }
+
+          const clonedTspans = clonedSvg.querySelectorAll('tspan')
+          clonedTspans.forEach(tspan => {
+            const parentText = tspan.closest('text')
+            if (parentText) {
+              if (!tspan.getAttribute('x') && parentText.getAttribute('x')) {
+                tspan.setAttribute('x', parentText.getAttribute('x'))
+              }
+              if (!tspan.getAttribute('y') && parentText.getAttribute('y')) {
+                let y = parseFloat(parentText.getAttribute('y') || '0')
+                const dy = tspan.getAttribute('dy')
+                if (dy) {
+                  if (dy.endsWith('em')) {
+                    const origTspan = origSvg.querySelectorAll('tspan')[Array.from(clonedTspans).indexOf(tspan)]
+                    const fontSize = origTspan ? parseFloat(window.getComputedStyle(origTspan).fontSize || '12') : 12
+                    y += parseFloat(dy) * fontSize
+                  } else {
+                    y += parseFloat(dy)
+                  }
+                }
+                tspan.setAttribute('y', String(y))
+              }
+            }
+          })
+        }
       }
 
       // ── 1. Cover page ──────────────────────────────────────
@@ -721,7 +812,15 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         const prevMaxH = scroll ? scroll.style.maxHeight : null
         if (scroll) scroll.style.maxHeight = 'none'
 
-        const canvas = await html2canvas(chartEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+        const canvas = await html2canvas(chartEl, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          onclone: (clonedDoc) => {
+            prepareSvgForHtml2Canvas(chartEl, clonedDoc.body)
+          }
+        })
+
         if (scroll) scroll.style.maxHeight = prevMaxH
 
         const titleBlockH = 9
@@ -885,6 +984,9 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
             <div className="di-viewbar__group di-viewbar__group--end">
               <button className="btn btn--outline" onClick={exportCSV} disabled={summary.filtered === 0}>
                 <TableChartIcon className="btn-icon" /> CSV
+              </button>
+              <button className="btn btn--outline" onClick={exportExcel} disabled={summary.filtered === 0}>
+                <TableChartIcon className="btn-icon" /> Excel
               </button>
               <button className="btn btn--primary" onClick={exportPDF} disabled={summary.filtered === 0 || exporting}>
                 <PictureAsPdfIcon className="btn-icon" /> {exporting ? 'Exporting…' : 'PDF'}
@@ -1322,6 +1424,7 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
             <Tooltip />
             <Bar dataKey="value" name={measureLabel} radius={[0, 6, 6, 0]} barSize={18} cursor="pointer" onClick={drillCategory}>
               {data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+              <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -1337,7 +1440,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={tickInterval} tickMargin={8} minTickGap={16} />
             <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
             <Tooltip />
-            <Line type="monotone" dataKey="value" name={measureLabel} stroke="#895BF5" strokeWidth={2.5} dot={{ r: 3, fill: '#895BF5' }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="value" name={measureLabel} stroke="#895BF5" strokeWidth={2.5} dot={{ r: 3, fill: '#895BF5' }} activeDot={{ r: 5 }}>
+              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            </Line>
           </LineChart>
         </ResponsiveContainer>
       )
@@ -1363,7 +1468,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} />
             <YAxis tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
             <Tooltip formatter={(v) => [`${v} record${v === 1 ? '' : 's'}`, 'Records']} />
-            <Bar dataKey="value" name="Records" fill="#895BF5" radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange} />
+            <Bar dataKey="value" name="Records" fill="#895BF5" radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange}>
+              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       )
@@ -1377,6 +1484,7 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
           <Tooltip />
           <Bar dataKey="value" name={measureLabel} radius={[6, 6, 0, 0]} cursor="pointer" onClick={drillCategory}>
             {data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            <LabelList dataKey="value" position="top" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -1480,13 +1588,35 @@ const DataTable = ({ columns, rows, fileName, anonymized, page, onPage }) => {
     URL.revokeObjectURL(url)
   }
 
+  const exportExcel = () => {
+    const headers = columns.map(c => c.name)
+    const body = rows.map(r => headers.map(h => r[h]))
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...body]);
+    ws['!cols'] = headers.map((colName) => {
+      const maxLen = Math.max(
+        colName.length,
+        ...rows.map(r => String(r[colName] ?? '').length)
+      );
+      return { wch: Math.min(40, Math.max(10, maxLen + 3)) };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Filtered Data');
+    const name = (fileName || 'data').replace(/\.[^.]+$/, '')
+    XLSX.writeFile(wb, `${name}-filtered-${anonymized ? 'company' : 'internal'}.xlsm`, { bookType: 'xlsm' });
+  }
+
   return (
     <div className="di-panel">
       <div className="di-panel__head">
         <h2><TableChartIcon /> Filtered Data <span className="di-badge">{rows.length}</span></h2>
-        <button className="btn btn--outline" onClick={exportCSV} disabled={rows.length === 0}>
-          <TableChartIcon className="btn-icon" /> Export CSV
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn--outline" onClick={exportCSV} disabled={rows.length === 0}>
+            <TableChartIcon className="btn-icon" /> Export CSV
+          </button>
+          <button className="btn btn--outline" onClick={exportExcel} disabled={rows.length === 0}>
+            <TableChartIcon className="btn-icon" /> Export Excel
+          </button>
+        </div>
       </div>
 
       {rows.length === 0 ? (
