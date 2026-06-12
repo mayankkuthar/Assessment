@@ -9,11 +9,29 @@ class ApiError extends Error {
   }
 }
 
+// Identify the current actor to the backend so it can enforce role-based
+// access (Super Admin / Admin / user). The server reads the x-user-id header.
+function authHeaders() {
+  try {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const user = JSON.parse(stored);
+      if (user && user.id) {
+        return { 'x-user-id': String(user.id), 'x-user-role': user.role || '' };
+      }
+    }
+  } catch {
+    /* ignore malformed currentUser */
+  }
+  return {};
+}
+
 async function apiCall(endpoint, options = {}) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders(),
         ...options.headers,
       },
       ...options,
@@ -288,5 +306,41 @@ export const userApi = {
       method: 'POST',
       body: JSON.stringify(attemptData),
     });
+  },
+
+  // --- Access-control: user management (role-gated on the server) ---
+
+  // Admin/Super Admin: add a user with initial password + dashboard views.
+  async createUser({ email, password, user_name, profile, role = 'user', permissions = [], organization_id = null }) {
+    return await apiCall('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, user_name, profile, role, permissions, organization_id }),
+    });
+  },
+
+  // Update a user's dashboard view permissions (locked changes need Super Admin).
+  async updateUserPermissions(userId, permissions) {
+    return await apiCall(`/users/${userId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions }),
+    });
+  },
+
+  // Set onboarding password (Admin, once) or reset it (Super Admin).
+  async setUserPassword(userId, password) {
+    return await apiCall(`/users/${userId}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  // Remove a user (Super Admin only).
+  async deleteUser(userId) {
+    return await apiCall(`/users/${userId}`, { method: 'DELETE' });
+  },
+
+  // Read the permission-action audit log (Super Admin only).
+  async getAuditLog() {
+    return await apiCall('/audit-log');
   }
 };

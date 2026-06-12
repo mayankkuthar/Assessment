@@ -59,24 +59,25 @@ import OrganizationManager from './components/OrganizationManager'
 
 const drawerWidth = 220
 
-// Admin navigation items
+// Admin navigation items. The `permission` key maps to the dashboard "views"
+// granted to a member; the menu is filtered by these (see navItems below).
 const adminNavItems = [
-  { label: 'Admin Dashboard', icon: <PersonIcon /> },
-  { label: 'Organization Management', icon: <BusinessIcon /> },
-  { label: 'Profile Management', icon: <PeopleIcon /> },
-  { label: 'Packet Management', icon: <CategoryIcon /> },
-  { label: 'Quiz Builder', icon: <QuizIcon /> },
-  { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon /> },
-  { label: 'Assessment Results', icon: <AssessmentIcon /> },
-  { label: 'Assessment Report', icon: <AssessmentIcon /> },
-  { label: 'Active Tracking', icon: <InsightsIcon /> },
-  { label: 'PDF Templates', icon: <ShareIcon /> },
+  { label: 'Admin Dashboard', icon: <PersonIcon />, permission: 'admin_dashboard' },
+  { label: 'Organization Management', icon: <BusinessIcon />, permission: 'organizations' },
+  { label: 'Profile Management', icon: <PeopleIcon />, permission: 'profiles' },
+  { label: 'Packet Management', icon: <CategoryIcon />, permission: 'packets' },
+  { label: 'Quiz Builder', icon: <QuizIcon />, permission: 'quiz_builder' },
+  { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon />, permission: 'assigned_quizzes' },
+  { label: 'Assessment Results', icon: <AssessmentIcon />, permission: 'results' },
+  { label: 'Assessment Report', icon: <AssessmentIcon />, permission: 'reports' },
+  { label: 'Active Tracking', icon: <InsightsIcon />, permission: 'active_tracking' },
+  { label: 'PDF Templates', icon: <ShareIcon />, permission: 'pdf_templates' },
 ]
 
 // User navigation items
 const userNavItems = [
-  { label: 'Home', icon: <HomeIcon /> },
-  { label: 'Quiz Records', icon: <HistoryIcon /> },
+  { label: 'Home', icon: <HomeIcon />, permission: 'home' },
+  { label: 'Quiz Records', icon: <HistoryIcon />, permission: 'quiz_records' },
 ]
 
 function App() {
@@ -133,6 +134,7 @@ function App() {
   const [howToOpen, setHowToOpen] = useState(false)
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Assign Quizzes widget state
@@ -172,8 +174,17 @@ function App() {
     }
   }
 
-  // Get navigation items based on user type
-  const navItems = isAdmin ? adminNavItems : userNavItems
+  // Get navigation items based on role + assigned permissions.
+  //   Super Admin            : sees every item.
+  //   Admin / User           : sees only items whose `permission` was granted.
+  //   Legacy (no permissions): falls back to the full set for their role so
+  //                            existing accounts keep working after migration.
+  const navItems = (() => {
+    const base = isAdmin ? adminNavItems : userNavItems
+    const perms = Array.isArray(user?.permissions) ? user.permissions : []
+    if (isSuperAdmin || perms.length === 0) return base
+    return base.filter(item => !item.permission || perms.includes(item.permission))
+  })()
 
   // Sync darkMode with body class and persist the choice
   useEffect(() => {
@@ -204,20 +215,26 @@ function App() {
   // Check if user is admin
   const checkUserRole = async (user) => {
     try {
-      // For our SQLite setup, the user object already contains the role
+      // For our SQLite setup, the user object already contains the role.
+      // Super Admin (HappiMynd) and Admin both get the admin experience;
+      // Super Admin additionally unlocks restricted actions.
       if (user && user.role) {
-        const isAdminUser = user.role === 'admin';
+        const superAdminUser = user.role === 'super_admin';
+        const isAdminUser = superAdminUser || user.role === 'admin';
         setIsAdmin(isAdminUser);
-        console.log('✅ User role detected:', user.role, 'isAdmin:', isAdminUser);
+        setIsSuperAdmin(superAdminUser);
+        console.log('✅ User role detected:', user.role, 'isAdmin:', isAdminUser, 'isSuperAdmin:', superAdminUser);
         return;
       }
 
       // Fallback: try to get role from API
       console.warn('No role in user object, trying API fallback');
       setIsAdmin(false);
+      setIsSuperAdmin(false);
     } catch (err) {
       console.warn('Role check failed:', err)
       setIsAdmin(false)
+      setIsSuperAdmin(false)
     }
   }
 
@@ -504,6 +521,7 @@ function App() {
                     localStorage.removeItem('currentUser');
                     setUser(null);
                     setIsAdmin(false);
+                    setIsSuperAdmin(false);
                   }}>Logout</button>
                 </div>
               </header>
@@ -656,7 +674,7 @@ function App() {
                                       );
                                     })
                                   ) : (
-                                    users.filter(u => u.role !== 'admin').map((u) => {
+                                    users.filter(u => u.role !== 'admin' && u.role !== 'super_admin').map((u) => {
                                       const isChecked = formSelectedUsers.includes(u.id);
                                       return (
                                         <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>

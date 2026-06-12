@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Data file path
 const DATA_FILE = path.join(process.cwd(), 'mock-data.json');
@@ -35,7 +35,8 @@ function loadData() {
         questions: data.questions || [],
         quizzes: data.quizzes || [],
         quizAssignments: data.quizAssignments || [],
-        quizAttempts: data.quizAttempts || []
+        quizAttempts: data.quizAttempts || [],
+        auditLog: data.auditLog || []
       };
     }
   } catch (error) {
@@ -346,7 +347,8 @@ function loadData() {
        }
      ],
                     quizAttempts: [],
-                    employees: []
+                    employees: [],
+                    auditLog: []
   };
 }
 
@@ -357,6 +359,82 @@ function saveData(data) {
   } catch (error) {
     console.log('❌ Error saving data:', error.message);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Role-Based Access Control (HappiMynd)
+//   super_admin : Internal HappiMynd team — full system access & override rights.
+//   admin       : Client admins (HR / Dept managers), scoped to their organization:
+//                   * may add users + assign dashboard views, but cannot delete users
+//                   * may set a password ONCE at onboarding, not reset it later
+//                   * may set view permissions during setup, but not modify once locked
+//   user        : End users — access only the modules assigned during onboarding.
+// ---------------------------------------------------------------------------
+const ROLES = { SUPER_ADMIN: 'super_admin', ADMIN: 'admin', USER: 'user' };
+
+// Dashboard "views" an admin can grant to a member during setup.
+const DASHBOARD_VIEWS = [
+  'admin_dashboard', 'organizations', 'profiles', 'packets', 'quiz_builder',
+  'assigned_quizzes', 'results', 'reports', 'active_tracking', 'pdf_templates'
+];
+
+function isSuperAdmin(u) { return !!u && u.role === ROLES.SUPER_ADMIN; }
+function isAdmin(u) { return !!u && (u.role === ROLES.ADMIN || u.role === ROLES.SUPER_ADMIN); }
+
+// Identify the user making the request via the x-user-id header set by the client.
+function getActor(req) {
+  const id = req.header('x-user-id');
+  if (!id) return null;
+  return mockData.users.find(u => String(u.id) === String(id)) || null;
+}
+
+// Organization scope check. Super Admin bypasses entirely. An admin with no
+// organization is treated as an unscoped/global admin (legacy default), while
+// an admin assigned to an organization is confined to that organization.
+function sameOrg(actor, targetOrgId) {
+  if (isSuperAdmin(actor)) return true;
+  if (!actor || !actor.organization_id) return true; // unscoped/global admin
+  return String(actor.organization_id) === String(targetOrgId || '');
+}
+
+// Append a permission-related action to the audit log.
+function logAction(actor, action, target, details = {}) {
+  if (!mockData.auditLog) mockData.auditLog = [];
+  const entry = {
+    id: String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
+    actor_id: actor ? actor.id : null,
+    actor_email: actor ? actor.email : null,
+    actor_role: actor ? actor.role : null,
+    action,
+    target_user_id: target ? (target.id || target) : null,
+    target_email: target && target.email ? target.email : null,
+    details,
+    created_at: new Date().toISOString()
+  };
+  mockData.auditLog.push(entry);
+  saveData(mockData);
+  console.log(`📝 audit: ${entry.actor_email || 'anon'} → ${action} (${entry.target_email || entry.target_user_id || '-'})`);
+  return entry;
+}
+
+// Middleware: require an authenticated Super Admin.
+function requireSuperAdmin(req, res, next) {
+  const actor = getActor(req);
+  if (!isSuperAdmin(actor)) {
+    return res.status(403).json({ error: 'Only Super Admin (HappiMynd) can perform this action.' });
+  }
+  req.actor = actor;
+  next();
+}
+
+// Middleware: require an authenticated Admin or Super Admin.
+function requireAdmin(req, res, next) {
+  const actor = getActor(req);
+  if (!isAdmin(actor)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  req.actor = actor;
+  next();
 }
 
 function generateOnboardingCode(organizations = []) {
@@ -393,6 +471,58 @@ if (mockData.organizations) {
     saveData(mockData);
   }
 }
+
+// Migrate users to the RBAC model: seed a generic Super Admin and backfill fields.
+// Credentials are configurable via env and documented in MIGRATION_SUMMARY.md.
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'superadmin@happimynd.com';
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@123';
+(function migrateAccessControl() {
+  let changed = false;
+
+  // Seed a single generic Super Admin if none exists.
+  if (!mockData.users.some(u => u.role === ROLES.SUPER_ADMIN)) {
+    mockData.users.push({
+      id: 'super-admin',
+      email: SUPER_ADMIN_EMAIL,
+      password: SUPER_ADMIN_PASSWORD,
+      role: ROLES.SUPER_ADMIN,
+      user_name: 'Super Admin',
+      organization_id: null,
+      permissions: DASHBOARD_VIEWS.slice(),
+      permissions_locked: true,
+      password_set_by_admin: false,
+      created_by: 'system',
+      created_at: new Date().toISOString()
+    });
+    changed = true;
+  }
+
+  // Backfill RBAC fields on any pre-existing users.
+  mockData.users.forEach(u => {
+    if (u.permissions === undefined) {
+      u.permissions = isAdmin(u) ? DASHBOARD_VIEWS.slice() : [];
+      changed = true;
+    }
+    if (u.permissions_locked === undefined) {
+      u.permissions_locked = isAdmin(u); // existing admins are considered configured
+      changed = true;
+    }
+    if (u.password_set_by_admin === undefined) {
+      u.password_set_by_admin = false;
+      changed = true;
+    }
+    if (u.organization_id === undefined) {
+      u.organization_id = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    console.log(`⚠️ Migrated users to RBAC model (Super Admin: ${SUPER_ADMIN_EMAIL}, fields backfilled)`);
+    saveData(mockData);
+  }
+})();
+
 console.log('📂 Loaded persistent data:', {
   users: mockData.users.length,
   profiles: mockData.profiles.length,
@@ -509,17 +639,23 @@ app.post('/api/auth/signup', (req, res) => {
     }
   }
   
-  // Create new user
+  // Create new user. Self-signup can never grant elevated roles — only a
+  // Super Admin may mint admins/super-admins (see POST /api/admin/users).
   const userId = String(Date.now());
   const newUser = {
     id: userId,
     email,
     password,
-    role,
+    role: ROLES.USER,
     user_name: targetUserName || email.split('@')[0],
     profile: profile,
     organization_id: organizationId,
-    organization: organizationName
+    organization: organizationName,
+    permissions: [],
+    permissions_locked: false,
+    password_set_by_admin: false,
+    created_by: 'self',
+    created_at: new Date().toISOString()
   };
   mockData.users.push(newUser);
   
@@ -584,6 +720,154 @@ app.get('/api/local-users/:id', (req, res) => {
   // Return user data without password
   const { password, ...userWithoutPassword } = user;
   res.json(userWithoutPassword);
+});
+
+// ---------------------------------------------------------------------------
+// RBAC: user management (Super Admin / Admin rules) + audit log
+// ---------------------------------------------------------------------------
+
+// Admin (or Super Admin) adds a new user with an initial password and the set
+// of dashboard views they may see. Permissions are locked immediately after
+// this initial setup; only a Super Admin can change them afterwards. Admins are
+// scoped to their own organization and may only create regular users.
+app.post('/api/admin/users', requireAdmin, (req, res) => {
+  const { email, password, user_name, profile, role = ROLES.USER, permissions = [], organization_id = null } = req.body;
+  console.log(`➕ ${req.actor.role} (${req.actor.email}) creating user: ${email}`);
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  if (mockData.users.find(u => u.email === email)) {
+    return res.status(400).json({ error: 'User already exists.' });
+  }
+  // Only a Super Admin may create admins or other super admins.
+  if ((role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN) && !isSuperAdmin(req.actor)) {
+    return res.status(403).json({ error: 'Only Super Admin can assign Admin or Super Admin roles.' });
+  }
+  const finalRole = [ROLES.USER, ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(role) ? role : ROLES.USER;
+  // Admins can only place users inside their own organization; Super Admin may target any.
+  const finalOrgId = isSuperAdmin(req.actor) ? organization_id : (req.actor.organization_id || null);
+  const sanitizedPerms = (Array.isArray(permissions) ? permissions : []).filter(p => DASHBOARD_VIEWS.includes(p));
+
+  const newUser = {
+    id: String(Date.now()),
+    email,
+    password,
+    role: finalRole,
+    user_name: user_name || email.split('@')[0],
+    profile: profile || null,
+    organization_id: finalOrgId,
+    permissions: sanitizedPerms,
+    permissions_locked: true,      // locked after initial setup
+    password_set_by_admin: true,   // onboarding password has been set
+    created_by: req.actor.id,
+    created_at: new Date().toISOString()
+  };
+  mockData.users.push(newUser);
+  saveData(mockData);
+  logAction(req.actor, 'user.create', newUser, { role: finalRole, permissions: sanitizedPerms, organization_id: finalOrgId });
+
+  const { password: _pw, ...safe } = newUser;
+  res.status(201).json(safe);
+});
+
+// Update a user's dashboard view permissions.
+//   Super Admin : always allowed.
+//   Admin       : allowed only while permissions are still unlocked (i.e. the
+//                 one-time initial setup) AND the target is in their org;
+//                 locked changes require Super Admin.
+app.put('/api/users/:id/permissions', requireAdmin, (req, res) => {
+  const actor = req.actor;
+  const user = mockData.users.find(u => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (!sameOrg(actor, user.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  const sanitized = (Array.isArray(req.body.permissions) ? req.body.permissions : []).filter(p => DASHBOARD_VIEWS.includes(p));
+
+  if (!isSuperAdmin(actor) && user.permissions_locked) {
+    return res.status(403).json({
+      error: 'View permissions are locked after initial setup. Any changes require Super Admin approval.'
+    });
+  }
+
+  const before = user.permissions;
+  user.permissions = sanitized;
+  user.permissions_locked = true;
+  saveData(mockData);
+  logAction(actor, 'permissions.update', user, { before, after: sanitized });
+  res.json({ success: true, permissions: user.permissions, permissions_locked: user.permissions_locked });
+});
+
+// Set or reset a user's password.
+//   Super Admin : may reset at any time.
+//   Admin       : may set the password ONCE during onboarding (own org only);
+//                 any subsequent reset must be routed to Super Admin.
+app.post('/api/users/:id/password', requireAdmin, (req, res) => {
+  const actor = req.actor;
+  const user = mockData.users.find(u => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (!sameOrg(actor, user.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: 'New password is required.' });
+  }
+
+  if (isSuperAdmin(actor)) {
+    user.password = password;
+    user.password_set_by_admin = false; // super admin reset clears the admin lock
+    saveData(mockData);
+    logAction(actor, 'password.reset', user, {});
+    return res.json({ success: true, message: 'Password reset successfully.' });
+  }
+
+  // Admin path: one-time onboarding set only.
+  if (user.password_set_by_admin) {
+    return res.status(403).json({
+      error: 'Password was already set during onboarding. For any further password changes or resets, please connect with Super Admin (HappiMynd).'
+    });
+  }
+  user.password = password;
+  user.password_set_by_admin = true;
+  saveData(mockData);
+  logAction(actor, 'password.set', user, { onboarding: true });
+  res.json({ success: true, message: 'Onboarding password set successfully.' });
+});
+
+// Delete a user. Admins cannot remove users — only a Super Admin can.
+app.delete('/api/users/:id', (req, res) => {
+  const actor = getActor(req);
+  if (!isAdmin(actor)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  if (!isSuperAdmin(actor)) {
+    return res.status(403).json({
+      error: 'Admin cannot remove users. User removal requests must be routed to Super Admin (HappiMynd).'
+    });
+  }
+  const idx = mockData.users.findIndex(u => u.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (mockData.users[idx].role === ROLES.SUPER_ADMIN) {
+    return res.status(403).json({ error: 'Super Admin accounts cannot be deleted.' });
+  }
+  const [removed] = mockData.users.splice(idx, 1);
+  saveData(mockData);
+  logAction(actor, 'user.delete', removed, { role: removed.role });
+  res.json({ success: true, message: `User ${removed.email} removed successfully.`, deleted_id: removed.id });
+});
+
+// Audit log — Super Admin only.
+app.get('/api/audit-log', requireSuperAdmin, (req, res) => {
+  const log = (mockData.auditLog || []).slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  res.json(log);
 });
 
 app.get('/api/profiles', (req, res) => {
@@ -655,13 +939,28 @@ app.delete('/api/profiles/:id', (req, res) => {
   });
 });
 
-// Organization CRUD operations
+// Organization CRUD operations.
+// This list is fetched during app bootstrap (before login too), so it never
+// 403s — it returns data scoped to the caller instead:
+//   Super Admin / legacy org-less admin -> all orgs
+//   Org-scoped admin                     -> their own org
+//   Non-admin / anonymous                -> empty list
 app.get('/api/organizations', (req, res) => {
   console.log('🏢 Get organizations');
-  res.json(mockData.organizations || []);
+  const actor = getActor(req);
+  const all = mockData.organizations || [];
+  if (!isAdmin(actor)) {
+    return res.json([]);
+  }
+  if (isSuperAdmin(actor) || !actor.organization_id) {
+    return res.json(all);
+  }
+  res.json(all.filter(o => String(o.id) === String(actor.organization_id)));
 });
 
-app.post('/api/organizations', (req, res) => {
+// Organization management (create/update/delete/regenerate code) is reserved
+// for Super Admin per the access-control policy.
+app.post('/api/organizations', requireSuperAdmin, (req, res) => {
   const org = req.body;
   console.log('🏢 Create organization', org);
   
@@ -694,7 +993,7 @@ app.post('/api/organizations', (req, res) => {
   res.status(201).json(newOrg);
 });
 
-app.put('/api/organizations/:id', (req, res) => {
+app.put('/api/organizations/:id', requireSuperAdmin, (req, res) => {
   const orgId = req.params.id;
   const updates = req.body;
   console.log(`🏢 Update organization ${orgId}`, updates);
@@ -727,7 +1026,7 @@ app.put('/api/organizations/:id', (req, res) => {
   res.json(updatedOrg);
 });
 
-app.delete('/api/organizations/:id', (req, res) => {
+app.delete('/api/organizations/:id', requireSuperAdmin, (req, res) => {
   const orgId = req.params.id;
   console.log(`🏢 Delete organization ${orgId}`);
 
@@ -750,7 +1049,7 @@ app.delete('/api/organizations/:id', (req, res) => {
   });
 });
 
-app.post('/api/organizations/:id/regenerate-code', (req, res) => {
+app.post('/api/organizations/:id/regenerate-code', requireSuperAdmin, (req, res) => {
   const orgId = req.params.id;
   console.log(`🏢 Regenerate onboarding code for organization ${orgId}`);
   if (!mockData.organizations) {
@@ -767,9 +1066,14 @@ app.post('/api/organizations/:id/regenerate-code', (req, res) => {
   res.json({ onboarding_code: code });
 });
 
-// Employees CRUD and Bulk Import operations
-app.get('/api/organizations/:orgId/employees', (req, res) => {
+// Employees CRUD and Bulk Import operations.
+// Managing the org directory is "managing users within allowed scope": Admins
+// may do it for their own organization, Super Admin for any.
+app.get('/api/organizations/:orgId/employees', requireAdmin, (req, res) => {
   const orgId = req.params.orgId;
+  if (!sameOrg(req.actor, orgId)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
   console.log(`👥 Get employees for organization ${orgId}`);
   if (!mockData.employees) {
     mockData.employees = [];
@@ -788,8 +1092,11 @@ app.get('/api/organizations/:orgId/employees', (req, res) => {
   res.json(enriched);
 });
 
-app.post('/api/organizations/:orgId/employees/import', (req, res) => {
+app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) => {
   const orgId = req.params.orgId;
+  if (!sameOrg(req.actor, orgId)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
   console.log(`👥 Import employees for organization ${orgId}`);
   const { employees } = req.body;
 
@@ -834,7 +1141,7 @@ app.post('/api/organizations/:orgId/employees/import', (req, res) => {
   res.json(imported);
 });
 
-app.delete('/api/employees/:id', (req, res) => {
+app.delete('/api/employees/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   console.log(`👥 Delete employee ${id}`);
   if (!mockData.employees) {
@@ -844,8 +1151,24 @@ app.delete('/api/employees/:id', (req, res) => {
   if (index === -1) {
     return res.status(404).json({ error: 'Employee not found' });
   }
+  const emp = mockData.employees[index];
+  if (!sameOrg(req.actor, emp.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  // If the directory entry has already become a registered user account, its
+  // removal is a user removal — reserved for Super Admin.
+  const isRegisteredUser = (mockData.users || []).some(u =>
+    u.email.toLowerCase() === emp.email.toLowerCase() &&
+    String(u.organization_id) === String(emp.organization_id)
+  );
+  if (isRegisteredUser && !isSuperAdmin(req.actor)) {
+    return res.status(403).json({
+      error: 'This member is a registered user. User removal requests must be routed to Super Admin (HappiMynd).'
+    });
+  }
   mockData.employees.splice(index, 1);
   saveData(mockData);
+  logAction(req.actor, 'employee.delete', { id: emp.id, email: emp.email }, { organization_id: emp.organization_id });
   res.json({ success: true, message: `Employee ${id} deleted successfully` });
 });
 

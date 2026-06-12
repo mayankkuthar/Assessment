@@ -120,9 +120,14 @@ export const authService = {
     return this.currentUser !== null;
   },
 
-  // Check if user has admin role
+  // Check if user has admin-level access (Admin or Super Admin)
   isAdmin() {
-    return this.currentUser?.role === 'admin';
+    return this.currentUser?.role === 'admin' || this.currentUser?.role === 'super_admin';
+  },
+
+  // Check if user is a HappiMynd Super Admin (full override rights)
+  isSuperAdmin() {
+    return this.currentUser?.role === 'super_admin';
   },
 
   // Create default admin user if none exists

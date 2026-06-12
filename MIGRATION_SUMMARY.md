@@ -40,12 +40,50 @@ npm run start
 ```
 This builds the React app and serves it from the Express server.
 
-## 📊 Default Admin Account
+## 📊 Default Accounts
 
+### Admin (client admin — limited)
 **Email**: `admin@assessment.local`
 **Password**: `admin123`
 
-⚠️ **Important**: Please change the default password after first login!
+### Super Admin (HappiMynd — full access)
+Seeded automatically on first server start (override via `SUPER_ADMIN_EMAIL` /
+`SUPER_ADMIN_PASSWORD` env vars):
+
+**Email**: `superadmin@happimynd.com`
+**Password**: `SuperAdmin@123`
+
+⚠️ **Important**: Please change these default passwords after first login!
+
+## 🔐 Role-Based Access Control (RBAC)
+
+Three roles are enforced on the **server** (`server-auth-test.js`) — the client only
+hides/disables controls; the API is the source of truth. The SQL equivalent lives in
+`add_access_control_roles.sql` (run it once for the Supabase/Postgres deployment).
+
+| Action | Super Admin | Admin | User |
+|--------|:-----------:|:-----:|:----:|
+| Add new user | ✅ any org/role | ✅ own org, role=`user` only | ❌ |
+| Set onboarding password (once) | ✅ | ✅ once | ❌ |
+| Reset / change password later | ✅ | ❌ → route to Super Admin | ❌ |
+| Modify view permissions | ✅ anytime | ✅ during setup only (then locked) | ❌ |
+| Delete / remove user | ✅ | ❌ → route to Super Admin | ❌ |
+| Manage organizations & config | ✅ | ❌ | ❌ |
+| View / scope | all orgs | own organization only | assigned modules only |
+| Read audit log | ✅ | ❌ | ❌ |
+
+**Dashboard view keys** granted via a user's `permissions[]`:
+`admin_dashboard, organizations, profiles, packets, quiz_builder, assigned_quizzes,
+results, reports, active_tracking, pdf_templates` (admin side) and `home, quiz_records`
+(user side). The sidebar menu is filtered by these.
+
+**Auth header:** the client sends `x-user-id` (and `x-user-role`) on every request
+(`src/services/api.js`); the server resolves it to the acting user and applies the
+`requireAdmin` / `requireSuperAdmin` middleware plus organization-scope checks.
+
+**Audit log:** every permission-related action (`user.create`, `user.delete`,
+`password.set`, `password.reset`, `permissions.update`, `employee.delete`) is recorded;
+read it at `GET /api/audit-log` (Super Admin only).
 
 ## 🗄️ Database Tables
 
