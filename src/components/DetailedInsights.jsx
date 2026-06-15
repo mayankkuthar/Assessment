@@ -91,6 +91,61 @@ const inferType = (rows, col) => {
 const distinctCount = (rows, col) =>
   new Set(rows.map(r => String(r[col] ?? '').trim()).filter(Boolean)).size
 
+// Column-name hints used to choose a meaningful default metric. We want the
+// focus metric to be something worth averaging (a score), not an identifier or
+// row index that merely happens to be numeric (Sr. No, Phone Number, …).
+const METRIC_NAME_RE = /\b(score|scores|rating|ratings|result|results|marks?|percent|percentage|grade|points?)\b/i
+const IDENTIFIER_NAME_RE = /\b(id|no\.?|number|phone|mobile|contact|serial|sr|zip|pin|code|year)\b/i
+
+// Pick the numeric column that best represents "the thing to measure".
+// Preference: a column literally named like a score → any numeric column that
+// isn't an identifier/index (by name, or by having a near-unique value per row)
+// → falling back to the first numeric column.
+const pickMetric = (cols, rows) => {
+  const numeric = cols.filter(c => c.type === 'numeric')
+  if (!numeric.length) return ''
+  const byName = numeric.find(c => METRIC_NAME_RE.test(c.name))
+  if (byName) return byName.name
+  const meaningful = numeric.filter(c => {
+    if (IDENTIFIER_NAME_RE.test(c.name)) return false
+    // An ID / serial column has roughly one distinct value per row.
+    if (rows.length > 5 && distinctCount(rows, c.name) >= rows.length * 0.9) return false
+    return true
+  })
+  return (meaningful[0] || numeric[0]).name
+}
+
+// Column-name hint for the "who" of a dataset, so per-person charts get labeled
+// "Employees by …" and Company view anonymizes the right column.
+const PEOPLE_NAME_RE = /\b(name|employee|employees|person|people|user|users|staff|member|members)\b/i
+
+// Choose the column that identifies each record. Prefer an explicitly
+// person-named column (e.g. "Full Name") over emails / IDs, then fall back to
+// the highest-cardinality text/categorical column.
+const pickIdentity = (cols, rows) => {
+  const candidates = cols
+    .filter(c => c.type === 'categorical' || c.type === 'text')
+    .map(c => ({ name: c.name, card: distinctCount(rows, c.name) }))
+  if (!candidates.length) return ''
+  const named = candidates.filter(c => PEOPLE_NAME_RE.test(c.name))
+  // Prefer a display-name column over an ID-style one ("Full Name" beats
+  // "Employee ID") so the per-person chart is labeled by name, not codes.
+  const display = named.filter(c => !IDENTIFIER_NAME_RE.test(c.name))
+  const pick = (display.length ? display : named).sort((a, b) => b.card - a.card)[0]
+  return (pick || candidates.sort((a, b) => b.card - a.card)[0]).name
+}
+
+// Performance bands for a 0–100 style score, mirroring Active Tracking's
+// Excellent / Good / Needs Improvement split (and its colors). Scores are
+// normalized by their scale first, so bands also work for marks out of 5/10/20.
+const BAND_DEFS = [
+  { name: 'Excellent', color: '#895BF5' },
+  { name: 'Good', color: '#A68AF9' },
+  { name: 'Needs Improvement', color: '#BF83FC' }
+]
+const detectScale = (max) => (max <= 5 ? 5 : max <= 10 ? 10 : max <= 20 ? 20 : 100)
+const bandForPct = (pct) => (pct >= 80 ? 'Excellent' : pct >= 60 ? 'Good' : 'Needs Improvement')
+
 const csvCell = (v) => {
   const s = String(v ?? '')
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -196,22 +251,28 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
     }
     const names = (order && order.length ? order : Object.keys(rawRows[0]))
       .map(h => String(h).trim()).filter(Boolean)
-    const cols = names.map(colName => ({ name: colName, type: inferType(rawRows, colName) }))
+    // Normalize every row's keys to the trimmed header names. Spreadsheets often
+    // carry stray whitespace in a header (e.g. "Score "); without this the
+    // trimmed column name ("Score") wouldn't match the raw row key, so the
+    // column reads as empty and is silently misclassified as text — dropping the
+    // very metric people upload the file to analyze.
+    const normRows = rawRows.map(r => {
+      const o = {}
+      Object.keys(r).forEach(k => { o[String(k).trim()] = r[k] })
+      return o
+    })
+    const cols = names.map(colName => ({ name: colName, type: inferType(normRows, colName) }))
     setFileName(name)
     setColumns(cols)
-    setRows(rawRows)
+    setRows(normRows)
     setFilters({})
     setTablePage(0)
-    setWidgets(buildDefaultWidgets(cols, rawRows))
-    setInsightMetric(cols.find(c => c.type === 'numeric')?.name || '')
-    // Default the identity column to the highest-cardinality dimension — the
-    // "who" of the dataset (e.g. Employee) — so Company view anonymizes the
-    // right column out of the box.
-    const idCandidate = cols
-      .filter(c => c.type === 'categorical' || c.type === 'text')
-      .map(c => ({ name: c.name, card: distinctCount(rawRows, c.name) }))
-      .sort((a, b) => b.card - a.card)[0]
-    setIdentityColumn(idCandidate?.name || '')
+    setWidgets(buildDefaultWidgets(cols, normRows))
+    setInsightMetric(pickMetric(cols, normRows))
+    // Default the identity column to the dataset's "who" (a person-named column
+    // such as Full Name, else the most distinct text column) — the same column
+    // the per-person score chart groups by, so Company view anonymizes it.
+    setIdentityColumn(pickIdentity(cols, normRows))
     setParseError(null)
   }, [])
 
@@ -272,14 +333,14 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
   // stays stable regardless of the active filters.
   const anonMap = useMemo(() => {
     if (!anonymized) return null
-    // Rank on the same metric the entity bar chart plots — the first numeric
-    // column, averaged and rounded to one decimal exactly as the charts do —
-    // rather than the user-selectable focus metric, which can diverge from the
-    // chart's measure. Matching the chart's value + rounding (and its stable,
-    // first-appearance ordering) makes the per-user chart read User 1, User 2,
-    // … in order with no gaps. Falls back to record count when the dataset has
-    // no numeric column (the chart ranks by count in that case too).
-    const rankMetric = columns.find(c => c.type === 'numeric')?.name || ''
+    // Rank on the same metric the entity bar chart plots — the primary numeric
+    // metric (see pickMetric), averaged and rounded to one decimal exactly as
+    // the charts do — rather than the user-selectable focus metric, which can
+    // diverge from the chart's measure. Matching the chart's value + rounding
+    // (and its stable, first-appearance ordering) makes the per-user chart read
+    // User 1, User 2, … in order with no gaps. Falls back to record count when
+    // the dataset has no numeric column (the chart ranks by count in that case too).
+    const rankMetric = pickMetric(columns, rows)
     const groups = {}
     rows.forEach(r => {
       const k = (String(r[identityColumn] ?? '').trim()) || '—'
@@ -1176,6 +1237,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
                     columns={columns}
                     dimensionCols={dimensionCols}
                     numericCols={numericCols}
+                    identityColumn={identityColumn}
                     onUpdate={updateWidget}
                     onRemove={removeWidget}
                     onDrill={setDrill}
@@ -1248,12 +1310,15 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
 }
 
 // Build an insightful starter dashboard modeled on the Active Tracking views:
-//  • a ranked horizontal bar of the highest-cardinality entity (e.g. people)
-//  • a distribution pie of the smallest category (e.g. performance level)
+//  • a ranked horizontal bar of every person by their score
+//  • a Performance Distribution band chart (Excellent / Good / Needs Improvement)
+//  • a score-spread histogram
+//  • a headcount breakdown + average-score bar for the smallest category
+//  • a headcount bar for a team-like category
 //  • a trend-over-time line when a date column exists
-//  • an average-by-category bar (e.g. by quiz / department)
+//  • an average-by-category bar for the remaining dimensions (dept, zone, …)
 function buildDefaultWidgets(cols, rows) {
-  const metric = cols.find(c => c.type === 'numeric')?.name
+  const metric = pickMetric(cols, rows)
   const dateCol = cols.find(c => c.type === 'date')?.name
   const dims = cols
     .filter(c => c.type === 'categorical' || c.type === 'text')
@@ -1261,32 +1326,44 @@ function buildDefaultWidgets(cols, rows) {
     .filter(c => c.card >= 2)
     .sort((a, b) => a.card - b.card) // ascending: small categories first
 
-  const entity = dims[dims.length - 1]?.name // most distinct → the "who"
-  const bandCat = dims.find(d => d.card <= 8)?.name // small set → good pie (e.g. level)
+  const entity = pickIdentity(cols, rows) // person-named column, else most distinct → the "who"
+  const bandCat = dims.find(d => d.card <= 8)?.name // small set → good pie (e.g. gender / level)
+  // A team-like category (a handful of groups, not the tiny pie set or the
+  // per-person entity) to show org composition by headcount.
+  const headcountCat = dims.find(d => d.card >= 3 && d.card <= 12 && d.name !== bandCat && d.name !== entity)?.name
 
   const widgets = []
   let i = 0
   const used = new Set()
   const add = (w) => widgets.push({ id: `w_default_${i++}`, topN: 15, measure: 'count', agg: 'count', ...w })
 
-  // 1. Ranked entity bar — e.g. employees / people by average score
+  // 1. Ranked entity bar — every person by their score
   if (entity) {
     used.add(entity)
     add(metric
       ? { type: 'hbar', dimension: entity, measure: metric, agg: 'avg' }
       : { type: 'hbar', dimension: entity })
   }
-  // 2. Score distribution histogram — how the metric is spread
+  // 2. Performance distribution — score split into Excellent / Good / Needs Improvement
+  if (metric) add({ type: 'bands', measure: metric, agg: 'avg' })
+  // 3. Score distribution histogram — the fine-grained spread
   if (metric) add({ type: 'histogram', measure: metric, agg: 'avg' })
-  // 3. Performance band distribution — pie of the smallest category
-  if (bandCat) { used.add(bandCat); add({ type: 'pie', dimension: bandCat }) }
-  // 4. Trend over time — when there is a date column
+  // 4 & 5. Smallest category as both a headcount pie and an average-score bar
+  //        (e.g. Gender Breakdown + Average Score by Gender for an equity read).
+  if (bandCat) {
+    used.add(bandCat)
+    add({ type: 'pie', dimension: bandCat })
+    if (metric) add({ type: 'bar', dimension: bandCat, measure: metric, agg: 'avg' })
+  }
+  // 6. Headcount by a team-like category — org composition
+  if (headcountCat) add({ type: 'bar', dimension: headcountCat, measure: 'count' })
+  // 7. Trend over time — when there is a date column
   if (dateCol) {
     add(metric
       ? { type: 'line', dimension: dateCol, measure: metric, agg: 'avg' }
       : { type: 'line', dimension: dateCol })
   }
-  // 5. Average-by-category for every remaining dimension (org, quiz, dept, …)
+  // 8. Average-by-category for every remaining dimension (dept, zone, location, …)
   dims
     .filter(d => !used.has(d.name))
     .slice(0, 4)
@@ -1300,7 +1377,7 @@ function buildDefaultWidgets(cols, rows) {
 const TOPN_OPTIONS = [10, 15, 25, 50]
 
 // ── Single configurable chart ────────────────────────────────
-const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpdate, onRemove, onDrill }) => {
+const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identityColumn, onUpdate, onRemove, onDrill }) => {
   const { type, dimension, measure, agg, topN = 15 } = widget
   const isDate = columns.find(c => c.name === dimension)?.type === 'date'
 
@@ -1387,7 +1464,29 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
     return buckets
   }, [type, measure, rows])
 
+  // Performance bands: split the metric into Excellent / Good / Needs Improvement
+  // (one count per record) for an at-a-glance health read of the score.
+  const bandData = useMemo(() => {
+    if (type !== 'bands' || measure === 'count') return []
+    const nums = rows.map(r => toNumber(r[measure])).filter(n => n !== null)
+    if (!nums.length) return []
+    const min = Math.min(...nums)
+    const max = Math.max(...nums)
+    const scale = detectScale(max)
+    const counts = { Excellent: 0, Good: 0, 'Needs Improvement': 0 }
+    nums.forEach(n => { counts[bandForPct((n / scale) * 100)] += 1 })
+    const ranges = {
+      Excellent: { lo: 0.8 * scale, hi: max },
+      Good: { lo: 0.6 * scale, hi: 0.8 * scale },
+      'Needs Improvement': { lo: min, hi: 0.6 * scale }
+    }
+    return BAND_DEFS
+      .map(b => ({ name: b.name, value: counts[b.name], color: b.color, ...ranges[b.name] }))
+      .filter(b => b.value > 0)
+  }, [type, measure, rows])
+
   const isHist = type === 'histogram'
+  const isBands = type === 'bands'
   const isBar = type === 'bar' || type === 'hbar'
   const limitable = isBar && !isDate
   const limit = topN === 'all' ? Infinity : Number(topN)
@@ -1406,11 +1505,28 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
     return fullData
   }, [fullData, limitable, limit, type, measure])
 
-  const view = isHist ? histData : data
+  const view = isHist ? histData : isBands ? bandData : data
   const measureLabel = measure === 'count' ? 'Count' : `${AGG_LABELS[agg]} of ${measure}`
-  const titleText = isHist
-    ? `Distribution of ${measure}`
-    : (isDate ? `${measureLabel} over ${dimension}` : `${measureLabel} by ${dimension}`)
+  // Report-ready titles modeled on the Active Tracking dashboards — e.g.
+  // "Employees by Average Score", "Performance Distribution", "Score
+  // Distribution", "Score Trend Over Time", "Average Score by Department".
+  // Derived (not stored) so the title stays accurate when reconfigured.
+  const titleText = useMemo(() => {
+    if (isBands) return 'Performance Distribution'
+    if (isHist) return `${measure} Distribution`
+    if (measure === 'count') {
+      if (isDate) return 'Records Over Time'
+      return type === 'pie' ? `${dimension} Breakdown` : `${dimension} Distribution`
+    }
+    const aggWord = AGG_LABELS[agg] // Average / Sum / Min / Max
+    if (isDate) return aggWord === 'Average' ? `${measure} Trend Over Time` : `${aggWord} ${measure} Over Time`
+    // Per-person framing for the identity column: "Employees by Average Score".
+    if (dimension === identityColumn) {
+      const who = PEOPLE_NAME_RE.test(dimension) ? 'Employees' : dimension
+      return `${who} by ${aggWord} ${measure}`
+    }
+    return `${aggWord} ${measure} by ${dimension}`
+  }, [isHist, isBands, isDate, type, dimension, measure, agg, identityColumn])
   const showTopN = limitable && fullData.length > TOPN_OPTIONS[0]
 
   const renderChart = () => {
@@ -1455,6 +1571,19 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
               {data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
             </Pie>
             <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (type === 'bands') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie data={bandData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={100} paddingAngle={2} label={(d) => `${d.name}: ${d.value}`} cursor="pointer" onClick={drillRange}>
+              {bandData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+            </Pie>
+            <Tooltip formatter={(v) => [`${v} ${v === 1 ? 'person' : 'people'}`, 'Count']} />
             <Legend />
           </PieChart>
         </ResponsiveContainer>
@@ -1506,9 +1635,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
           value={type}
           onChange={(e) => {
             const t = e.target.value
-            // Histogram needs a numeric measure; switch off "count" automatically.
+            // Histogram and bands need a numeric measure; switch off "count".
             const patch = { type: t }
-            if (t === 'histogram' && measure === 'count') {
+            if ((t === 'histogram' || t === 'bands') && measure === 'count') {
               patch.measure = numericCols[0]?.name
               patch.agg = 'avg'
             }
@@ -1520,9 +1649,10 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
           <option value="line">Line</option>
           <option value="pie">Pie</option>
           {numericCols.length > 0 && <option value="histogram">Histogram</option>}
+          {numericCols.length > 0 && <option value="bands">Performance bands</option>}
         </select>
 
-        {!isHist && (
+        {!isHist && !isBands && (
           <>
             <span className="di-chart-controls__sep">by</span>
             <select className="di-select" value={dimension} onChange={(e) => onUpdate(widget.id, { dimension: e.target.value })}>
@@ -1541,11 +1671,11 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, onUpda
             onUpdate(widget.id, { measure: m, agg: m === 'count' ? 'count' : (agg === 'count' ? 'avg' : agg) })
           }}
         >
-          {!isHist && <option value="count">Count of rows</option>}
+          {!isHist && !isBands && <option value="count">Count of rows</option>}
           {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select>
 
-        {measure !== 'count' && !isHist && (
+        {measure !== 'count' && !isHist && !isBands && (
           <select className="di-select" value={agg} onChange={(e) => onUpdate(widget.id, { agg: e.target.value })}>
             <option value="sum">Sum</option>
             <option value="avg">Average</option>
