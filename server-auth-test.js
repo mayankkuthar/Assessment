@@ -2146,7 +2146,7 @@ function getDefaultPDFTemplate() {
   return {
     header: { 
       enabled: true, 
-      backgroundColor: '#2563eb', 
+      backgroundColor: '#895BF5', 
       textColor: '#ffffff',
       title: 'Assessment Performance Report',
       subtitle: 'Comprehensive Analysis Report',
@@ -2240,7 +2240,7 @@ function getDefaultPDFTemplate() {
       fontSizes: { h1: 28, h2: 24, h3: 20, h4: 18, h5: 16, body: 12, small: 10 }
     },
     colors: {
-      primary: '#2563eb',
+      primary: '#895BF5',
       secondary: '#6b7280',
       success: '#10b981',
       warning: '#f59e0b',

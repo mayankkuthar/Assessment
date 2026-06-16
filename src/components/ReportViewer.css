@@ -3,10 +3,14 @@
 .report-viewer-shell {
   width: 100%;
   min-height: 100vh;
-  background: radial-gradient(circle at top left, var(--color-bg) 0%, var(--color-card) 100%);
+  background: radial-gradient(circle at top left, #FAF5FF 0%, #F3E8FF 50%, #E9D5FF 100%);
   padding: var(--space-4);
   box-sizing: border-box;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body.dark .report-viewer-shell {
+  background: radial-gradient(circle at top left, #1e152a 0%, #0c0a12 100%);
 }
 
 @media (min-width: 640px) {
@@ -84,7 +88,7 @@ body.dark .rv-shell-header {
 }
 
 .rv-btn--primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #4f46e5 50%, #3730a3 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #7C3AED 50%, #6D28D9 100%);
   color: #ffffff;
   box-shadow: 0 4px 15px rgba(137, 91, 245, 0.35);
   border: none;
@@ -788,4 +792,139 @@ body.dark .rv-profile-item {
 .bar-chart-bar:hover {
   transform: translateY(-4px);
   filter: brightness(1.05);
+}
+
+/* ── Premium Intro Card Styling ────────────────────────── */
+.rv-card--intro {
+  position: relative;
+  overflow: hidden;
+  border-top: 4px solid var(--color-primary);
+  background: linear-gradient(180deg, var(--color-surface) 0%, rgba(137, 91, 245, 0.01) 100%);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) !important;
+}
+
+.rv-card--intro::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(137, 91, 245, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── High Fidelity Markdown styling ────────────────────── */
+.rv-markdown-content h1 {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-4);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #a68af9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  letter-spacing: -0.5px;
+}
+
+.rv-markdown-content h2 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-6);
+  color: var(--color-primary);
+  border-left: 4px solid var(--color-primary);
+  padding-left: var(--space-3);
+  letter-spacing: -0.2px;
+  text-transform: uppercase;
+}
+
+.rv-markdown-content h3 {
+  font-size: var(--text-base);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+  margin-top: var(--space-6);
+  color: var(--color-fg);
+}
+
+.rv-markdown-content p {
+  margin-bottom: var(--space-4);
+  font-size: 0.95rem;
+  color: var(--color-secondary);
+  line-height: 1.8;
+  text-align: justify;
+}
+
+.rv-markdown-content strong {
+  color: var(--color-fg);
+  font-weight: 700;
+}
+
+.rv-markdown-content ul {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: var(--space-4);
+}
+
+.rv-markdown-content ul li {
+  position: relative;
+  padding-left: var(--space-5);
+  margin-bottom: var(--space-3);
+  font-size: 0.95rem;
+  color: var(--color-secondary);
+  line-height: 1.6;
+}
+
+.rv-markdown-content ul li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary);
+}
+
+.rv-markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-6) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+}
+
+.rv-markdown-content th {
+  background-color: rgba(137, 91, 245, 0.05);
+  color: var(--color-primary);
+  font-weight: 800;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border-bottom: 2px solid rgba(137, 91, 245, 0.15);
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.rv-markdown-content td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+  color: var(--color-secondary);
+  line-height: 1.6;
+  text-align: left;
+}
+
+.rv-markdown-content tr:last-child td {
+  border-bottom: none;
+}
+
+.rv-markdown-content tr:nth-of-type(even) {
+  background-color: rgba(137, 91, 245, 0.015);
 }
