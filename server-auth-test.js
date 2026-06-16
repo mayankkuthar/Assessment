@@ -26,6 +26,10 @@ function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      data.quizzes = (data.quizzes || []).map(q => ({
+        ...q,
+        start_instructions: q.start_instructions !== undefined ? q.start_instructions : ''
+      }));
       return {
         users: data.users || [],
         profiles: data.profiles || [],
@@ -33,7 +37,7 @@ function loadData() {
         employees: data.employees || [],
         packets: data.packets || [],
         questions: data.questions || [],
-        quizzes: data.quizzes || [],
+        quizzes: data.quizzes,
         quizAssignments: data.quizAssignments || [],
         quizAttempts: data.quizAttempts || [],
         auditLog: data.auditLog || []
@@ -1580,6 +1584,7 @@ app.post('/api/quizzes', (req, res) => {
     passing_score: newQuiz.passing_score || 70,
     report_header: newQuiz.report_header || '',
     report_footer: newQuiz.report_footer || '',
+    start_instructions: newQuiz.start_instructions || '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -1609,6 +1614,7 @@ app.put('/api/quizzes/:id', (req, res) => {
     passing_score: updateData.passing_score || mockData.quizzes[quizIndex].passing_score,
     report_header: updateData.report_header !== undefined ? updateData.report_header : mockData.quizzes[quizIndex].report_header,
     report_footer: updateData.report_footer !== undefined ? updateData.report_footer : mockData.quizzes[quizIndex].report_footer,
+    start_instructions: updateData.start_instructions !== undefined ? updateData.start_instructions : mockData.quizzes[quizIndex].start_instructions,
     updated_at: new Date().toISOString()
   };
   
