@@ -9,6 +9,7 @@ import {
   quizPacketService,
   userService
 } from '../services/database'
+import { enrichQuizWithInstructions } from '../components/QuizInstructionsMap'
 
 export const useDatabase = () => {
   const [profiles, setProfiles] = useState([])
@@ -42,6 +43,9 @@ export const useDatabase = () => {
       setProfiles(profilesData)
       setOrganizations(organizationsData)
       setPackets(packetsData)
+      if (quizzesData && Array.isArray(quizzesData)) {
+        quizzesData.forEach(q => enrichQuizWithInstructions(q));
+      }
       setQuizzes(quizzesData)
       setQuizAssignments(quizAssignmentsData)
 
@@ -276,6 +280,7 @@ export const useDatabase = () => {
   const addQuiz = useCallback(async (quiz) => {
     try {
       const newQuiz = await quizService.createQuiz(quiz)
+      enrichQuizWithInstructions(newQuiz);
       setQuizzes(prev => [...prev, newQuiz])
       return newQuiz
     } catch (err) {
@@ -288,6 +293,7 @@ export const useDatabase = () => {
   const updateQuiz = useCallback(async (id, updates) => {
     try {
       const updatedQuiz = await quizService.updateQuiz(id, updates)
+      enrichQuizWithInstructions(updatedQuiz);
       setQuizzes(prev => prev.map(q => q.id === id ? updatedQuiz : q))
       return updatedQuiz
     } catch (err) {
@@ -386,7 +392,9 @@ export const useDatabase = () => {
   // Get quiz by ID
   const getQuizById = useCallback(async (id) => {
     try {
-      return await quizService.getQuizById(id)
+      const quiz = await quizService.getQuizById(id)
+      enrichQuizWithInstructions(quiz);
+      return quiz
     } catch (err) {
       console.error('Error getting quiz by ID:', err)
       setError(err.message)

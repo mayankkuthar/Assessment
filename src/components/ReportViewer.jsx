@@ -12,6 +12,8 @@ import remarkGfm from 'remark-gfm';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import './ReportViewer.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 // Custom alpha function for hex/rgb to rgba conversion without material-ui
 const alpha = (color, opacity) => {
@@ -572,6 +574,7 @@ const ReportViewer = () => {
         }
 
         const quizData = await quizRes.json();
+        enrichQuizWithInstructions(quizData);
         const attempts = await attemptsRes.json();
         const packetData = await packetsRes.json();
         let templateData = null;

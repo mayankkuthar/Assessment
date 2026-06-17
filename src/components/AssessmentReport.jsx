@@ -7,6 +7,8 @@ import {
 } from '@mui/icons-material';
 import PDFGenerator from '../services/pdfGenerator';
 import './AssessmentReport.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 const AssessmentReport = () => {
   const [quizzes, setQuizzes] = useState([]);
@@ -43,6 +45,9 @@ const AssessmentReport = () => {
       const quizzesData = await quizzesRes.json();
       const profilesData = await profilesRes.json();
 
+      if (quizzesData && Array.isArray(quizzesData)) {
+        quizzesData.forEach(q => enrichQuizWithInstructions(q));
+      }
       setQuizzes(quizzesData);
       setProfiles(profilesData);
     } catch (err) {

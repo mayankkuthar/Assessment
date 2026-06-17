@@ -7,6 +7,8 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import './QuizAttempt.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 // Helper function to get readable packet names
 const getPacketName = (packetId) => {
@@ -94,6 +96,7 @@ const QuizAttempt = () => {
         }
 
         const quizData = await quizRes.json();
+        enrichQuizWithInstructions(quizData);
         const questionsData = await questionsRes.json();
         const profilesData = profilesRes.ok ? await profilesRes.json() : [];
         const assignmentsData = assignmentsRes.ok ? await assignmentsRes.json() : [];
@@ -630,16 +633,15 @@ const QuizAttempt = () => {
                   alt="HappiMynd Logo"
                   className="quiz-attempt__desc-logo"
                 />
+                <h2 className="quiz-attempt__desc-title">
+                  Why should I take this assessment?
+                </h2>
                 {quiz?.start_instructions ? (
                   <div className="quiz-attempt__desc-markdown">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
                   </div>
                 ) : (
                   <>
-                    <h2 className="quiz-attempt__desc-title">
-                      Why should I take this assessment?
-                    </h2>
-                    
                     <div className="quiz-attempt__desc-body">
                       <p>
                         Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
