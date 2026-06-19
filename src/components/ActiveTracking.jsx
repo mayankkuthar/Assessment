@@ -63,6 +63,7 @@ const PDF_INK = [24, 24, 27]       // near-black body text
 const PDF_MUTED = [114, 114, 121]  // secondary text
 const PDF_FAINT = [161, 161, 170]  // footer / captions
 const PDF_HAIRLINE = [228, 228, 231]
+const PDF_PAGE_BG = [244, 242, 254]   // soft lavender page wash
 
 // Convert a #rrggbb hex string to an [r, g, b] tuple for jsPDF setters.
 const hexToRgb = (hex) => {
@@ -548,7 +549,7 @@ const ActiveTracking = () => {
 
       // Reserved zones for the repeating header band and footer so content
       // never collides with the branding.
-      const HEADER_H = 22           // band height on content pages
+      const HEADER_H = 28           // band height on content pages
       const FOOTER_H = 14           // footer strip height on every page
       const contentTop = HEADER_H + 8
       const contentBottom = pageH - FOOTER_H - 2
@@ -566,6 +567,18 @@ const ActiveTracking = () => {
         if (pdf.getTextWidth(s) <= maxW) return s
         while (s.length > 1 && pdf.getTextWidth(`${s}…`) > maxW) s = s.slice(0, -1)
         return `${s}…`
+      }
+
+      // Wash every page in a soft lavender so the report reads as branded
+      // stationery rather than plain white. Must run before any page content.
+      const paintPageBg = () => {
+        pdf.setFillColor(...PDF_PAGE_BG)
+        pdf.rect(0, 0, pageW, pageH, 'F')
+      }
+      // Add a fresh page that already carries the lavender wash.
+      const newPage = () => {
+        pdf.addPage()
+        paintPageBg()
       }
 
       // Prepare SVG elements for html2canvas by copy-inlining computed styles and fixing tspan offsets.
@@ -645,36 +658,39 @@ const ActiveTracking = () => {
 
       // ── 1. Cover page ──────────────────────────────────────
       const drawCover = () => {
+        // Lavender stationery wash for the whole page
+        paintPageBg()
+
         // Full-width brand band across the top
         pdf.setFillColor(...PDF_BRAND)
         pdf.rect(0, 0, pageW, 4, 'F')
 
         // Centered logo
         if (logo) {
-          const h = 16
+          const h = 28
           const w = h * logoAspect
-          pdf.addImage(logo, 'PNG', (pageW - w) / 2, 56, w, h)
+          pdf.addImage(logo, 'PNG', (pageW - w) / 2, 50, w, h)
         }
 
         // Eyebrow label
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(11)
         pdf.setTextColor(...PDF_BRAND)
-        pdf.text('ACTIVE TRACKING REPORT', pageW / 2, 92, { align: 'center' })
+        pdf.text('ACTIVE TRACKING REPORT', pageW / 2, 96, { align: 'center' })
 
         // Organization (main title)
         pdf.setFontSize(30)
         pdf.setTextColor(...PDF_INK)
-        pdf.text(fitText(selectedOrg, contentW), pageW / 2, 108, { align: 'center' })
+        pdf.text(fitText(selectedOrg, contentW), pageW / 2, 112, { align: 'center' })
 
         // Accent rule under the title
         pdf.setFillColor(...PDF_BRAND)
-        pdf.rect(pageW / 2 - 16, 114, 32, 1.2, 'F')
+        pdf.rect(pageW / 2 - 16, 118, 32, 1.2, 'F')
 
         // Metadata box
         const boxW = 130
         const boxX = (pageW - boxW) / 2
-        const boxY = 130
+        const boxY = 134
         const rows = [
           ['View', viewLabel],
           ['Period', periodLabel],
@@ -682,7 +698,7 @@ const ActiveTracking = () => {
         ]
         const rowH = 11
         const boxH = rows.length * rowH + 8
-        pdf.setFillColor(249, 248, 254)
+        pdf.setFillColor(255, 255, 255)
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
         pdf.roundedRect(boxX, boxY, boxW, boxH, 3, 3, 'FD')
@@ -714,13 +730,13 @@ const ActiveTracking = () => {
         pdf.setFillColor(...PDF_BRAND)
         pdf.rect(0, 0, pageW, 2.5, 'F')
         if (logo) {
-          const h = 8
-          pdf.addImage(logo, 'PNG', margin, 8, h * logoAspect, h)
+          const h = 16
+          pdf.addImage(logo, 'PNG', margin, 7, h * logoAspect, h)
         }
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(9)
         pdf.setTextColor(...PDF_BRAND)
-        pdf.text(`Active Tracking · ${fitText(selectedOrg, 70)}`, pageW - margin, 13, { align: 'right' })
+        pdf.text(`Active Tracking · ${fitText(selectedOrg, 70)}`, pageW - margin, 16, { align: 'right' })
         pdf.setFont('helvetica', 'normal')
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
@@ -766,7 +782,7 @@ const ActiveTracking = () => {
       drawCover()
 
       // ── 3. Executive summary (native, crisp vector) ────────
-      pdf.addPage()
+      newPage()
       let cursorY = drawSectionTitle('Executive Summary', '', contentTop) + 4
 
       // KPI tiles
@@ -884,7 +900,7 @@ const ActiveTracking = () => {
 
         // New page if the title + chart won't fit in remaining space
         if (cursorY + titleBlockH + drawH > contentBottom) {
-          pdf.addPage()
+          newPage()
           cursorY = contentTop
         } else {
           cursorY += 6
@@ -892,7 +908,13 @@ const ActiveTracking = () => {
 
         cursorY = drawSectionTitle(title, note, cursorY)
         const x = margin + (contentW - drawW) / 2
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, cursorY, drawW, drawH)
+        // White rounded card behind the chart so it reads as a panel on lavender.
+        pdf.setFillColor(255, 255, 255)
+        pdf.setDrawColor(...PDF_HAIRLINE)
+        pdf.setLineWidth(0.3)
+        pdf.roundedRect(x - 2, cursorY - 2, drawW + 4, drawH + 4, 2, 2, 'FD')
+        // JPEG keeps the file small; PNG of tall charts ballooned to 100s of MB.
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', x, cursorY, drawW, drawH, undefined, 'FAST')
         cursorY += drawH
       }
 

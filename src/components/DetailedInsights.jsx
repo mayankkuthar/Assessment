@@ -7,6 +7,10 @@ import {
   BarChart, Bar,
   LineChart, Line,
   PieChart, Pie, Cell,
+  ComposedChart,
+  ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Treemap,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList
 } from 'recharts'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -14,6 +18,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import InsightsIcon from '@mui/icons-material/Insights'
 import FilterAltIcon from '@mui/icons-material/FilterAlt'
 import AddChartIcon from '@mui/icons-material/Addchart'
+import TuneIcon from '@mui/icons-material/Tune'
 import TableChartIcon from '@mui/icons-material/TableChart'
 import CloseIcon from '@mui/icons-material/Close'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
@@ -37,6 +42,7 @@ const PDF_INK = [24, 24, 27]       // near-black body text
 const PDF_MUTED = [114, 114, 121]  // secondary text
 const PDF_FAINT = [161, 161, 170]  // footer / captions
 const PDF_HAIRLINE = [228, 228, 231]
+const PDF_PAGE_BG = [244, 242, 254]   // soft lavender page wash
 
 // Preload an image for the PDF; resolves null on failure so a missing logo
 // never breaks the export.
@@ -119,6 +125,55 @@ const pickMetric = (cols, rows) => {
 // "Employees by …" and Company view anonymizes the right column.
 const PEOPLE_NAME_RE = /\b(name|employee|employees|person|people|user|users|staff|member|members)\b/i
 
+// Assessment detection: every numeric column whose name contains the word
+// "Score" (EQ Score, Technical Score, Leadership Score, …) is treated as a
+// separate assessment. The Smart-charts pack builds an individual report for
+// each and comparative reports across all of them.
+const SCORE_NAME_RE = /\bscores?\b/i
+// Common HR dimensions the smart pack looks for to build the requested charts.
+const DEPT_RE = /\b(department|dept|division|team|function|unit|group)\b/i
+const DESIG_RE = /\b(designation|role|title|position|grade|level|band|seniority)\b/i
+const EXP_RE = /\b(experience|exp|tenure|years|yoe|service)\b/i
+
+// Diverging fill for a correlation cell: purple for positive, pink for
+// negative, with opacity scaling by strength so the matrix reads as a heatmap.
+const corrColor = (r) => {
+  if (r === null || r === undefined) return '#F4F4F5'
+  const a = Math.min(1, Math.abs(r))
+  return r >= 0 ? `rgba(137,91,245,${0.12 + 0.88 * a})` : `rgba(224,108,159,${0.12 + 0.88 * a})`
+}
+const shortLabel = (s, n = 16) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s))
+
+// Sequential brand fill for a 0–100 performance value: pink-tinted when weak,
+// deepening to brand purple as it strengthens. Used by the heatmap & treemap.
+const heatColor = (pct) => {
+  if (pct === null || pct === undefined) return '#F4F4F5'
+  const t = Math.max(0, Math.min(1, pct / 100))
+  // Interpolate pink (#E06C9F → weak) to purple (#5B3FB8 → strong).
+  const lerp = (a, b) => Math.round(a + (b - a) * t)
+  const r = lerp(0xE0, 0x5B), g = lerp(0x6C, 0x3F), b = lerp(0x9F, 0xB8)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+// Custom Treemap tile: area encodes headcount, fill encodes average score, so
+// big-but-weak and small-but-strong groups read at a glance. Labels are drawn
+// only when the tile is large enough to hold them.
+const TreemapTile = (props) => {
+  const { x, y, width, height, name, avg, n, pct } = props
+  if (!(width > 0 && height > 0)) return null
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={heatColor(pct)} stroke="#fff" strokeWidth={2} />
+      {width > 64 && height > 34 && (
+        <>
+          <text x={x + 7} y={y + 19} fill="#fff" fontSize={12} fontWeight={700}>{shortLabel(name, Math.floor(width / 8))}</text>
+          <text x={x + 7} y={y + 35} fill="#fff" fontSize={11} fillOpacity={0.92}>avg {avg} · n={n}</text>
+        </>
+      )}
+    </g>
+  )
+}
+
 // Choose the column that identifies each record. Prefer an explicitly
 // person-named column (e.g. "Full Name") over emails / IDs, then fall back to
 // the highest-cardinality text/categorical column.
@@ -177,6 +232,42 @@ const groupStats = (rows, dim, metric) => {
         : g.count
     }))
     .sort((a, b) => b.value - a.value)
+}
+
+// Pearson correlation coefficient for paired [x, y] samples (null if undefined).
+const pearson = (pairs) => {
+  const n = pairs.length
+  if (n < 3) return null
+  const mx = pairs.reduce((s, p) => s + p[0], 0) / n
+  const my = pairs.reduce((s, p) => s + p[1], 0) / n
+  let cov = 0, vx = 0, vy = 0
+  pairs.forEach(([x, y]) => { cov += (x - mx) * (y - my); vx += (x - mx) ** 2; vy += (y - my) ** 2 })
+  if (vx === 0 || vy === 0) return null
+  return cov / Math.sqrt(vx * vy)
+}
+
+// Least-squares trend line (slope + intercept) for paired [x, y] samples.
+const linReg = (pairs) => {
+  const n = pairs.length
+  if (n < 2) return null
+  const sx = pairs.reduce((s, p) => s + p[0], 0)
+  const sy = pairs.reduce((s, p) => s + p[1], 0)
+  const sxy = pairs.reduce((s, p) => s + p[0] * p[1], 0)
+  const sxx = pairs.reduce((s, p) => s + p[0] * p[0], 0)
+  const d = n * sxx - sx * sx
+  if (d === 0) return null
+  const slope = (n * sxy - sx * sy) / d
+  return { slope, intercept: (sy - slope * sx) / n }
+}
+
+// Map a raw score to a performance band using its detected scale (out of 5/10/100).
+const BAND_KEYS = ['Excellent', 'Good', 'Needs Improvement']
+const BAND_COLOR = { Excellent: '#895BF5', Good: '#A68AF9', 'Needs Improvement': '#E06C9F' }
+const bandOf = (raw, scale) => bandForPct((raw / scale) * 100)
+
+const strengthWord = (r) => {
+  const a = Math.abs(r)
+  return a >= 0.6 ? 'strong' : a >= 0.3 ? 'moderate' : a >= 0.15 ? 'weak' : 'no meaningful'
 }
 
 // Derive an at-a-glance narrative + highlight stats for the current rows,
@@ -238,6 +329,12 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
   const [viewMode, setViewMode] = useState('internal') // 'internal' | 'company'
   const [identityColumn, setIdentityColumn] = useState('') // column whose values get anonymized
   const [exporting, setExporting] = useState(false)
+  const [builderOpen, setBuilderOpen] = useState(false)   // custom-chart configuration pop-up
+  // Optional narrative that brackets the PDF: an opening statement up front and
+  // closing remarks at the end, both rendered as branded sections.
+  const [openingStatement, setOpeningStatement] = useState('')
+  const [closingStatement, setClosingStatement] = useState('')
+  const [showNarrative, setShowNarrative] = useState(true)
 
   const fileInputRef = useRef(null)
   const dashboardRef = useRef(null)
@@ -321,6 +418,8 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
     setTablePage(0)
     setViewMode('internal')
     setIdentityColumn('')
+    setOpeningStatement('')
+    setClosingStatement('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -490,22 +589,97 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
   // categorical/text columns, never numeric measures or dates).
   const identityCols = useMemo(() => columns.filter(c => c.type === 'categorical' || c.type === 'text'), [columns])
 
-  const addWidget = () => {
-    const dim = dimensionCols[0]?.name || columns[0]?.name
-    if (!dim) return
-    const dimType = columns.find(c => c.name === dim)?.type
-    setWidgets(prev => [...prev, {
-      id: `w_${Date.now()}_${prev.length}`,
-      type: dimType === 'date' ? 'line' : 'bar',
-      dimension: dim,
-      measure: 'count',
-      agg: 'count',
-      topN: 15
-    }])
+  // Each numeric column named like a "Score" is a separate assessment. When the
+  // sheet has no literal Score column we fall back to every numeric measure so
+  // the Smart-charts pack still works on generic data.
+  const scoreCols = useMemo(() => {
+    const named = numericCols.filter(c => SCORE_NAME_RE.test(c.name))
+    return (named.length ? named : numericCols).map(c => c.name)
+  }, [numericCols])
+
+  // Add a fully-configured chart from the builder pop-up.
+  const createWidget = (cfg) => {
+    setWidgets(prev => [...prev, { id: `w_${Date.now()}_${prev.length}`, ...cfg }])
+    setBuilderOpen(false)
   }
   const updateWidget = (id, patch) =>
     setWidgets(prev => prev.map(w => (w.id === id ? { ...w, ...patch } : w)))
   const removeWidget = (id) => setWidgets(prev => prev.filter(w => w.id !== id))
+
+  // One-click "smart pack": treat every Score column as a separate assessment,
+  // then build (a) an individual report for each assessment and (b) comparative
+  // reports across all of them. Each generated chart carries an executive
+  // explanation (metrics / business value / insights / interpretation).
+  const addSmartCharts = () => {
+    const scores = scoreCols
+    if (!scores.length) return
+
+    // A low-cardinality category makes the best grouping axis (e.g. Department).
+    const grpCandidates = categoricalCols
+      .map(c => ({ name: c.name, card: distinctCount(filteredRows, c.name) }))
+      .filter(c => c.card >= 2 && c.card <= 15)
+      .sort((a, b) => a.card - b.card)
+    // Prefer name-matched HR dimensions, else the smallest usable category.
+    const deptDim = dimensionCols.find(c => DEPT_RE.test(c.name))?.name || grpCandidates[0]?.name || categoricalCols[0]?.name
+    const desigDim = dimensionCols.find(c => DESIG_RE.test(c.name) && c.name !== deptDim)?.name
+    const expCol = numericCols.find(c => EXP_RE.test(c.name) && !scores.includes(c.name))?.name
+    const dateCol = columns.find(c => c.type === 'date')?.name
+    const entity = pickIdentity(columns, rows)
+
+    const base = Date.now()
+    let i = 0
+    const make = (cfg) => ({ id: `w_${base}_${i++}`, agg: 'avg', topN: 10, ...cfg })
+    const pack = []
+
+    // Participation concentration — how respondents spread across the org. One
+    // chart (count-based), since it contextualizes every assessment's averages.
+    if (deptDim) pack.push(make({ type: 'pareto', dimension: deptDim, measure: 'count' }))
+
+    // ── (a) Individual assessment report — one block per Score column ──
+    scores.forEach(metric => {
+      if (deptDim) pack.push(make({ type: 'combo', dimension: deptDim, measure: metric }))        // Dept performance: responses + avg
+      if (deptDim) pack.push(make({ type: 'range', dimension: deptDim, measure: metric }))        // Avg trustworthiness: spread + n per dept
+      pack.push(make({ type: 'histogram', measure: metric }))                                      // Score distribution
+      pack.push(make({ type: 'bands', measure: metric }))                                          // Employees within score bands
+      if (entity) {
+        pack.push(make({ type: 'hbar', dimension: entity, measure: metric, order: 'desc' }))       // Top performers
+        pack.push(make({ type: 'hbar', dimension: entity, measure: metric, order: 'asc' }))        // Low performers
+      }
+      if (expCol) pack.push(make({ type: 'scatterline', xMeasure: expCol, yMeasure: metric }))     // Experience vs Score (points + trend)
+      if (desigDim) pack.push(make({ type: 'hbar', dimension: desigDim, measure: metric, agg: 'avg' })) // Designation vs Score
+      if (dateCol) pack.push(make({ type: 'progression', dimension: dateCol, measure: metric }))   // Progression over time (points + trend)
+      if (deptDim) pack.push(make({ type: 'riskmatrix', dimension: deptDim, measure: metric }))    // Risk: low score × large headcount
+    })
+
+    // Mean + spread of the primary assessment — average per group with the
+    // individual scores behind it, so a strong average hiding wide variation shows.
+    if (deptDim) pack.push(make({ type: 'meanspread', dimension: deptDim, measure: scores[0] }))
+
+    // A treemap of the primary assessment — headcount sizing + score color in
+    // one tile per group (complements the combo's responses-vs-average read).
+    if (deptDim) pack.push(make({ type: 'treemap', dimension: deptDim, measure: scores[0] }))
+
+    // ── (b) Comparative reports — only meaningful with 2+ assessments ──
+    if (scores.length >= 2) {
+      if (deptDim) pack.push(make({ type: 'grouped', dimension: deptDim, scores }))                // Dept comparison across all assessments
+      if (deptDim) pack.push(make({ type: 'heatmap', dimension: deptDim, scores }))                // Group × assessment capability map
+      pack.push(make({ type: 'correlation', scores }))                                             // Assessment correlation matrix
+      pack.push(make({ type: 'radar', scores }))                                                   // Strength / weakness radar
+      pack.push(make({ type: 'quadrant', xMeasure: scores[0], yMeasure: scores[1] }))              // Talent matrix on the first two assessments
+      // Pairwise scatters for the first few assessment pairs (EQ vs Technical, …)
+      let pairs = 0
+      for (let a = 0; a < scores.length && pairs < 3; a++) {
+        for (let b = a + 1; b < scores.length && pairs < 3; b++) {
+          pack.push(make({ type: 'scatter', xMeasure: scores[a], yMeasure: scores[b] }))
+          pairs++
+        }
+      }
+    }
+
+    // Generating the report replaces the working set so it reads top-to-bottom
+    // as a structured deliverable rather than appending to ad-hoc charts.
+    if (pack.length) setWidgets(pack)
+  }
 
   // ── Auto-generated insights ────────────────────────────────
   const insights = useMemo(
@@ -599,7 +773,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
       const margin = 14
       const contentW = pageW - margin * 2
 
-      const HEADER_H = 22
+      const HEADER_H = 28
       const FOOTER_H = 14
       const contentTop = HEADER_H + 8
       const contentBottom = pageH - FOOTER_H - 2
@@ -616,6 +790,18 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         if (pdf.getTextWidth(s) <= maxW) return s
         while (s.length > 1 && pdf.getTextWidth(`${s}…`) > maxW) s = s.slice(0, -1)
         return `${s}…`
+      }
+
+      // Wash every page in a soft lavender so the report reads as branded
+      // stationery rather than plain white. Must run before any page content.
+      const paintPageBg = () => {
+        pdf.setFillColor(...PDF_PAGE_BG)
+        pdf.rect(0, 0, pageW, pageH, 'F')
+      }
+      // Add a fresh page that already carries the lavender wash.
+      const newPage = () => {
+        pdf.addPage()
+        paintPageBg()
       }
 
       // Prepare SVG elements for html2canvas by copy-inlining computed styles and fixing tspan offsets.
@@ -695,28 +881,31 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
 
       // ── 1. Cover page ──────────────────────────────────────
       const drawCover = () => {
+        // Lavender stationery wash for the whole page
+        paintPageBg()
+
         pdf.setFillColor(...PDF_BRAND)
         pdf.rect(0, 0, pageW, 4, 'F')
         if (logo) {
-          const h = 16
+          const h = 28
           const w = h * logoAspect
-          pdf.addImage(logo, 'PNG', (pageW - w) / 2, 56, w, h)
+          pdf.addImage(logo, 'PNG', (pageW - w) / 2, 50, w, h)
         }
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(11)
         pdf.setTextColor(...PDF_BRAND)
-        pdf.text('DETAILED INSIGHTS REPORT', pageW / 2, 92, { align: 'center' })
+        pdf.text('DETAILED INSIGHTS REPORT', pageW / 2, 96, { align: 'center' })
 
         pdf.setFontSize(30)
         pdf.setTextColor(...PDF_INK)
-        pdf.text(fitText(reportName, contentW), pageW / 2, 108, { align: 'center' })
+        pdf.text(fitText(reportName, contentW), pageW / 2, 112, { align: 'center' })
 
         pdf.setFillColor(...PDF_BRAND)
-        pdf.rect(pageW / 2 - 16, 114, 32, 1.2, 'F')
+        pdf.rect(pageW / 2 - 16, 118, 32, 1.2, 'F')
 
         const boxW = 130
         const boxX = (pageW - boxW) / 2
-        const boxY = 130
+        const boxY = 134
         const metaRows = [
           ['View', viewLabel],
           ['Records', `${summary.filtered} of ${summary.total}`],
@@ -725,7 +914,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         ]
         const rowH = 11
         const boxH = metaRows.length * rowH + 8
-        pdf.setFillColor(249, 248, 254)
+        pdf.setFillColor(255, 255, 255)
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
         pdf.roundedRect(boxX, boxY, boxW, boxH, 3, 3, 'FD')
@@ -757,13 +946,13 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         pdf.setFillColor(...PDF_BRAND)
         pdf.rect(0, 0, pageW, 2.5, 'F')
         if (logo) {
-          const h = 8
-          pdf.addImage(logo, 'PNG', margin, 8, h * logoAspect, h)
+          const h = 16
+          pdf.addImage(logo, 'PNG', margin, 7, h * logoAspect, h)
         }
         pdf.setFont('helvetica', 'bold')
         pdf.setFontSize(9)
         pdf.setTextColor(...PDF_BRAND)
-        pdf.text(`Detailed Insights · ${fitText(reportName, 70)}`, pageW - margin, 13, { align: 'right' })
+        pdf.text(`Detailed Insights · ${fitText(reportName, 70)}`, pageW - margin, 16, { align: 'right' })
         pdf.setFont('helvetica', 'normal')
         pdf.setDrawColor(...PDF_HAIRLINE)
         pdf.setLineWidth(0.3)
@@ -803,11 +992,61 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         return next
       }
 
+      // Render a free-text narrative section inside a branded white card,
+      // splitting across pages when the text is long. Returns the new cursorY.
+      const drawNarrative = (title, text, startY) => {
+        let y = startY
+        const paras = String(text).split(/\n{1,}/).map(s => s.trim()).filter(Boolean)
+        const lineH = 5
+        const padX = 6
+        const padY = 6
+
+        if (y + 20 > contentBottom) { newPage(); y = contentTop }
+        y = drawSectionTitle(title, '', y) + 2
+
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(10)
+
+        for (const para of paras) {
+          const wrapped = pdf.splitTextToSize(para, contentW - padX * 2)
+          // Page-break before a paragraph that wouldn't fit at all.
+          if (y + padY + lineH > contentBottom) { newPage(); y = contentTop }
+
+          // Draw the paragraph line by line so a long block can flow onto the
+          // next page while keeping the lavender-on-white card look on each page.
+          let i = 0
+          while (i < wrapped.length) {
+            const remaining = contentBottom - y - padY
+            const linesThatFit = Math.max(1, Math.floor(remaining / lineH))
+            const slice = wrapped.slice(i, i + linesThatFit)
+            const boxH = slice.length * lineH + padY * 2
+            pdf.setFillColor(255, 255, 255)
+            pdf.setDrawColor(...PDF_HAIRLINE)
+            pdf.setLineWidth(0.3)
+            pdf.roundedRect(margin, y, contentW, boxH, 2.5, 2.5, 'FD')
+            pdf.setFillColor(...PDF_BRAND)
+            pdf.rect(margin, y + 3, 1.4, boxH - 6, 'F')
+            pdf.setTextColor(...PDF_INK)
+            pdf.text(slice, margin + padX, y + padY + 3.5)
+            y += boxH + 4
+            i += slice.length
+            if (i < wrapped.length) { newPage(); y = contentTop }
+          }
+        }
+        return y
+      }
+
       // ── Cover ──
       drawCover()
 
+      // ── 2b. Opening statement (optional, branded) ──────────
+      if (openingStatement.trim()) {
+        newPage()
+        drawNarrative('Opening Statement', openingStatement, contentTop)
+      }
+
       // ── 3. Executive summary (native vector) ───────────────
-      pdf.addPage()
+      newPage()
       let cursorY = drawSectionTitle('Executive Summary', '', contentTop) + 4
 
       const tiles = insights && insights.hasMetric
@@ -894,7 +1133,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
         }
 
         if (cursorY + titleBlockH + drawH > contentBottom) {
-          pdf.addPage()
+          newPage()
           cursorY = contentTop
         } else {
           cursorY += 6
@@ -902,8 +1141,19 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
 
         cursorY = drawSectionTitle(title, '', cursorY)
         const x = margin + (contentW - drawW) / 2
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, cursorY, drawW, drawH)
+        // White rounded card behind the chart so it reads as a panel on lavender.
+        pdf.setFillColor(255, 255, 255)
+        pdf.setDrawColor(...PDF_HAIRLINE)
+        pdf.setLineWidth(0.3)
+        pdf.roundedRect(x - 2, cursorY - 2, drawW + 4, drawH + 4, 2, 2, 'FD')
+        // JPEG keeps the file small; PNG of tall charts ballooned to 100s of MB.
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', x, cursorY, drawW, drawH, undefined, 'FAST')
         cursorY += drawH
+      }
+
+      // ── 4b. Closing remarks (optional, branded) ────────────
+      if (closingStatement.trim()) {
+        cursorY = drawNarrative('Closing Remarks', closingStatement, cursorY + 8)
       }
 
       // ── 5. Stamp header/footer (cover keeps its own band) ──
@@ -1066,6 +1316,45 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
             </div>
           )}
 
+          {/* Report narrative — opening & closing text rendered into the PDF */}
+          <div className="di-panel">
+            <div className="di-panel__head">
+              <h2><PictureAsPdfIcon /> Report narrative <span className="di-hint">PDF only</span></h2>
+              <button className="di-link" onClick={() => setShowNarrative(s => !s)}>
+                {showNarrative ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showNarrative && (
+              <div className="di-narrative">
+                <div className="di-narrative__field">
+                  <label htmlFor="di-opening">Opening statement</label>
+                  <textarea
+                    id="di-opening"
+                    className="di-textarea"
+                    rows={3}
+                    placeholder="Intro shown at the start of the PDF — e.g. purpose of this assessment review, period covered, audience…"
+                    value={openingStatement}
+                    onChange={(e) => setOpeningStatement(e.target.value)}
+                  />
+                </div>
+                <div className="di-narrative__field">
+                  <label htmlFor="di-closing">Closing remarks</label>
+                  <textarea
+                    id="di-closing"
+                    className="di-textarea"
+                    rows={3}
+                    placeholder="Wrap-up shown at the end of the PDF — e.g. recommended next steps, owners, review date…"
+                    value={closingStatement}
+                    onChange={(e) => setClosingStatement(e.target.value)}
+                  />
+                </div>
+                <p className="di-narrative__note">
+                  These appear only in the exported PDF — the opening as the first section after the cover, the closing remarks at the very end. Leave blank to omit.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Filters */}
           <div className="di-panel">
             <div className="di-panel__head">
@@ -1220,9 +1509,14 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
           <div className="di-panel" ref={dashboardRef}>
             <div className="di-panel__head">
               <h2><InsightsIcon /> Dashboards</h2>
-              <button className="btn btn--primary" onClick={addWidget}>
-                <AddChartIcon className="btn-icon" /> Add chart
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="btn btn--primary" onClick={addSmartCharts} title="Detect every Score column as an assessment and build per-assessment + comparative reports with executive commentary">
+                  <InsightsIcon className="btn-icon" /> Smart charts
+                </button>
+                <button className="btn btn--outline" onClick={() => setBuilderOpen(true)} title="Build your own chart — pick the type, fields, scale, order and color">
+                  <AddChartIcon className="btn-icon" /> Custom chart
+                </button>
+              </div>
             </div>
 
             {widgets.length === 0 ? (
@@ -1305,6 +1599,19 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
           </div>
         </div>
       )}
+
+      {/* Custom-chart builder pop-up */}
+      {builderOpen && (
+        <ChartBuilderModal
+          columns={columns}
+          dimensionCols={dimensionCols}
+          numericCols={numericCols}
+          categoricalCols={categoricalCols}
+          scoreCols={scoreCols}
+          onCreate={createWidget}
+          onClose={() => setBuilderOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1378,8 +1685,39 @@ const TOPN_OPTIONS = [10, 15, 25, 50]
 
 // ── Single configurable chart ────────────────────────────────
 const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identityColumn, onUpdate, onRemove, onDrill }) => {
-  const { type, dimension, measure, agg, topN = 15 } = widget
+  const { type, dimension, measure, agg, topN = 15, series, xMeasure, yMeasure, order, title, yMin, yMax, color } = widget
   const isDate = columns.find(c => c.name === dimension)?.type === 'date'
+  // Per-chart customization panel (custom title, scale, order, accent color).
+  const [showCustomize, setShowCustomize] = useState(false)
+  const categoricalCols = useMemo(() => columns.filter(c => c.type === 'categorical'), [columns])
+  // "Smart" chart types combine the metric with a second factor.
+  const isCombo = type === 'combo'
+  const isStacked = type === 'stacked'
+  const isScatter = type === 'scatter'
+  const isRisk = type === 'riskmatrix'
+  // Multi-assessment chart types span every Score column at once.
+  const isGrouped = type === 'grouped'
+  const isCorr = type === 'correlation'
+  const isRadar = type === 'radar'
+  // Dual-metric charts that pair a score read with participation / spread.
+  const isRange = type === 'range'
+  const isPareto = type === 'pareto'
+  // Matrix / map / quadrant views.
+  const isHeatmap = type === 'heatmap'   // dimension × assessment, colored by avg
+  const isTreemap = type === 'treemap'   // size = headcount, color = avg score
+  const isQuadrant = type === 'quadrant' // 9-box talent matrix on two assessments
+  // Combined charts that overlay two encodings to read two things at once.
+  const isDual = type === 'dualaxis'         // bar (metric A) + line (metric B), two axes
+  const isScatterLine = type === 'scatterline' // individual points + average trend line
+  const isProgression = type === 'progression' // points over time + average-per-period line
+  const isMeanSpread = type === 'meanspread'   // average bar per group + individual points
+
+  // The assessments a multi-score chart spans: the widget's stored list, else
+  // every numeric column. Filtered to columns that still exist as numbers.
+  const scoreList = useMemo(() => {
+    const list = (widget.scores && widget.scores.length) ? widget.scores : numericCols.map(c => c.name)
+    return list.filter(n => numericCols.some(c => c.name === n))
+  }, [widget.scores, numericCols])
 
   // Lift a clicked category/range up to the drill-down modal.
   const drillCategory = (d) => {
@@ -1438,9 +1776,12 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return { name, value: round1(value), count: g.count, ts: g.ts }
     })
     if (isDate) arr.sort((a, b) => a.ts - b.ts)
+    // `order: 'asc'` surfaces the lowest performers (bottom of the ranking);
+    // everything else ranks highest-first (top performers / largest groups).
+    else if (order === 'asc') arr.sort((a, b) => a.value - b.value)
     else arr.sort((a, b) => b.value - a.value)
     return arr
-  }, [rows, dimension, measure, agg, isDate])
+  }, [rows, dimension, measure, agg, isDate, order])
 
   // Histogram: bucket a numeric column into equal-width ranges (score spread).
   const histData = useMemo(() => {
@@ -1485,6 +1826,368 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       .filter(b => b.value > 0)
   }, [type, measure, rows])
 
+  // ── Combo: headcount (bars) + average metric (line) per category ──────────
+  const comboData = useMemo(() => {
+    if (!isCombo) return []
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const n = toNumber(r[measure])
+      g[k] = g[k] || { vals: [], total: 0 }
+      g[k].total += 1
+      if (n !== null) g[k].vals.push(n)
+    })
+    // `count` = responses (people who actually have a score for this assessment)
+    // so a high average backed by only a few respondents is immediately visible
+    // next to its bar. `total` keeps the group's full headcount for context.
+    return Object.entries(g)
+      .map(([name, v]) => ({
+        name,
+        count: v.vals.length,
+        total: v.total,
+        avg: v.vals.length ? round1(v.vals.reduce((s, n) => s + n, 0) / v.vals.length) : 0
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [isCombo, rows, dimension, measure])
+
+  // ── Stacked: category split by a 2nd category (or by score bands) ─────────
+  const stacked = useMemo(() => {
+    if (!isStacked) return { data: [], keys: [], byBands: false }
+    const byBands = series === '__bands__'
+    let scale = 100
+    if (byBands) {
+      const nums = rows.map(r => toNumber(r[measure])).filter(n => n !== null)
+      scale = detectScale(nums.length ? Math.max(...nums) : 100)
+    }
+    const keySet = new Set()
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      let sk
+      if (byBands) {
+        const n = toNumber(r[measure])
+        if (n === null) return
+        sk = bandOf(n, scale)
+      } else {
+        sk = (String(r[series] ?? '').trim()) || '—'
+      }
+      keySet.add(sk)
+      g[k] = g[k] || { __total: 0 }
+      g[k][sk] = (g[k][sk] || 0) + 1
+      g[k].__total += 1
+    })
+    const keys = byBands ? BAND_KEYS.filter(k => keySet.has(k)) : [...keySet].sort()
+    const data = Object.entries(g)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.__total - a.__total)
+    return { data, keys, byBands }
+  }, [isStacked, rows, dimension, series, measure])
+
+  // ── Scatter: two numeric columns, one point per row, + trend line ─────────
+  const scatter = useMemo(() => {
+    if (!isScatter || !xMeasure || !yMeasure) return { points: [], trend: null, r: null }
+    const points = rows
+      .map(r => ({ x: toNumber(r[xMeasure]), y: toNumber(r[yMeasure]) }))
+      .filter(p => p.x !== null && p.y !== null)
+    const pairs = points.map(p => [p.x, p.y])
+    const reg = linReg(pairs)
+    const r = pearson(pairs)
+    let trend = null
+    if (reg && points.length) {
+      const xs = points.map(p => p.x)
+      const minX = Math.min(...xs), maxX = Math.max(...xs)
+      trend = [
+        { x: minX, y: round1(reg.slope * minX + reg.intercept) },
+        { x: maxX, y: round1(reg.slope * maxX + reg.intercept) }
+      ]
+    }
+    return { points, trend, r }
+  }, [isScatter, rows, xMeasure, yMeasure])
+
+  // ── Risk matrix: per-category average (X) vs headcount (Y) ────────────────
+  const risk = useMemo(() => {
+    if (!isRisk) return { points: [], avgThresh: 0, countThresh: 0 }
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const n = toNumber(r[measure])
+      g[k] = g[k] || { vals: [], count: 0 }
+      g[k].count += 1
+      if (n !== null) g[k].vals.push(n)
+    })
+    const points = Object.entries(g).map(([name, v]) => ({
+      name,
+      x: v.vals.length ? round1(v.vals.reduce((s, n) => s + n, 0) / v.vals.length) : 0,
+      y: v.count
+    }))
+    const allNums = rows.map(r => toNumber(r[measure])).filter(n => n !== null)
+    const avgThresh = allNums.length ? round1(allNums.reduce((s, n) => s + n, 0) / allNums.length) : 0
+    const counts = points.map(p => p.y).sort((a, b) => a - b)
+    const countThresh = counts.length ? counts[Math.floor(counts.length / 2)] : 0
+    return { points, avgThresh, countThresh }
+  }, [isRisk, rows, dimension, measure])
+
+  // ── Grouped: average of every assessment per category, side by side ───────
+  // Powers the "Department-wise comparison across all assessments" view.
+  const grouped = useMemo(() => {
+    if (!isGrouped) return { data: [], keys: [] }
+    const keys = scoreList
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      if (!g[k]) g[k] = { __count: 0, sums: {}, cnts: {} }
+      g[k].__count += 1
+      keys.forEach(s => {
+        const n = toNumber(r[s])
+        if (n !== null) { g[k].sums[s] = (g[k].sums[s] || 0) + n; g[k].cnts[s] = (g[k].cnts[s] || 0) + 1 }
+      })
+    })
+    const data = Object.entries(g).map(([name, v]) => {
+      const o = { name, __count: v.__count }
+      keys.forEach(s => { o[s] = v.cnts[s] ? round1(v.sums[s] / v.cnts[s]) : 0 })
+      return o
+    }).sort((a, b) => b.__count - a.__count)
+    return { data, keys }
+  }, [isGrouped, rows, dimension, scoreList])
+
+  // ── Correlation matrix: Pearson r between every pair of assessments ───────
+  const corr = useMemo(() => {
+    if (!isCorr) return { cells: [], labels: [] }
+    const labels = scoreList
+    const cells = []
+    for (let i = 0; i < labels.length; i++) {
+      for (let j = 0; j < labels.length; j++) {
+        let r
+        if (i === j) r = 1
+        else {
+          const pairs = rows
+            .map(row => [toNumber(row[labels[j]]), toNumber(row[labels[i]])])
+            .filter(p => p[0] !== null && p[1] !== null)
+          r = pearson(pairs)
+        }
+        cells.push({ x: j, y: i, r: r === null ? null : Math.round(r * 100) / 100, xLabel: labels[j], yLabel: labels[i] })
+      }
+    }
+    return { cells, labels }
+  }, [isCorr, rows, scoreList])
+
+  // ── Radar: workforce strength/weakness profile across assessments ─────────
+  // Each assessment's average is normalized to a 0–100% scale (by its detected
+  // out-of-5/10/100 ceiling) so different-scaled assessments share one axis.
+  const radar = useMemo(() => {
+    if (!isRadar) return []
+    return scoreList.map(s => {
+      const nums = rows.map(r => toNumber(r[s])).filter(n => n !== null)
+      if (!nums.length) return { assessment: s, value: 0, raw: 0 }
+      const avg = nums.reduce((a, b) => a + b, 0) / nums.length
+      const scale = detectScale(Math.max(...nums))
+      return { assessment: s, value: round1((avg / scale) * 100), raw: round1(avg) }
+    })
+  }, [isRadar, rows, scoreList])
+
+  // ── Range: min / average / max of a score per category, with response count ─
+  // A floating bar spans min→max and a dot marks the average, so you see both
+  // the typical level AND the spread — and how many people actually scored.
+  const rangeData = useMemo(() => {
+    if (!isRange || measure === 'count') return []
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const n = toNumber(r[measure])
+      g[k] = g[k] || { vals: [], total: 0 }
+      g[k].total += 1
+      if (n !== null) g[k].vals.push(n)
+    })
+    return Object.entries(g)
+      .filter(([, v]) => v.vals.length)
+      .map(([name, v]) => {
+        const lo = Math.min(...v.vals)
+        const hi = Math.max(...v.vals)
+        const avg = round1(v.vals.reduce((s, n) => s + n, 0) / v.vals.length)
+        return { name, lo: round1(lo), hi: round1(hi), avg, count: v.vals.length, total: v.total, range: [round1(lo), round1(hi)] }
+      })
+      .sort((a, b) => b.avg - a.avg)
+  }, [isRange, rows, dimension, measure])
+
+  // ── Pareto: participation per category (bars, desc) + cumulative share (line) ─
+  // Shows how concentrated assessment participation is — e.g. 3 departments
+  // account for 80% of all respondents.
+  const paretoData = useMemo(() => {
+    if (!isPareto) return []
+    const g = {}
+    rows.forEach(r => {
+      // Count respondents when a score is chosen, else all rows in the group.
+      const counts = measure === 'count' || toNumber(r[measure]) !== null
+      if (!counts) return
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      g[k] = (g[k] || 0) + 1
+    })
+    const sorted = Object.entries(g).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+    const total = sorted.reduce((s, d) => s + d.count, 0) || 1
+    let cum = 0
+    return sorted.map(d => { cum += d.count; return { ...d, cumPct: round1((100 * cum) / total) } })
+  }, [isPareto, rows, dimension, measure])
+
+  // ── Heatmap: dimension (rows) × assessment (cols), colored by avg % ───────
+  // Every category's normalized average on every assessment in one grid, so a
+  // group strong on one assessment and weak on another is obvious at a glance.
+  const heat = useMemo(() => {
+    if (!isHeatmap) return { cells: [], cats: [], cols: [] }
+    const cols = scoreList
+    const scaleOf = {}
+    cols.forEach(s => {
+      const nums = rows.map(r => toNumber(r[s])).filter(n => n !== null)
+      scaleOf[s] = detectScale(nums.length ? Math.max(...nums) : 100)
+    })
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      if (!g[k]) { g[k] = {}; cols.forEach(s => { g[k][s] = { sum: 0, n: 0 } }) }
+      cols.forEach(s => { const v = toNumber(r[s]); if (v !== null) { g[k][s].sum += v; g[k][s].n += 1 } })
+    })
+    // Order categories by their overall average so strong groups sit together.
+    const cats = Object.keys(g).sort((a, b) => {
+      const avg = (k) => cols.reduce((s, c) => s + (g[k][c].n ? g[k][c].sum / g[k][c].n / scaleOf[c] : 0), 0)
+      return avg(b) - avg(a)
+    })
+    const cells = []
+    cats.forEach((cat, yi) => {
+      cols.forEach((s, xi) => {
+        const cell = g[cat][s]
+        const raw = cell.n ? round1(cell.sum / cell.n) : null
+        const pct = cell.n ? round1((cell.sum / cell.n / scaleOf[s]) * 100) : null
+        cells.push({ x: xi, y: yi, pct, raw, n: cell.n, cat, assessment: s })
+      })
+    })
+    return { cells, cats, cols }
+  }, [isHeatmap, rows, dimension, scoreList])
+
+  // ── Treemap: one tile per category, area = headcount, color = avg score ───
+  const treemap = useMemo(() => {
+    if (!isTreemap || measure === 'count') return []
+    const nums = rows.map(r => toNumber(r[measure])).filter(n => n !== null)
+    const scale = detectScale(nums.length ? Math.max(...nums) : 100)
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const v = toNumber(r[measure])
+      g[k] = g[k] || { sum: 0, n: 0, total: 0 }
+      g[k].total += 1
+      if (v !== null) { g[k].sum += v; g[k].n += 1 }
+    })
+    return Object.entries(g)
+      .map(([name, v]) => {
+        const avg = v.n ? round1(v.sum / v.n) : 0
+        return { name, size: v.total, avg, n: v.n, pct: round1((avg / scale) * 100) }
+      })
+      .sort((a, b) => b.size - a.size)
+  }, [isTreemap, rows, dimension, measure])
+
+  // ── Quadrant: one point per person on two assessments, split into 4 boxes ─
+  const quadrant = useMemo(() => {
+    if (!isQuadrant || !xMeasure || !yMeasure) return { points: [], xMid: 0, yMid: 0, xMax: 0, yMax: 0 }
+    const points = rows
+      .map(r => ({ x: toNumber(r[xMeasure]), y: toNumber(r[yMeasure]), name: identityColumn ? String(r[identityColumn] ?? '') : '' }))
+      .filter(p => p.x !== null && p.y !== null)
+    const xs = points.map(p => p.x), ys = points.map(p => p.y)
+    const mean = (a) => (a.length ? a.reduce((s, n) => s + n, 0) / a.length : 0)
+    return {
+      points,
+      xMid: round1(mean(xs)),
+      yMid: round1(mean(ys)),
+      xMax: xs.length ? Math.max(...xs) : 0,
+      yMax: ys.length ? Math.max(...ys) : 0
+    }
+  }, [isQuadrant, rows, xMeasure, yMeasure, identityColumn])
+
+  // ── Dual axis: average of metric A (bars) + average of metric B (line) per
+  // category, each on its own axis — compares two different measures together. ─
+  const dual = useMemo(() => {
+    if (!isDual) return []
+    const m2 = widget.measure2
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      g[k] = g[k] || { a: [], b: [] }
+      const a = toNumber(r[measure]); if (a !== null) g[k].a.push(a)
+      const b = toNumber(r[m2]); if (b !== null) g[k].b.push(b)
+    })
+    const mean = (arr) => (arr.length ? round1(arr.reduce((s, n) => s + n, 0) / arr.length) : 0)
+    return Object.entries(g)
+      .map(([name, v]) => ({ name, left: mean(v.a), right: mean(v.b), count: v.a.length }))
+      .sort((a, b) => b.left - a.left)
+  }, [isDual, rows, dimension, measure, widget.measure2])
+
+  // ── Scatter + line: every individual as a point, plus a binned average curve
+  // overlaid — shows the spread AND the trend in one chart. ──────────────────
+  const scatterLine = useMemo(() => {
+    if (!isScatterLine || !xMeasure || !yMeasure) return { points: [], line: [] }
+    const points = rows
+      .map(r => ({ x: toNumber(r[xMeasure]), y: toNumber(r[yMeasure]) }))
+      .filter(p => p.x !== null && p.y !== null)
+    if (!points.length) return { points: [], line: [] }
+    const xs = points.map(p => p.x)
+    const min = Math.min(...xs), max = Math.max(...xs)
+    const bins = 8
+    const w = (max - min) / bins || 1
+    const buckets = Array.from({ length: bins }, () => ({ sum: 0, n: 0 }))
+    points.forEach(p => {
+      const i = Math.min(bins - 1, Math.max(0, Math.floor((p.x - min) / w)))
+      buckets[i].sum += p.y; buckets[i].n += 1
+    })
+    const line = buckets
+      .map((b, i) => (b.n ? { x: round1(min + (i + 0.5) * w), y: round1(b.sum / b.n) } : null))
+      .filter(Boolean)
+    return { points, line }
+  }, [isScatterLine, rows, xMeasure, yMeasure])
+
+  // ── Progression: every attempt as a point over time + the average-per-period
+  // line, so improvement (or drift) across assessment dates is visible. ───────
+  const progression = useMemo(() => {
+    if (!isProgression) return { points: [], line: [], byMonth: false }
+    const pts = []
+    rows.forEach(r => {
+      const tt = parseDate(r[dimension]); const y = toNumber(r[measure])
+      if (tt !== null && y !== null) pts.push({ x: tt, y })
+    })
+    if (!pts.length) return { points: [], line: [], byMonth: false }
+    const byMonth = new Set(pts.map(p => Math.floor(p.x / 86400000))).size > 31
+    const g = {}
+    pts.forEach(p => {
+      const d = new Date(p.x)
+      const ts = byMonth ? Date.UTC(d.getFullYear(), d.getMonth(), 1) : Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+      g[ts] = g[ts] || { sum: 0, n: 0 }
+      g[ts].sum += p.y; g[ts].n += 1
+    })
+    const line = Object.entries(g).map(([ts, v]) => ({ x: Number(ts), y: round1(v.sum / v.n) })).sort((a, b) => a.x - b.x)
+    return { points: pts, line, byMonth }
+  }, [isProgression, rows, dimension, measure])
+
+  // ── Mean + spread: average bar per category, with every individual score
+  // overlaid as a point — the mean and the distribution behind it together. ──
+  const meanSpread = useMemo(() => {
+    if (!isMeanSpread || measure === 'count') return { cats: [], points: [] }
+    const g = {}
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const y = toNumber(r[measure])
+      g[k] = g[k] || { vals: [] }
+      if (y !== null) g[k].vals.push(y)
+    })
+    const cats = Object.entries(g)
+      .filter(([, v]) => v.vals.length)
+      .map(([name, v]) => ({ name, avg: round1(v.vals.reduce((s, n) => s + n, 0) / v.vals.length), count: v.vals.length }))
+      .sort((a, b) => b.avg - a.avg)
+    const valid = new Set(cats.map(c => c.name))
+    const points = []
+    rows.forEach(r => {
+      const k = (String(r[dimension] ?? '').trim()) || '—'
+      const y = toNumber(r[measure])
+      if (y !== null && valid.has(k)) points.push({ name: k, value: y })
+    })
+    return { cats, points }
+  }, [isMeanSpread, rows, dimension, measure])
+
   const isHist = type === 'histogram'
   const isBands = type === 'bands'
   const isBar = type === 'bar' || type === 'hbar'
@@ -1505,13 +2208,47 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
     return fullData
   }, [fullData, limitable, limit, type, measure])
 
-  const view = isHist ? histData : isBands ? bandData : data
+  const view = isCombo ? comboData
+    : isStacked ? stacked.data
+    : isScatter ? scatter.points
+    : isRisk ? risk.points
+    : isGrouped ? grouped.data
+    : isCorr ? corr.cells
+    : isRadar ? radar
+    : isRange ? rangeData
+    : isPareto ? paretoData
+    : isHeatmap ? heat.cells
+    : isTreemap ? treemap
+    : isQuadrant ? quadrant.points
+    : isDual ? dual
+    : isScatterLine ? scatterLine.points
+    : isProgression ? progression.points
+    : isMeanSpread ? meanSpread.cats
+    : isHist ? histData
+    : isBands ? bandData
+    : data
   const measureLabel = measure === 'count' ? 'Count' : `${AGG_LABELS[agg]} of ${measure}`
   // Report-ready titles modeled on the Active Tracking dashboards — e.g.
   // "Employees by Average Score", "Performance Distribution", "Score
   // Distribution", "Score Trend Over Time", "Average Score by Department".
   // Derived (not stored) so the title stays accurate when reconfigured.
   const titleText = useMemo(() => {
+    if (isCombo) return `${dimension}: Headcount vs Avg ${measure}`
+    if (isStacked) return stacked.byBands ? `${measure} Distribution by ${dimension}` : `${dimension} by ${series} (split)`
+    if (isScatter) return `${yMeasure} vs ${xMeasure}`
+    if (isRisk) return `Risk Matrix — ${measure} vs Headcount by ${dimension}`
+    if (isGrouped) return `${dimension} — Comparison Across Assessments`
+    if (isCorr) return 'Assessment Correlation Matrix'
+    if (isRadar) return 'Strength & Weakness Radar'
+    if (isRange) return `${measure} Range & Average by ${dimension}`
+    if (isPareto) return `Participation Concentration by ${dimension}`
+    if (isHeatmap) return `${dimension} × Assessment Heatmap`
+    if (isTreemap) return `${dimension} Map — Size = Headcount, Color = Avg ${measure}`
+    if (isQuadrant) return `Talent Matrix — ${yMeasure} vs ${xMeasure}`
+    if (isDual) return `${measure} vs ${widget.measure2} by ${dimension}`
+    if (isScatterLine) return `${yMeasure} vs ${xMeasure} — Points + Average Trend`
+    if (isProgression) return `${measure} Progression Over Time`
+    if (isMeanSpread) return `${measure} — Average & Individual Spread by ${dimension}`
     if (isBands) return 'Performance Distribution'
     if (isHist) return `${measure} Distribution`
     if (measure === 'count') {
@@ -1520,26 +2257,718 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
     }
     const aggWord = AGG_LABELS[agg] // Average / Sum / Min / Max
     if (isDate) return aggWord === 'Average' ? `${measure} Trend Over Time` : `${aggWord} ${measure} Over Time`
+    // Explicit top / low performer framing when an order is set on the ranking.
+    if (type === 'hbar' && order === 'desc') return `Top Performers — ${aggWord} ${measure}${dimension === identityColumn ? '' : ` by ${dimension}`}`
+    if (type === 'hbar' && order === 'asc') return `Lowest Performers — ${aggWord} ${measure}${dimension === identityColumn ? '' : ` by ${dimension}`}`
     // Per-person framing for the identity column: "Employees by Average Score".
     if (dimension === identityColumn) {
       const who = PEOPLE_NAME_RE.test(dimension) ? 'Employees' : dimension
       return `${who} by ${aggWord} ${measure}`
     }
     return `${aggWord} ${measure} by ${dimension}`
-  }, [isHist, isBands, isDate, type, dimension, measure, agg, identityColumn])
+  }, [isHist, isBands, isDate, type, dimension, measure, agg, identityColumn, isCombo, isStacked, isScatter, isRisk, isGrouped, isCorr, isRadar, isRange, isPareto, isHeatmap, isTreemap, isQuadrant, isDual, isScatterLine, isProgression, isMeanSpread, series, xMeasure, yMeasure, widget.measure2, stacked.byBands, order])
+  // A custom title overrides the auto-generated one when the user sets it.
+  const displayTitle = (title && title.trim()) ? title : titleText
+  // User-pinned value-axis bounds ("scale need"); 'auto' lets recharts fit the
+  // data. Empty → auto so charts still work out of the box.
+  const vMin = (yMin === 0 || (yMin !== undefined && yMin !== null && yMin !== '')) ? Number(yMin) : 'auto'
+  const vMax = (yMax === 0 || (yMax !== undefined && yMax !== null && yMax !== '')) ? Number(yMax) : 'auto'
+  const valueDomain = [vMin, vMax]
+  // Optional single accent color; when unset the multi-color palette is used.
+  const accent = color || null
+  // Charts whose value axis the scale controls apply to.
+  const scalable = ['bar', 'hbar', 'line', 'combo', 'histogram', 'dualaxis', 'scatterline', 'progression', 'meanspread'].includes(type)
   const showTopN = limitable && fullData.length > TOPN_OPTIONS[0]
 
+  // ── Auto-generated executive commentary for each chart ────────────────────
+  // Returns { question, metrics, business, insights, executive } or null, with
+  // every field derived from the live aggregates so the commentary stays
+  // accurate for any uploaded dataset. The four facets answer the brief:
+  // metrics used · business value · insights generated · executive interpretation.
+  const insight = useMemo(() => {
+    const people = (n) => `${n} ${n === 1 ? 'person' : 'people'}`
+
+    if (isCombo && comboData.length) {
+      const best = comboData.reduce((a, b) => (b.avg > a.avg ? b : a))
+      const worst = comboData.reduce((a, b) => (b.avg < a.avg ? b : a))
+      const largest = comboData.reduce((a, b) => (b.count > a.count ? b : a))
+      if (best.name === worst.name) return null
+      return {
+        question: `Which ${dimension} groups underperform on ${measure} — and how many employees does that affect?`,
+        metrics: `Headcount per ${dimension} (bars) plotted against the average ${measure} of each group (line).`,
+        business: `Headcount and performance move independently, so a weak average inside a large group quietly affects far more people than the score alone implies — this view sizes that exposure.`,
+        insights: `${worst.name} has the lowest average ${measure} (${worst.avg}) and ${best.name} the highest (${best.avg}); the largest group is ${largest.name} (${people(largest.count)}).`,
+        executive: `Prioritize a ${worst.name} intervention and benchmark its practices against ${best.name}.`
+      }
+    }
+
+    if (isStacked && stacked.data.length) {
+      if (stacked.byBands) {
+        const need = 'Needs Improvement'
+        const withNeed = stacked.data
+          .map(d => ({ name: d.name, n: d[need] || 0, total: d.__total }))
+          .sort((a, b) => b.n - a.n)
+        const worst = withNeed[0]
+        const totalNeed = withNeed.reduce((s, d) => s + d.n, 0)
+        if (!worst || totalNeed === 0) return null
+        const pct = round1((100 * worst.n) / worst.total)
+        return {
+          question: `Are low ${measure} scores a few failures or a broadly weak ${dimension}?`,
+          metrics: `Each ${dimension} bar split into Excellent / Good / Needs Improvement bands of ${measure} (employee counts).`,
+          business: `A high share of below-bar scores is a systemic capability gap, not a handful of outliers — it calls for a group fix rather than individual coaching.`,
+          insights: `${worst.name} carries the most below-bar scores — ${worst.n} of ${worst.total} (${pct}%) in “Needs Improvement”; ${people(totalNeed)} fall below the Good band overall.`,
+          executive: pct >= 50
+            ? `Treat ${worst.name} as a structural gap: group upskilling, not one-off coaching.`
+            : `Target the bottom band in ${worst.name} while protecting its stronger performers.`
+        }
+      }
+      return {
+        question: `How does ${series} break down within each ${dimension}?`,
+        metrics: `Employee counts per ${dimension}, stacked by ${series}.`,
+        business: `Differences in composition often explain performance gaps that a single average can't reveal.`,
+        insights: `${people(rows.length)} across ${stacked.data.length} ${dimension} groups, each showing its own ${series} mix rather than just a total.`,
+        executive: `Compare groups with similar mixes to separate real performance differences from composition effects.`
+      }
+    }
+
+    if (isScatter && scatter.r !== null) {
+      const r = scatter.r
+      const dir = r >= 0 ? 'positive' : 'negative'
+      const strong = strengthWord(r)
+      const weak = Math.abs(r) < 0.15
+      return {
+        question: `Does ${xMeasure} relate to ${yMeasure}?`,
+        metrics: `One point per employee — ${xMeasure} (x) vs ${yMeasure} (y) — with a least-squares trend line and Pearson r.`,
+        business: `Shows whether ${xMeasure} is a usable predictor of ${yMeasure}, informing where to place hiring and development bets.`,
+        insights: `${strong === 'no meaningful' ? 'No meaningful' : `A ${strong} ${dir}`} relationship (r = ${Math.round(r * 100) / 100}) across ${people(scatter.points.length)}.`,
+        executive: weak
+          ? `Treat ${xMeasure} and ${yMeasure} as independent — don't use one to forecast the other; segment by role or department instead.`
+          : `Use ${xMeasure} as an early signal for ${yMeasure} and focus support on employees sitting well below the trend line.`
+      }
+    }
+
+    if (isRisk && risk.points.length) {
+      const high = risk.points
+        .filter(p => p.x < risk.avgThresh && p.y >= risk.countThresh)
+        .sort((a, b) => b.y - a.y)
+      const affected = high.reduce((s, p) => s + p.y, 0)
+      const common = {
+        question: `Which low-scoring ${dimension} groups affect the most people on ${measure}?`,
+        metrics: `Per ${dimension}: average ${measure} (x) vs headcount (y), with reference lines at the overall average (${risk.avgThresh}) and median group size.`,
+        business: `Sequences interventions by exposure — weak scores multiplied by large populations give the biggest return on a fix.`
+      }
+      if (!high.length) {
+        return {
+          ...common,
+          insights: `No group is both below-average (${risk.avgThresh}) and above median size — risk is well distributed.`,
+          executive: `Maintain monitoring; re-check after the next assessment cycle.`
+        }
+      }
+      return {
+        ...common,
+        insights: `${high.map(p => `${p.name} (avg ${p.x}, ${people(p.y)})`).join('; ')} sit in the high-risk zone — ${people(affected)} in total.`,
+        executive: `Sequence fixes by exposure: start with ${high[0].name} (${people(high[0].y)}).`
+      }
+    }
+
+    if (isGrouped && grouped.data.length && grouped.keys.length) {
+      // Tally which group leads each assessment, and find the assessment with
+      // the widest spread between groups (the biggest comparative gap).
+      const leadTally = {}
+      let widest = { key: grouped.keys[0], spread: -1 }
+      grouped.keys.forEach(k => {
+        const vals = grouped.data.map(d => ({ name: d.name, v: d[k] }))
+        const top = vals.reduce((a, b) => (b.v > a.v ? b : a))
+        leadTally[top.name] = (leadTally[top.name] || 0) + 1
+        const spread = round1(Math.max(...vals.map(v => v.v)) - Math.min(...vals.map(v => v.v)))
+        if (spread > widest.spread) widest = { key: k, spread }
+      })
+      const leader = Object.entries(leadTally).sort((a, b) => b[1] - a[1])[0]
+      return {
+        question: `How does each ${dimension} compare across all ${grouped.keys.length} assessments at once?`,
+        metrics: `Average of each assessment (${grouped.keys.join(', ')}) per ${dimension}, shown side by side.`,
+        business: `Surfaces every group's relative strengths and weaknesses across the whole assessment suite in a single view, instead of one chart per score.`,
+        insights: `${leader[0]} leads in ${leader[1]} of ${grouped.keys.length} assessments; ${widest.key} shows the widest spread between groups (${widest.spread} points).`,
+        executive: `Tailor development to each group's weakest assessment rather than running one-size-fits-all programs.`
+      }
+    }
+
+    if (isCorr && corr.labels.length >= 2) {
+      const off = corr.cells.filter(c => c.x < c.y && c.r !== null) // unique pairs, lower triangle
+      if (!off.length) return null
+      const strongest = off.reduce((a, b) => (Math.abs(b.r) > Math.abs(a.r) ? b : a))
+      const weakest = off.reduce((a, b) => (Math.abs(b.r) < Math.abs(a.r) ? b : a))
+      return {
+        question: `Which assessments measure overlapping abilities, and which are independent?`,
+        metrics: `Pairwise Pearson correlation between all ${corr.labels.length} assessments; cell color shows strength and direction.`,
+        business: `Highly correlated assessments may be redundant; independent or negatively related ones reveal genuine skill trade-offs to staff around.`,
+        insights: `Strongest link: ${shortLabel(strongest.yLabel)} ↔ ${shortLabel(strongest.xLabel)} (r = ${strongest.r}); most independent: ${shortLabel(weakest.yLabel)} ↔ ${shortLabel(weakest.xLabel)} (r = ${weakest.r}).`,
+        executive: `Consider consolidating the most correlated assessments; design roles and teams around the genuine trade-offs the weak/negative pairs expose.`
+      }
+    }
+
+    if (isRadar && radar.length >= 3) {
+      const valid = radar.filter(d => d.value > 0)
+      if (valid.length < 3) return null
+      const max = valid.reduce((a, b) => (b.value > a.value ? b : a))
+      const min = valid.reduce((a, b) => (b.value < a.value ? b : a))
+      return {
+        question: `What is the workforce's overall strength-and-weakness profile across assessments?`,
+        metrics: `Average of each assessment normalized to a 0–100% scale (by its detected ceiling), one axis per assessment.`,
+        business: `One glance shows where the organization is collectively strong and where capability gaps lie across the full assessment set.`,
+        insights: `Strongest area: ${shortLabel(max.assessment)} (${max.value}%); weakest: ${shortLabel(min.assessment)} (${min.value}%).`,
+        executive: `Direct development budget at ${shortLabel(min.assessment)}; leverage ${shortLabel(max.assessment)} as a competitive strength.`
+      }
+    }
+
+    if (isBands && bandData.length) {
+      const total = bandData.reduce((s, b) => s + b.value, 0)
+      const find = (n) => bandData.find(b => b.name === n)?.value || 0
+      const need = find('Needs Improvement')
+      const exc = find('Excellent')
+      if (!total) return null
+      const needPct = round1((100 * need) / total)
+      return {
+        question: `What share of employees are excelling versus needing support on ${measure}?`,
+        metrics: `Each employee's ${measure} mapped to Excellent / Good / Needs Improvement bands (count per band).`,
+        business: `Quantifies the size of the development gap and the high-performer pool — the numbers behind a single average.`,
+        insights: `${people(need)} (${needPct}%) sit in “Needs Improvement” and ${people(exc)} are “Excellent”, out of ${total}.`,
+        executive: needPct >= 25
+          ? `A material ${needPct}% fall below the Good band on ${measure} — budget targeted development this cycle.`
+          : `Distribution is healthy; protect and stretch the top performers while lifting the remainder.`
+      }
+    }
+
+    if (isHist && histData.length) {
+      const total = histData.reduce((s, b) => s + b.value, 0)
+      if (!total) return null
+      const modal = histData.reduce((a, b) => (b.value > a.value ? b : a))
+      const modalIdx = histData.indexOf(modal)
+      const skew = modalIdx <= 2 ? 'concentrated toward the lower end' : modalIdx >= 7 ? 'concentrated toward the top' : 'centred in the mid-range'
+      return {
+        question: `How is ${measure} spread — clustered, skewed, or polarized?`,
+        metrics: `${measure} bucketed into equal-width ranges; bar height = number of employees.`,
+        business: `Reveals concentration, polarization and outlier tails that a single average hides.`,
+        insights: `Most employees fall in the ${modal.name} range (${people(modal.value)}); the distribution is ${skew}.`,
+        executive: `Use the spread to set realistic ${measure} targets and to size the at-risk tail for follow-up.`
+      }
+    }
+
+    if (isRange && rangeData.length) {
+      const widest = rangeData.reduce((a, b) => ((b.hi - b.lo) > (a.hi - a.lo) ? b : a))
+      const thin = rangeData.filter(d => d.count <= 3)
+      const topAvg = rangeData.reduce((a, b) => (b.avg > a.avg ? b : a))
+      return {
+        question: `Is each ${dimension}'s average ${measure} trustworthy, or driven by a few people or wide spread?`,
+        metrics: `Per ${dimension}: a bar spanning the min–max of ${measure}, a dot for the average, and the response count (n) behind it.`,
+        business: `Guards against misreading a group's average — a high mean from 3 respondents, or one stretched across a huge range, is far less reliable than a tight mean from many.`,
+        insights: `${topAvg.name} has the highest average (${topAvg.avg}, n=${topAvg.count}); ${widest.name} has the widest spread (${widest.lo}–${widest.hi}).${thin.length ? ` Thin samples (n≤3): ${thin.map(d => `${d.name} (${d.count})`).join(', ')}.` : ''}`,
+        executive: `Trust averages from large, tight groups; treat ${thin.length ? thin[0].name : widest.name} as indicative only until more people are assessed.`
+      }
+    }
+
+    if (isPareto && paretoData.length) {
+      const total = paretoData.reduce((s, d) => s + d.count, 0)
+      // How many groups make up ~80% of all respondents.
+      let n80 = 0
+      for (const d of paretoData) { n80++; if (d.cumPct >= 80) break }
+      const top = paretoData[0]
+      return {
+        question: `Is assessment participation concentrated in a few ${dimension} groups?`,
+        metrics: `Respondents per ${dimension} (bars, highest first) with the running cumulative share (line).`,
+        business: `Reveals whether results are dominated by a handful of groups — averages across the whole population can be skewed by who actually showed up.`,
+        insights: `${top.name} alone accounts for ${top.cumPct}% of the ${total} respondents; the top ${n80} ${dimension} group${n80 === 1 ? '' : 's'} cover ~80%.`,
+        executive: `Drive participation in the long tail before treating org-wide averages as representative.`
+      }
+    }
+
+    if (isHeatmap && heat.cells.length && heat.cats.length && heat.cols.length) {
+      const valid = heat.cells.filter(c => c.pct !== null)
+      if (!valid.length) return null
+      const best = valid.reduce((a, b) => (b.pct > a.pct ? b : a))
+      const worst = valid.reduce((a, b) => (b.pct < a.pct ? b : a))
+      return {
+        question: `Where is each ${dimension} strong or weak across all ${heat.cols.length} assessments?`,
+        metrics: `Average of every assessment per ${dimension}, normalized to 0–100% and color-coded in one grid (cell label = %).`,
+        business: `Replaces ${heat.cols.length} separate charts with a single map of capability, exposing pockets of strength and weakness that per-chart views scatter.`,
+        insights: `Brightest cell: ${shortLabel(best.cat)} on ${shortLabel(best.assessment)} (${best.pct}%); weakest: ${shortLabel(worst.cat)} on ${shortLabel(worst.assessment)} (${worst.pct}%).`,
+        executive: `Move best practice from strong cells to the matching weak ones; target development at ${shortLabel(worst.cat)}'s ${shortLabel(worst.assessment)}.`
+      }
+    }
+
+    if (isTreemap && treemap.length) {
+      const biggest = treemap[0]
+      const bigWeak = [...treemap].sort((a, b) => (b.size * (100 - b.pct)) - (a.size * (100 - a.pct)))[0]
+      return {
+        question: `Which ${dimension} groups combine large headcount with weak ${measure}?`,
+        metrics: `One tile per ${dimension}: area = headcount, color = average ${measure} (pink = low, purple = high).`,
+        business: `Size and performance in one view — a large pale tile is a far bigger risk than a small one with the same average.`,
+        insights: `Largest group: ${biggest.name} (${biggest.n} respondents, avg ${biggest.avg}). Highest people-weighted gap: ${bigWeak.name} (avg ${bigWeak.avg}, n=${bigWeak.n}).`,
+        executive: `Prioritize the large, pale tiles — fixing ${bigWeak.name} moves the most people at once.`
+      }
+    }
+
+    if (isQuadrant && quadrant.points.length) {
+      const { points, xMid, yMid } = quadrant
+      const stars = points.filter(p => p.x >= xMid && p.y >= yMid).length
+      const dev = points.filter(p => p.x < xMid && p.y < yMid).length
+      return {
+        question: `How do employees split across ${xMeasure} and ${yMeasure} together?`,
+        metrics: `One point per employee — ${xMeasure} (x) vs ${yMeasure} (y) — divided into four boxes at each assessment's average.`,
+        business: `A talent-matrix read: combines two assessments to separate all-round strength from one-sided profiles and genuine development needs.`,
+        insights: `${stars} employee${stars === 1 ? '' : 's'} are above average on both (Top Talent); ${dev} sit below average on both (Development), out of ${points.length}.`,
+        executive: `Fast-track the Top Talent box; build targeted plans for the Development box and round out the one-sided quadrants.`
+      }
+    }
+
+    if (isDual && dual.length) {
+      const m2 = widget.measure2
+      const topA = dual.reduce((a, b) => (b.left > a.left ? b : a))
+      const topB = dual.reduce((a, b) => (b.right > a.right ? b : a))
+      const aligned = topA.name === topB.name
+      return {
+        question: `How do ${measure} and ${m2} compare across ${dimension} — do they move together?`,
+        metrics: `Two measures per ${dimension} on independent axes: average ${measure} (bars) and average ${m2} (line).`,
+        business: `Reveals whether two different capabilities rise and fall together or trade off — a single-metric chart can't show that relationship.`,
+        insights: aligned
+          ? `${topA.name} leads on both — highest ${measure} (${topA.left}) and ${m2} (${topB.right}), so the two track together.`
+          : `${topA.name} leads on ${measure} (${topA.left}) but ${topB.name} leads on ${m2} (${topB.right}) — the two diverge by group.`,
+        executive: aligned
+          ? `Treat ${topA.name} as the all-round benchmark for both ${measure} and ${m2}.`
+          : `Don't assume strength in ${measure} implies strength in ${m2}; develop each ${dimension} on its weaker axis.`
+      }
+    }
+
+    if (isScatterLine && scatterLine.points.length && scatterLine.line.length >= 2) {
+      const ln = scatterLine.line
+      const first = ln[0], last = ln[ln.length - 1]
+      const delta = round1(last.y - first.y)
+      const dir = delta > 0 ? 'rises' : delta < 0 ? 'falls' : 'stays flat'
+      return {
+        question: `How does ${yMeasure} change as ${xMeasure} increases — and how scattered are individuals around that trend?`,
+        metrics: `Every employee as a point (${xMeasure} vs ${yMeasure}) with a binned average curve overlaid.`,
+        business: `The points show how consistent people are; the line shows the underlying trend — together they separate a real pattern from noise.`,
+        insights: `Average ${yMeasure} ${dir} from ${first.y} to ${last.y} (${delta >= 0 ? '+' : ''}${delta}) across the ${xMeasure} range, plotted over ${people(scatterLine.points.length)}.`,
+        executive: Math.abs(delta) < 1
+          ? `${yMeasure} is largely independent of ${xMeasure}; look elsewhere for what drives it.`
+          : `${xMeasure} tracks ${yMeasure} — focus on individuals sitting well below the average curve.`
+      }
+    }
+
+    if (isProgression && progression.line.length >= 2) {
+      const ln = progression.line
+      const first = ln[0], last = ln[ln.length - 1]
+      const delta = round1(last.y - first.y)
+      const dir = delta > 0 ? 'improving' : delta < 0 ? 'declining' : 'flat'
+      return {
+        question: `Is ${measure} improving across assessment dates — and how consistent are individuals?`,
+        metrics: `Every attempt as a point over time, with the average ${measure} per period drawn as a line.`,
+        business: `Separates a genuine trend from noise: the line shows direction, the scatter shows whether everyone is moving or just a few.`,
+        insights: `Average ${measure} went from ${first.y} to ${last.y} (${delta >= 0 ? '+' : ''}${delta}) across ${ln.length} periods — ${dir} — over ${people(progression.points.length)} attempts.`,
+        executive: delta >= 0
+          ? `Momentum is positive; keep investing in what's driving the gains and watch the points lagging the line.`
+          : `The trend is slipping — review what changed and support the widening low tail.`
+      }
+    }
+
+    if (isMeanSpread && meanSpread.cats.length) {
+      const top = meanSpread.cats[0]
+      const bottom = meanSpread.cats[meanSpread.cats.length - 1]
+      // Widest individual spread within a group (consistency signal).
+      const spreadBy = {}
+      meanSpread.points.forEach(p => { (spreadBy[p.name] = spreadBy[p.name] || []).push(p.value) })
+      let widest = null
+      Object.entries(spreadBy).forEach(([name, vals]) => {
+        const range = Math.max(...vals) - Math.min(...vals)
+        if (!widest || range > widest.range) widest = { name, range: round1(range) }
+      })
+      return {
+        question: `How does each ${dimension}'s average ${measure} compare, and how spread out are individuals within it?`,
+        metrics: `A bar for each ${dimension}'s average ${measure}, with every individual score overlaid as a point.`,
+        business: `The bar gives the headline; the points reveal whether a group is uniformly at that level or hiding wide internal variation.`,
+        insights: `${top.name} leads (avg ${top.avg}) and ${bottom.name} trails (avg ${bottom.avg})${widest ? `; ${widest.name} has the widest internal spread (${widest.range} points)` : ''}.`,
+        executive: `Coach for consistency where spread is widest; a strong average can still hide at-risk individuals.`
+      }
+    }
+
+    // Ranked bar with a numeric measure → top / low performers (per person) or
+    // an average-by-category read (e.g. Designation vs Score).
+    if (isBar && measure !== 'count' && fullData.length >= 2) {
+      const top = fullData[0]
+      const bottom = fullData[fullData.length - 1]
+      const aggWord = AGG_LABELS[agg]
+      const perPerson = dimension === identityColumn
+      if (perPerson && order === 'asc') {
+        return {
+          question: `Who needs the most support on ${measure}?`,
+          metrics: `${aggWord} ${measure} per person, ranked lowest-first (showing the bottom ${Math.min(limit, fullData.length)}).`,
+          business: `Targets coaching where it moves the needle most.`,
+          insights: `${bottom.name} trails at ${bottom.value}; the lowest ranks cluster well under the top of ${top.value}.`,
+          executive: `Prioritize coaching for the bottom group and set 90-day improvement goals.`
+        }
+      }
+      if (perPerson) {
+        return {
+          question: `Who are the strongest performers on ${measure}?`,
+          metrics: `${aggWord} ${measure} per person, ranked highest-first (showing the top ${Math.min(limit, fullData.length)}).`,
+          business: `Identifies role models and retention priorities.`,
+          insights: `${top.name} leads at ${top.value}, ahead of a field that bottoms out at ${bottom.value}.`,
+          executive: `Recognize and retain top talent; study their practices for wider rollout.`
+        }
+      }
+      if (top.name === bottom.name) return null
+      return {
+        question: `How does ${measure} vary across ${dimension}?`,
+        metrics: `${aggWord} ${measure} per ${dimension}, ranked ${order === 'asc' ? 'lowest' : 'highest'}-first.`,
+        business: `Pinpoints which ${dimension} groups to develop or learn from.`,
+        insights: `${top.name} leads at ${top.value} while ${bottom.name} trails at ${bottom.value} — a ${round1(Math.abs(top.value - bottom.value))}-point gap.`,
+        executive: `Close the gap by transferring ${top.name}'s practices to ${bottom.name}.`
+      }
+    }
+
+    // Date line with a numeric measure → trend / progression across attempts.
+    if (type === 'line' && isDate && measure !== 'count' && fullData.length >= 2) {
+      const first = fullData[0]
+      const last = fullData[fullData.length - 1]
+      const delta = round1(last.value - first.value)
+      const dir = delta > 0 ? 'improving' : delta < 0 ? 'declining' : 'flat'
+      return {
+        question: `Is ${measure} improving over time?`,
+        metrics: `Average ${measure} per period (${fullData.length} points) ordered chronologically.`,
+        business: `Tracks whether assessment cycles are translating into real, sustained improvement.`,
+        insights: `${measure} moved from ${first.value} (${first.name}) to ${last.value} (${last.name}) — ${dir}${delta ? ` by ${Math.abs(delta)} points` : ''}.`,
+        executive: delta >= 0
+          ? `Momentum is positive — keep investing in what's driving the gains.`
+          : `The downward trend needs attention; review what changed since ${first.name}.`
+      }
+    }
+
+    return null
+  }, [isCombo, isStacked, isScatter, isRisk, isGrouped, isCorr, isRadar, isRange, isPareto, isHeatmap, isTreemap, isQuadrant, isDual, isScatterLine, isProgression, isMeanSpread, isBands, isHist, isBar, isDate, type, comboData, stacked, scatter, risk, grouped, corr, radar, rangeData, paretoData, heat, treemap, quadrant, dual, scatterLine, progression, meanSpread, widget.measure2, bandData, histData, fullData, rows.length, dimension, measure, agg, order, limit, identityColumn, series, xMeasure, yMeasure])
+
+  // Tooltip formatter that appends the sample size to an averaged value, so a
+  // high average backed by only a few respondents is never read in isolation.
+  const withSampleSize = (v, n, p) =>
+    (measure !== 'count' && p?.payload?.count != null) ? [`${v}  (n=${p.payload.count})`, n] : [v, n]
+
   const renderChart = () => {
+    if (isCombo) {
+      return (
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={comboData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} label={{ value: 'Responses', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis yAxisId="right" orientation="right" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <Tooltip formatter={(v, n, p) => (n === 'Responses' ? [`${v} of ${p.payload.total}`, 'Responses'] : [v, n])} />
+            <Legend />
+            <Bar yAxisId="left" dataKey="count" name="Responses" fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory}>
+              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            </Bar>
+            <Line yAxisId="right" type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#895BF5" strokeWidth={2.6} dot={{ r: 3.5, fill: '#895BF5' }} activeDot={{ r: 5 }}>
+              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#895BF5', fontWeight: 'bold' }} />
+            </Line>
+          </ComposedChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isStacked) {
+      return (
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={stacked.data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            {stacked.keys.map((k, i) => (
+              <Bar key={k} dataKey={k} name={k} stackId="s"
+                fill={stacked.byBands ? (BAND_COLOR[k] || CHART_COLORS[i % CHART_COLORS.length]) : CHART_COLORS[i % CHART_COLORS.length]}
+                radius={i === stacked.keys.length - 1 ? [5, 5, 0, 0] : [0, 0, 0, 0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isScatter) {
+      return (
+        <ResponsiveContainer width="100%" height={320}>
+          <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis type="number" dataKey="y" name={yMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <ZAxis range={[45, 45]} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+            <Scatter data={scatter.points} fill="#895BF5" fillOpacity={0.6} />
+            {scatter.trend && (
+              <Line data={scatter.trend} dataKey="y" type="linear" dot={false} stroke="#E06C9F" strokeWidth={2} strokeDasharray="6 4" isAnimationActive={false} legendType="none" />
+            )}
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isRisk) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis type="number" dataKey="x" name={`Avg ${measure}`} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis type="number" dataKey="y" name="Headcount" allowDecimals={false} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: 'Headcount →', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <ZAxis dataKey="y" range={[120, 600]} />
+            <ReferenceLine x={risk.avgThresh} stroke="#A1A1AA" strokeDasharray="5 5" label={{ value: `avg ${risk.avgThresh}`, fontSize: 10, fill: '#A1A1AA' }} />
+            <ReferenceLine y={risk.countThresh} stroke="#A1A1AA" strokeDasharray="5 5" />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v, n) => [v, n]} />
+            <Scatter data={risk.points} cursor="pointer" onClick={drillCategory}>
+              {risk.points.map((p) => {
+                const highRisk = p.x < risk.avgThresh && p.y >= risk.countThresh
+                return <Cell key={p.name} fill={highRisk ? '#E06C9F' : '#895BF5'} fillOpacity={highRisk ? 0.85 : 0.55} />
+              })}
+              <LabelList dataKey="name" position="top" style={{ fontSize: 10, fill: '#52525B', fontWeight: 600 }} />
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isGrouped) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <BarChart data={grouped.data} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
+            <Tooltip />
+            <Legend />
+            {grouped.keys.map((k, i) => (
+              <Bar key={k} dataKey={k} name={k} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isCorr) {
+      const n = corr.labels.length
+      const ticks = Array.from({ length: n }, (_, i) => i)
+      return (
+        <ResponsiveContainer width="100%" height={Math.max(280, n * 52 + 110)}>
+          <ScatterChart margin={{ top: 16, right: 24, left: 70, bottom: 90 }}>
+            <XAxis type="number" dataKey="x" domain={[-0.5, n - 0.5]} ticks={ticks} interval={0}
+              tickFormatter={(i) => shortLabel(corr.labels[i] ?? '', 12)} angle={-30} textAnchor="end"
+              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} />
+            <YAxis type="number" dataKey="y" domain={[-0.5, n - 0.5]} ticks={ticks} interval={0} reversed
+              tickFormatter={(i) => shortLabel(corr.labels[i] ?? '', 12)}
+              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} width={70} />
+            <ZAxis range={[1600, 1600]} />
+            <Tooltip cursor={false}
+              formatter={(v, name, p) => [p?.payload?.r ?? '—', `${shortLabel(p?.payload?.yLabel ?? '')} ↔ ${shortLabel(p?.payload?.xLabel ?? '')}`]} />
+            <Scatter data={corr.cells} shape="square">
+              {corr.cells.map((c) => <Cell key={`${c.x}-${c.y}`} fill={corrColor(c.r)} />)}
+              <LabelList dataKey="r" position="center" formatter={(v) => (v === null || v === undefined ? '' : Number(v).toFixed(2))}
+                style={{ fontSize: 10, fontWeight: 700 }} fill="#27272A" />
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isRadar) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <RadarChart data={radar} outerRadius="72%">
+            <PolarGrid stroke="#E4E4E7" />
+            <PolarAngleAxis dataKey="assessment" tick={{ fontSize: 11, fill: '#727279' }} tickFormatter={(v) => shortLabel(v, 14)} />
+            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: '#A1A1AA' }} />
+            <Radar name="Avg %" dataKey="value" stroke="#895BF5" fill="#895BF5" fillOpacity={0.35} />
+            <Tooltip formatter={(v, name, p) => [`${v}% (avg ${p?.payload?.raw})`, p?.payload?.assessment]} />
+          </RadarChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isRange) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ComposedChart data={rangeData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
+            <Tooltip formatter={(v, n, p) => {
+              if (n === 'Range') return [`${p.payload.lo} – ${p.payload.hi}`, 'Min–Max']
+              if (n === `Avg ${measure}`) return [`${v}  (n=${p.payload.count} of ${p.payload.total})`, n]
+              return [v, n]
+            }} />
+            <Legend />
+            <Bar dataKey="range" name="Range" fill="#C7B3FD" radius={[5, 5, 5, 5]} barSize={26} cursor="pointer" onClick={drillCategory} />
+            <Line type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#895BF5" strokeWidth={0} dot={{ r: 5, fill: '#895BF5' }} activeDot={{ r: 6 }} legendType="circle">
+              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#895BF5', fontWeight: 'bold' }} />
+            </Line>
+          </ComposedChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isPareto) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ComposedChart data={paretoData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} label={{ value: 'Respondents', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#727279' }} unit="%" label={{ value: 'Cumulative %', angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <Tooltip formatter={(v, n) => (n === 'Cumulative %' ? [`${v}%`, n] : [v, n])} />
+            <Legend />
+            <Bar yAxisId="left" dataKey="count" name="Respondents" fill="#895BF5" radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory}>
+              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            </Bar>
+            <Line yAxisId="right" type="monotone" dataKey="cumPct" name="Cumulative %" stroke="#E06C9F" strokeWidth={2.4} dot={{ r: 3, fill: '#E06C9F' }} activeDot={{ r: 5 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isHeatmap) {
+      const nx = heat.cols.length
+      const ny = heat.cats.length
+      const xticks = Array.from({ length: nx }, (_, i) => i)
+      const yticks = Array.from({ length: ny }, (_, i) => i)
+      return (
+        <ResponsiveContainer width="100%" height={Math.max(280, ny * 46 + 120)}>
+          <ScatterChart margin={{ top: 16, right: 24, left: 95, bottom: 90 }}>
+            <XAxis type="number" dataKey="x" domain={[-0.5, nx - 0.5]} ticks={xticks} interval={0}
+              tickFormatter={(i) => shortLabel(heat.cols[i] ?? '', 12)} angle={-30} textAnchor="end"
+              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} />
+            <YAxis type="number" dataKey="y" domain={[-0.5, ny - 0.5]} ticks={yticks} interval={0} reversed
+              tickFormatter={(i) => shortLabel(heat.cats[i] ?? '', 14)}
+              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} width={95} />
+            <ZAxis range={[1400, 1400]} />
+            <Tooltip cursor={false}
+              formatter={(v, name, p) => [p?.payload?.raw == null ? '—' : `${p.payload.raw}  (${p.payload.pct}%, n=${p.payload.n})`, `${shortLabel(p?.payload?.cat ?? '')} · ${shortLabel(p?.payload?.assessment ?? '')}`]} />
+            <Scatter data={heat.cells} shape="square">
+              {heat.cells.map((c) => <Cell key={`${c.x}-${c.y}`} fill={c.pct == null ? '#F4F4F5' : heatColor(c.pct)} />)}
+              <LabelList dataKey="pct" position="center" formatter={(v) => (v === null || v === undefined ? '' : `${Math.round(v)}`)}
+                style={{ fontSize: 10, fontWeight: 700 }} fill="#fff" />
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isTreemap) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <Treemap data={treemap} dataKey="size" stroke="#fff" isAnimationActive={false} content={<TreemapTile />}>
+            <Tooltip formatter={(v, name, p) => [`${p?.payload?.size} people · avg ${p?.payload?.avg} (n=${p?.payload?.n})`, p?.payload?.name]} />
+          </Treemap>
+        </ResponsiveContainer>
+      )
+    }
+    if (isQuadrant) {
+      const { points, xMid, yMid, xMax, yMax } = quadrant
+      const quadColor = (p) => {
+        const hx = p.x >= xMid, hy = p.y >= yMid
+        if (hx && hy) return '#5B3FB8'
+        if (!hx && !hy) return '#E06C9F'
+        return '#A68AF9'
+      }
+      const areaLabel = { fontSize: 10, fill: '#A1A1AA', fontWeight: 600 }
+      return (
+        <ResponsiveContainer width="100%" height={360}>
+          <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 16 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis type="number" dataKey="x" name={xMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `${xMeasure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis type="number" dataKey="y" name={yMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `${yMeasure} →`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <ZAxis range={[55, 55]} />
+            {points.length > 0 && (
+              <>
+                <ReferenceArea x1={xMid} y1={yMid} x2={xMax} y2={yMax} fill="#895BF5" fillOpacity={0.07} label={{ value: 'Top Talent', position: 'insideTopRight', ...areaLabel, fill: '#5B3FB8' }} />
+                <ReferenceArea x1={0} y1={yMid} x2={xMid} y2={yMax} fill="#A68AF9" fillOpacity={0.05} label={{ value: `High ${shortLabel(yMeasure, 12)}`, position: 'insideTopLeft', ...areaLabel }} />
+                <ReferenceArea x1={xMid} y1={0} x2={xMax} y2={yMid} fill="#A68AF9" fillOpacity={0.05} label={{ value: `High ${shortLabel(xMeasure, 12)}`, position: 'insideBottomRight', ...areaLabel }} />
+                <ReferenceArea x1={0} y1={0} x2={xMid} y2={yMid} fill="#E06C9F" fillOpacity={0.05} label={{ value: 'Development', position: 'insideBottomLeft', ...areaLabel, fill: '#E06C9F' }} />
+              </>
+            )}
+            <ReferenceLine x={xMid} stroke="#A1A1AA" strokeDasharray="5 5" />
+            <ReferenceLine y={yMid} stroke="#A1A1AA" strokeDasharray="5 5" />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v, n) => [v, n === 'x' ? xMeasure : n === 'y' ? yMeasure : n]} />
+            <Scatter data={points} fillOpacity={0.7}>
+              {points.map((p, i) => <Cell key={i} fill={quadColor(p)} />)}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isDual) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ComposedChart data={dual} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${widget.measure2}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <Tooltip />
+            <Legend />
+            <Bar yAxisId="left" dataKey="left" name={`Avg ${measure}`} fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory} />
+            <Line yAxisId="right" type="monotone" dataKey="right" name={`Avg ${widget.measure2}`} stroke="#895BF5" strokeWidth={2.6} dot={{ r: 3.5, fill: '#895BF5' }} activeDot={{ r: 5 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isScatterLine) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <YAxis type="number" dataKey="y" domain={valueDomain} name={yMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <ZAxis range={[45, 45]} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+            <Legend />
+            <Scatter data={scatterLine.points} name="Individuals" fill={accent || '#895BF5'} fillOpacity={0.5} />
+            <Line data={scatterLine.line} dataKey="y" name="Average trend" type="monotone" stroke="#E06C9F" strokeWidth={2.6} dot={{ r: 3, fill: '#E06C9F' }} isAnimationActive={false} legendType="line" />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isProgression) {
+      const fmtTs = (t2) => {
+        const d = new Date(t2)
+        return progression.byMonth
+          ? d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+          : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      }
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis type="number" dataKey="x" name="Date" domain={['dataMin', 'dataMax']} tickFormatter={fmtTs} tick={{ fontSize: 11, fill: '#727279' }} />
+            <YAxis type="number" dataKey="y" domain={valueDomain} name={measure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: measure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <ZAxis range={[40, 40]} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} labelFormatter={fmtTs} formatter={(v, n) => [v, n === 'x' ? 'Date' : measure]} />
+            <Legend />
+            <Scatter data={progression.points} name="Individual attempts" fill={accent || '#895BF5'} fillOpacity={0.4} />
+            <Line data={progression.line} dataKey="y" name="Average per period" type="monotone" stroke="#E06C9F" strokeWidth={2.6} dot={{ r: 3, fill: '#E06C9F' }} isAnimationActive={false} legendType="line" />
+          </ScatterChart>
+        </ResponsiveContainer>
+      )
+    }
+    if (isMeanSpread) {
+      return (
+        <ResponsiveContainer width="100%" height={340}>
+          <ComposedChart data={meanSpread.cats} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+            <XAxis dataKey="name" type="category" allowDuplicatedCategory={false} tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+            <Legend />
+            <Bar dataKey="avg" name={`Avg ${measure}`} fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} barSize={28} cursor="pointer" onClick={drillCategory} />
+            <Scatter data={meanSpread.points} dataKey="value" name="Individuals" fill="#5B3FB8" fillOpacity={0.55} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )
+    }
     if (type === 'hbar') {
       return (
         <ResponsiveContainer width="100%" height={Math.max(220, data.length * 32)}>
           <BarChart layout="vertical" data={data} margin={{ top: 8, right: 28, left: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
-            <XAxis type="number" tick={{ fontSize: 12, fill: '#727279' }} />
+            <XAxis type="number" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
             <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 12, fill: '#727279' }} tickFormatter={(v) => (v.length > 20 ? `${v.slice(0, 19)}…` : v)} />
-            <Tooltip />
-            <Bar dataKey="value" name={measureLabel} radius={[0, 6, 6, 0]} barSize={18} cursor="pointer" onClick={drillCategory}>
-              {data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            <Tooltip formatter={withSampleSize} />
+            <Bar dataKey="value" name={measureLabel} fill={accent || undefined} radius={[0, 6, 6, 0]} barSize={18} cursor="pointer" onClick={drillCategory}>
+              {!accent && data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
@@ -1554,9 +2983,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
           <LineChart data={data} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={tickInterval} tickMargin={8} minTickGap={16} />
-            <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
             <Tooltip />
-            <Line type="monotone" dataKey="value" name={measureLabel} stroke="#895BF5" strokeWidth={2.5} dot={{ r: 3, fill: '#895BF5' }} activeDot={{ r: 5 }}>
+            <Line type="monotone" dataKey="value" name={measureLabel} stroke={accent || '#895BF5'} strokeWidth={2.5} dot={{ r: 3, fill: accent || '#895BF5' }} activeDot={{ r: 5 }}>
               <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
             </Line>
           </LineChart>
@@ -1595,9 +3024,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
           <BarChart data={histData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} barCategoryGap={1}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} />
-            <YAxis tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
             <Tooltip formatter={(v) => [`${v} record${v === 1 ? '' : 's'}`, 'Records']} />
-            <Bar dataKey="value" name="Records" fill="#895BF5" radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange}>
+            <Bar dataKey="value" name="Records" fill={accent || '#895BF5'} radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange}>
               <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
@@ -1609,10 +3038,10 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
         <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-          <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
-          <Tooltip />
-          <Bar dataKey="value" name={measureLabel} radius={[6, 6, 0, 0]} cursor="pointer" onClick={drillCategory}>
-            {data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+          <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
+          <Tooltip formatter={withSampleSize} />
+          <Bar dataKey="value" name={measureLabel} fill={accent || undefined} radius={[6, 6, 0, 0]} cursor="pointer" onClick={drillCategory}>
+            {!accent && data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
             <LabelList dataKey="value" position="top" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
           </Bar>
         </BarChart>
@@ -1623,8 +3052,8 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
   return (
     <div className="di-chart-card">
       <div className="di-chart-card__head">
-        <h3 className="di-chart-card__title">{titleText}</h3>
-        <button className="di-chart-card__remove" onClick={() => onRemove(widget.id)} aria-label="Remove chart">
+        <h3 className="di-chart-card__title">{displayTitle}</h3>
+        <button className="di-chart-card__remove" onClick={() => onRemove(widget.id)} aria-label="Remove chart" title="Remove this chart (it won't appear in the PDF)">
           <CloseIcon />
         </button>
       </div>
@@ -1635,65 +3064,235 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
           value={type}
           onChange={(e) => {
             const t = e.target.value
-            // Histogram and bands need a numeric measure; switch off "count".
+            const num0 = numericCols[0]?.name
+            const num1 = numericCols.find(c => c.name !== num0)?.name
             const patch = { type: t }
-            if ((t === 'histogram' || t === 'bands') && measure === 'count') {
-              patch.measure = numericCols[0]?.name
+            // Charts that measure a number need a numeric measure, not "count".
+            if (['histogram', 'bands', 'combo', 'riskmatrix', 'stacked', 'range', 'treemap', 'dualaxis', 'progression', 'meanspread'].includes(t) && (measure === 'count' || !measure)) {
+              patch.measure = num0
               patch.agg = 'avg'
+            }
+            // Progression plots over time — default its axis to a date column.
+            if (t === 'progression') {
+              const dCol = columns.find(c => c.type === 'date')?.name
+              if (dCol && columns.find(c => c.name === dimension)?.type !== 'date') patch.dimension = dCol
+            }
+            // Smart-type specific defaults so the chart renders immediately.
+            if (t === 'stacked' && !series) {
+              patch.series = num0 ? '__bands__' : (categoricalCols.find(c => c.name !== dimension)?.name)
+            }
+            if (t === 'scatter' || t === 'quadrant' || t === 'scatterline') {
+              patch.xMeasure = xMeasure || num1 || num0
+              patch.yMeasure = yMeasure || num0
+            }
+            if (t === 'dualaxis' && !widget.measure2) {
+              patch.measure2 = num1 || num0
+            }
+            // Multi-assessment charts span every numeric column by default.
+            if (['grouped', 'correlation', 'radar', 'heatmap'].includes(t) && !(widget.scores && widget.scores.length)) {
+              patch.scores = numericCols.map(c => c.name)
             }
             onUpdate(widget.id, patch)
           }}
         >
-          <option value="hbar">Bar (ranked)</option>
-          <option value="bar">Bar (column)</option>
-          <option value="line">Line</option>
-          <option value="pie">Pie</option>
-          {numericCols.length > 0 && <option value="histogram">Histogram</option>}
-          {numericCols.length > 0 && <option value="bands">Performance bands</option>}
+          <optgroup label="Basic">
+            <option value="hbar">Bar (ranked)</option>
+            <option value="bar">Bar (column)</option>
+            <option value="line">Line</option>
+            <option value="pie">Pie</option>
+            {numericCols.length > 0 && <option value="histogram">Histogram</option>}
+            {numericCols.length > 0 && <option value="bands">Performance bands</option>}
+          </optgroup>
+          {numericCols.length > 0 && (
+            <optgroup label="Smart (two factors)">
+              <option value="combo">Combo · responses + avg</option>
+              <option value="range">Range · min/avg/max + n</option>
+              <option value="pareto">Pareto · participation concentration</option>
+              <option value="treemap">Treemap · headcount + avg score</option>
+              {numericCols.length >= 2 && <option value="dualaxis">Dual axis · bar + line (2 metrics)</option>}
+              {numericCols.length >= 2 && <option value="scatterline">Scatter + line · points + trend</option>}
+              <option value="progression">Progression · points + trend over time</option>
+              <option value="meanspread">Mean + spread · bar + points</option>
+              <option value="stacked">Stacked · split / distribution</option>
+              {numericCols.length >= 2 && <option value="scatter">Scatter · correlation</option>}
+              {numericCols.length >= 2 && <option value="quadrant">Quadrant · talent matrix</option>}
+              <option value="riskmatrix">Risk matrix · score vs size</option>
+            </optgroup>
+          )}
+          {numericCols.length >= 2 && (
+            <optgroup label="Multi-assessment">
+              <option value="grouped">Grouped · compare all assessments</option>
+              <option value="heatmap">Heatmap · group × assessment</option>
+              <option value="correlation">Correlation matrix</option>
+              <option value="radar">Strength / weakness radar</option>
+            </optgroup>
+          )}
         </select>
 
-        {!isHist && !isBands && (
+        {/* Scatter, quadrant & scatter+line compare two numeric columns (X vs Y). */}
+        {(isScatter || isQuadrant || isScatterLine) ? (
           <>
-            <span className="di-chart-controls__sep">by</span>
-            <select className="di-select" value={dimension} onChange={(e) => onUpdate(widget.id, { dimension: e.target.value })}>
-              {dimensionCols.length === 0 && <option value={dimension}>{dimension}</option>}
-              {dimensionCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            <select className="di-select" value={xMeasure || ''} onChange={(e) => onUpdate(widget.id, { xMeasure: e.target.value })}>
+              {numericCols.map(c => <option key={c.name} value={c.name}>X: {c.name}</option>)}
             </select>
-            <span className="di-chart-controls__sep">·</span>
+            <span className="di-chart-controls__sep">vs</span>
+            <select className="di-select" value={yMeasure || ''} onChange={(e) => onUpdate(widget.id, { yMeasure: e.target.value })}>
+              {numericCols.map(c => <option key={c.name} value={c.name}>Y: {c.name}</option>)}
+            </select>
+          </>
+        ) : (
+          <>
+            {!isHist && !isBands && !isCorr && !isRadar && (
+              <>
+                <span className="di-chart-controls__sep">by</span>
+                <select className="di-select" value={dimension} onChange={(e) => onUpdate(widget.id, { dimension: e.target.value })}>
+                  {dimensionCols.length === 0 && <option value={dimension}>{dimension}</option>}
+                  {dimensionCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {/* Multi-assessment charts span every Score column — no single measure to pick. */}
+            {(isGrouped || isCorr || isRadar || isHeatmap) && (
+              <span className="di-chart-controls__sep">across {scoreList.length} assessment{scoreList.length === 1 ? '' : 's'}</span>
+            )}
+
+            {/* Stacked: choose the second factor to split each bar by. */}
+            {isStacked && (
+              <>
+                <span className="di-chart-controls__sep">split by</span>
+                <select className="di-select" value={series || ''} onChange={(e) => onUpdate(widget.id, { series: e.target.value })}>
+                  {numericCols.length > 0 && <option value="__bands__">Score bands</option>}
+                  {categoricalCols.filter(c => c.name !== dimension).map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {/* Combo, risk, hist & bands always measure a numeric; bar/line/pie can also just count. */}
+            {!isStacked && !isGrouped && !isCorr && !isRadar && !isHeatmap && (
+              <>
+                {!isHist && !isBands && <span className="di-chart-controls__sep">·</span>}
+                <select
+                  className="di-select"
+                  value={measure}
+                  onChange={(e) => {
+                    const m = e.target.value
+                    onUpdate(widget.id, { measure: m, agg: m === 'count' ? 'count' : (agg === 'count' ? 'avg' : agg) })
+                  }}
+                >
+                  {!isHist && !isBands && !isCombo && !isRisk && !isRange && !isTreemap && !isDual && !isProgression && !isMeanSpread && <option value="count">{isPareto ? 'All respondents' : 'Count of rows'}</option>}
+                  {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {/* Dual axis: the second metric drawn as the overlaid line. */}
+            {isDual && (
+              <>
+                <span className="di-chart-controls__sep">+ line</span>
+                <select className="di-select" value={widget.measure2 || ''} onChange={(e) => onUpdate(widget.id, { measure2: e.target.value })}>
+                  {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {measure !== 'count' && !isHist && !isBands && !isCombo && !isRisk && !isStacked && !isGrouped && !isCorr && !isRadar && !isRange && !isPareto && !isTreemap && !isHeatmap && !isDual && !isProgression && !isMeanSpread && (
+              <select className="di-select" value={agg} onChange={(e) => onUpdate(widget.id, { agg: e.target.value })}>
+                <option value="sum">Sum</option>
+                <option value="avg">Average</option>
+                <option value="min">Min</option>
+                <option value="max">Max</option>
+              </select>
+            )}
+            {showTopN && (
+              <select className="di-select" value={String(topN)} onChange={(e) => onUpdate(widget.id, { topN: e.target.value })}>
+                {TOPN_OPTIONS.filter(n => n < fullData.length).map(n => <option key={n} value={String(n)}>Top {n}</option>)}
+                <option value="all">All ({fullData.length})</option>
+              </select>
+            )}
           </>
         )}
-
-        <select
-          className="di-select"
-          value={measure}
-          onChange={(e) => {
-            const m = e.target.value
-            onUpdate(widget.id, { measure: m, agg: m === 'count' ? 'count' : (agg === 'count' ? 'avg' : agg) })
-          }}
+        <button
+          type="button"
+          className={`di-customize-toggle ${showCustomize ? 'is-active' : ''}`}
+          onClick={() => setShowCustomize(s => !s)}
+          title="Customize this chart — title, scale, order, color"
         >
-          {!isHist && !isBands && <option value="count">Count of rows</option>}
-          {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-        </select>
-
-        {measure !== 'count' && !isHist && !isBands && (
-          <select className="di-select" value={agg} onChange={(e) => onUpdate(widget.id, { agg: e.target.value })}>
-            <option value="sum">Sum</option>
-            <option value="avg">Average</option>
-            <option value="min">Min</option>
-            <option value="max">Max</option>
-          </select>
-        )}
-        {showTopN && (
-          <select className="di-select" value={String(topN)} onChange={(e) => onUpdate(widget.id, { topN: e.target.value })}>
-            {TOPN_OPTIONS.filter(n => n < fullData.length).map(n => <option key={n} value={String(n)}>Top {n}</option>)}
-            <option value="all">All ({fullData.length})</option>
-          </select>
-        )}
+          <TuneIcon /> Customize
+        </button>
       </div>
+
+      {showCustomize && (
+        <div className="di-customize">
+          <div className="di-customize__field di-customize__field--wide">
+            <label>Title</label>
+            <input
+              type="text"
+              className="di-input di-input--full"
+              placeholder={titleText}
+              value={title || ''}
+              onChange={(e) => onUpdate(widget.id, { title: e.target.value })}
+            />
+          </div>
+
+          {(type === 'bar' || type === 'hbar') && !isDate && (
+            <div className="di-customize__field">
+              <label>Order</label>
+              <select className="di-select" value={order || 'desc'} onChange={(e) => onUpdate(widget.id, { order: e.target.value })}>
+                <option value="desc">High → Low</option>
+                <option value="asc">Low → High</option>
+              </select>
+            </div>
+          )}
+
+          {scalable && (
+            <div className="di-customize__field">
+              <label>Scale (axis min / max)</label>
+              <div className="di-range">
+                <input type="number" className="di-input" placeholder="auto" value={yMin ?? ''} onChange={(e) => onUpdate(widget.id, { yMin: e.target.value === '' ? null : e.target.value })} />
+                <span className="di-range__sep">–</span>
+                <input type="number" className="di-input" placeholder="auto" value={yMax ?? ''} onChange={(e) => onUpdate(widget.id, { yMax: e.target.value === '' ? null : e.target.value })} />
+              </div>
+            </div>
+          )}
+
+          {['bar', 'hbar', 'line', 'histogram', 'combo', 'dualaxis', 'scatterline', 'progression', 'meanspread'].includes(type) && (
+            <div className="di-customize__field">
+              <label>Color</label>
+              <div className="di-customize__color">
+                <input type="color" value={color || '#895BF5'} onChange={(e) => onUpdate(widget.id, { color: e.target.value })} />
+                {color && <button type="button" className="di-link" onClick={() => onUpdate(widget.id, { color: null })}>Reset</button>}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="di-link di-customize__reset"
+            onClick={() => onUpdate(widget.id, { title: '', yMin: null, yMax: null, color: null })}
+          >
+            Reset all
+          </button>
+        </div>
+      )}
 
       {view.length === 0
         ? <div className="di-empty-charts">No data for the current filters.</div>
         : (type === 'hbar' ? <div className="di-chart-scroll">{renderChart()}</div> : renderChart())}
+
+      {insight && (
+        <div className="di-insight-card">
+          <div className="di-insight-card__q">
+            <LightbulbIcon style={{ fontSize: 16 }} /> {insight.question}
+          </div>
+          <div className="di-insight-card__grid">
+            <div><span className="di-insight-card__k">Metrics used</span><p>{insight.metrics}</p></div>
+            <div><span className="di-insight-card__k">Business value</span><p>{insight.business}</p></div>
+            <div><span className="di-insight-card__k">Insights generated</span><p>{insight.insights}</p></div>
+            <div><span className="di-insight-card__k">Executive interpretation</span><p>{insight.executive}</p></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1776,6 +3375,236 @@ const DataTable = ({ columns, rows, fileName, anonymized, page, onPage }) => {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ── Custom-chart builder pop-up ───────────────────────────────
+// Collects every field for a chart (type, dimension/measures, scale, title,
+// color, order, Top-N) up front, then hands the finished config to onCreate.
+const ChartBuilderModal = ({ columns, dimensionCols, numericCols, categoricalCols, scoreCols, onCreate, onClose }) => {
+  const num0 = numericCols[0]?.name
+  const num1 = numericCols.find(c => c.name !== num0)?.name
+  const firstDim = dimensionCols[0]?.name || columns[0]?.name
+
+  const [draft, setDraft] = useState({
+    type: 'bar',
+    dimension: firstDim,
+    measure: 'count',
+    agg: 'count',
+    topN: 15,
+    scores: numericCols.map(c => c.name)
+  })
+  const set = (patch) => setDraft(d => ({ ...d, ...patch }))
+
+  // Mirror the inline type-change defaults so the chosen type renders on create.
+  const changeType = (t) => {
+    const patch = { type: t }
+    if (['histogram', 'bands', 'combo', 'riskmatrix', 'stacked', 'range', 'treemap', 'dualaxis', 'progression', 'meanspread'].includes(t) && (draft.measure === 'count' || !draft.measure)) {
+      patch.measure = num0; patch.agg = 'avg'
+    }
+    if (t === 'progression') {
+      const dCol = columns.find(c => c.type === 'date')?.name
+      if (dCol) patch.dimension = dCol
+    }
+    if (t === 'stacked' && !draft.series) patch.series = num0 ? '__bands__' : (categoricalCols.find(c => c.name !== draft.dimension)?.name)
+    if (['scatter', 'quadrant', 'scatterline'].includes(t)) { patch.xMeasure = draft.xMeasure || num1 || num0; patch.yMeasure = draft.yMeasure || num0 }
+    if (t === 'dualaxis' && !draft.measure2) patch.measure2 = num1 || num0
+    if (['grouped', 'heatmap', 'correlation', 'radar'].includes(t) && !(draft.scores && draft.scores.length)) patch.scores = numericCols.map(c => c.name)
+    set(patch)
+  }
+
+  const t = draft.type
+  const isXY = ['scatter', 'quadrant', 'scatterline'].includes(t)
+  const isMulti = ['grouped', 'heatmap', 'correlation', 'radar'].includes(t)
+  const isStackedT = t === 'stacked'
+  const needsDim = !isXY && !['histogram', 'bands', 'correlation', 'radar'].includes(t)
+  const numericMeasureType = ['histogram', 'bands', 'combo', 'riskmatrix', 'range', 'treemap', 'dualaxis', 'progression', 'meanspread'].includes(t)
+  const canCount = ['bar', 'hbar', 'line', 'pie', 'pareto'].includes(t)
+  const showMeasure = numericMeasureType || canCount
+  const showAgg = ['bar', 'hbar', 'line', 'pie'].includes(t) && draft.measure !== 'count'
+  const showOrder = ['bar', 'hbar'].includes(t)
+  const scalableT = ['bar', 'hbar', 'line', 'combo', 'histogram', 'dualaxis', 'scatterline', 'progression', 'meanspread'].includes(t)
+  const colorableT = ['bar', 'hbar', 'line', 'histogram', 'combo', 'dualaxis', 'scatterline', 'progression', 'meanspread'].includes(t)
+
+  return (
+    <div className="di-modal-overlay" onClick={onClose}>
+      <div className="di-modal di-builder" onClick={(e) => e.stopPropagation()}>
+        <div className="di-modal__head">
+          <div>
+            <h2 className="di-modal__title">Build a custom chart</h2>
+            <p className="di-modal__subtitle">Choose the fields and scale, then create the chart</p>
+          </div>
+          <button className="di-chart-card__remove" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+        </div>
+
+        <div className="di-builder__grid">
+          <div className="di-builder__field di-builder__field--wide">
+            <label>Chart type</label>
+            <select className="di-select" value={t} onChange={(e) => changeType(e.target.value)}>
+              <optgroup label="Basic">
+                <option value="hbar">Bar (ranked)</option>
+                <option value="bar">Bar (column)</option>
+                <option value="line">Line</option>
+                <option value="pie">Pie</option>
+                {numericCols.length > 0 && <option value="histogram">Histogram</option>}
+                {numericCols.length > 0 && <option value="bands">Performance bands</option>}
+              </optgroup>
+              {numericCols.length > 0 && (
+                <optgroup label="Smart (two factors)">
+                  <option value="combo">Combo · responses + avg</option>
+                  <option value="range">Range · min/avg/max + n</option>
+                  <option value="pareto">Pareto · participation</option>
+                  <option value="treemap">Treemap · headcount + avg</option>
+                  {numericCols.length >= 2 && <option value="dualaxis">Dual axis · bar + line</option>}
+                  {numericCols.length >= 2 && <option value="scatterline">Scatter + line · points + trend</option>}
+                  <option value="progression">Progression · points + trend over time</option>
+                  <option value="meanspread">Mean + spread · bar + points</option>
+                  <option value="stacked">Stacked · split / distribution</option>
+                  {numericCols.length >= 2 && <option value="scatter">Scatter · correlation</option>}
+                  {numericCols.length >= 2 && <option value="quadrant">Quadrant · talent matrix</option>}
+                  <option value="riskmatrix">Risk matrix · score vs size</option>
+                </optgroup>
+              )}
+              {numericCols.length >= 2 && (
+                <optgroup label="Multi-assessment">
+                  <option value="grouped">Grouped · all assessments</option>
+                  <option value="heatmap">Heatmap · group × assessment</option>
+                  <option value="correlation">Correlation matrix</option>
+                  <option value="radar">Strength / weakness radar</option>
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          {needsDim && (
+            <div className="di-builder__field">
+              <label>{isStackedT || isMulti ? 'Group by' : 'Category (X axis)'}</label>
+              <select className="di-select" value={draft.dimension || ''} onChange={(e) => set({ dimension: e.target.value })}>
+                {dimensionCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {isXY && (
+            <>
+              <div className="di-builder__field">
+                <label>X axis</label>
+                <select className="di-select" value={draft.xMeasure || ''} onChange={(e) => set({ xMeasure: e.target.value })}>
+                  {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="di-builder__field">
+                <label>Y axis</label>
+                <select className="di-select" value={draft.yMeasure || ''} onChange={(e) => set({ yMeasure: e.target.value })}>
+                  {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+            </>
+          )}
+
+          {showMeasure && (
+            <div className="di-builder__field">
+              <label>{t === 'dualaxis' ? 'Bars (metric A)' : 'Measure (Y axis)'}</label>
+              <select className="di-select" value={draft.measure} onChange={(e) => { const m = e.target.value; set({ measure: m, agg: m === 'count' ? 'count' : (draft.agg === 'count' ? 'avg' : draft.agg) }) }}>
+                {canCount && <option value="count">{t === 'pareto' ? 'All respondents' : 'Count of rows'}</option>}
+                {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {t === 'dualaxis' && (
+            <div className="di-builder__field">
+              <label>Line (metric B)</label>
+              <select className="di-select" value={draft.measure2 || ''} onChange={(e) => set({ measure2: e.target.value })}>
+                {numericCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {isStackedT && (
+            <div className="di-builder__field">
+              <label>Split by</label>
+              <select className="di-select" value={draft.series || ''} onChange={(e) => set({ series: e.target.value })}>
+                {numericCols.length > 0 && <option value="__bands__">Score bands</option>}
+                {categoricalCols.filter(c => c.name !== draft.dimension).map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {showAgg && (
+            <div className="di-builder__field">
+              <label>Aggregation</label>
+              <select className="di-select" value={draft.agg} onChange={(e) => set({ agg: e.target.value })}>
+                <option value="sum">Sum</option>
+                <option value="avg">Average</option>
+                <option value="min">Min</option>
+                <option value="max">Max</option>
+              </select>
+            </div>
+          )}
+
+          {showOrder && (
+            <div className="di-builder__field">
+              <label>Order</label>
+              <select className="di-select" value={draft.order || 'desc'} onChange={(e) => set({ order: e.target.value })}>
+                <option value="desc">High → Low</option>
+                <option value="asc">Low → High</option>
+              </select>
+            </div>
+          )}
+
+          {showOrder && (
+            <div className="di-builder__field">
+              <label>Show</label>
+              <select className="di-select" value={String(draft.topN)} onChange={(e) => set({ topN: e.target.value })}>
+                {TOPN_OPTIONS.map(n => <option key={n} value={String(n)}>Top {n}</option>)}
+                <option value="all">All</option>
+              </select>
+            </div>
+          )}
+
+          {isMulti && (
+            <div className="di-builder__field di-builder__field--wide">
+              <label>Assessments</label>
+              <div className="di-builder__note">Uses all {scoreCols.length} detected assessment{scoreCols.length === 1 ? '' : 's'} automatically.</div>
+            </div>
+          )}
+
+          {scalableT && (
+            <div className="di-builder__field">
+              <label>Scale (axis min / max)</label>
+              <div className="di-range">
+                <input type="number" className="di-input" placeholder="auto" value={draft.yMin ?? ''} onChange={(e) => set({ yMin: e.target.value === '' ? null : e.target.value })} />
+                <span className="di-range__sep">–</span>
+                <input type="number" className="di-input" placeholder="auto" value={draft.yMax ?? ''} onChange={(e) => set({ yMax: e.target.value === '' ? null : e.target.value })} />
+              </div>
+            </div>
+          )}
+
+          {colorableT && (
+            <div className="di-builder__field">
+              <label>Color</label>
+              <div className="di-customize__color">
+                <input type="color" value={draft.color || '#895BF5'} onChange={(e) => set({ color: e.target.value })} />
+                {draft.color && <button type="button" className="di-link" onClick={() => set({ color: null })}>Reset</button>}
+              </div>
+            </div>
+          )}
+
+          <div className="di-builder__field di-builder__field--wide">
+            <label>Title (optional)</label>
+            <input type="text" className="di-input di-input--full" placeholder="Auto-generated from your selection" value={draft.title || ''} onChange={(e) => set({ title: e.target.value })} />
+          </div>
+        </div>
+
+        <div className="di-builder__actions">
+          <button className="btn btn--outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary" onClick={() => onCreate({ ...draft })}>
+            <AddChartIcon className="btn-icon" /> Create chart
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

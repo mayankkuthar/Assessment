@@ -24,5 +24,5 @@ const clearAttempts = async () => {
   }
 };
 
-// Run the function
+
 clearAttempts();
