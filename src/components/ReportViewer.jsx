@@ -12,6 +12,8 @@ import remarkGfm from 'remark-gfm';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import './ReportViewer.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 // Custom alpha function for hex/rgb to rgba conversion without material-ui
 const alpha = (color, opacity) => {
@@ -32,6 +34,42 @@ const alpha = (color, opacity) => {
     return color.replace(/rgb\(|rgba\(/, 'rgba(').replace(/\)/, `, ${opacity})`);
   }
   return color;
+};
+
+// Helper to filter out duplicate sections from quiz.report_footer
+const getFilteredFooterMarkdown = (footerText) => {
+  if (!footerText) return '';
+  const lines = footerText.split('\n');
+  const result = [];
+  let skipSection = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Check if line starts a section header (markdown H1, H2, H3, H4)
+    if (trimmed.startsWith('#')) {
+      const lowerLine = trimmed.toLowerCase();
+      if (
+        lowerLine.includes('next step') ||
+        lowerLine.includes('support services') ||
+        lowerLine.includes('our services') ||
+        lowerLine.includes('contact') ||
+        lowerLine.includes('disclaimer') ||
+        lowerLine.includes('helpline')
+      ) {
+        skipSection = true;
+      } else {
+        skipSection = false;
+      }
+    }
+    
+    if (!skipSection) {
+      result.push(line);
+    }
+  }
+  
+  return result.join('\n').trim();
 };
 
 const defaultTemplate = {
@@ -399,6 +437,91 @@ const ReportViewer = () => {
     );
   }, [quiz]);
 
+  const isHappiEQ = useMemo(() => {
+    const name = quiz?.name?.toLowerCase() || '';
+    return (
+      name.includes('happieq') || 
+      name.includes('happi eq') ||
+      name.includes('happiness quotient') ||
+      name.includes('emotional intelligence assessment') ||
+      name.includes('happi assess ei')
+    );
+  }, [quiz]);
+
+  const getServiceList = () => {
+    if (isHappiEQ) {
+      return [
+        { name: 'HappiGUIDE', desc: "Get expert-led insights on your profile and create a clear roadmap for growth. Together, you'll discover what your results truly mean and create a practical action plan tailored just for you." },
+        { name: 'HappiLEARN', desc: "Your emotional wellbeing library—open 24/7. With HappiLEARN, you get unlimited access to 5000+ minutes of curated videos, audios, blogs, and tools designed by experts to practice empathy, regulation, and resilience at your own pace." },
+        { name: 'HappiBUDDY', desc: "Confidential space to enhance your relational EQ because everyone needs someone to talk to or just a safe space to vent out our emotions. HappiBUDDY connects you with a trusted professional \"buddy\" in a safe, private, and judgment-free space so you never have to face challenges alone." },
+        { name: 'HappiSELF', desc: "Empowers you to manage your emotional health with interactive programs based on Cognitive Behavioral Therapy (CBT). Build habits, track progress, and grow stronger every day." },
+        { name: 'HappiTALK', desc: "A safe space for real conversations, allowing you to have meaningful discussions with experts to improve communication, relationships, and emotional expression." }
+      ];
+    }
+    
+    return [
+      { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
+      { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
+      { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
+      { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
+      { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
+    ];
+  };
+
+  const getDisclaimerTextB = () => {
+    if (isHappiEQ) {
+      return (
+        <>
+          <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for any medical advice. The statements used in HappiEQ are inspired by the work of EQ experts across the globe. If you are having difficult thoughts or going through rough times, please consider calling the helpline numbers below:
+        </>
+      );
+    }
+    
+    return (
+      <>
+        <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for medical advice. The statements used in HappiLIFE awareness tool are inspired by ICD-10 (WHO) & DSM-5® guidelines. If you are having difficult thoughts or going through rough times, consider calling the below listed helpline numbers:
+      </>
+    );
+  };
+
+  const renderContactDetails = () => {
+    if (isHappiEQ) {
+      return (
+        <div className="rv-contact-details">
+          <h4 className="rv-contact-details__title">📞 Contact Details</h4>
+          <p className="rv-contact-details__text" style={{ marginBottom: '16px' }}>
+            For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>08062365939</strong> or <a href="https://wa.me/919136899581?text=EQ" target="_blank" rel="noopener noreferrer"><strong>WhatsApp Chat</strong></a> or download our mobile app:
+          </p>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '12px' }}>
+            <a href="https://play.google.com/store/apps/details?id=com.happimynd" target="_blank" rel="noopener noreferrer">
+              <img 
+                src="https://happimynd.com/assets/Frontend/images/play_store.png" 
+                alt="Download on Google Play" 
+                style={{ height: '40px', borderRadius: '4px' }} 
+              />
+            </a>
+            <a href="https://apps.apple.com/in/app/happimynd-emotional-self-help/id1634742782" target="_blank" rel="noopener noreferrer">
+              <img 
+                src="https://apps.apple.com/in/app/happimynd-emotional-self-help/id1634742782" 
+                alt="Download on App Store" 
+                style={{ height: '40px', borderRadius: '4px' }} 
+              />
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rv-contact-details">
+        <h4 className="rv-contact-details__title">📞 Contact Details</h4>
+        <p className="rv-contact-details__text">
+          For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>08062365939</strong> or visit our website at <a href="https://www.happimynd.com" target="_blank" rel="noopener noreferrer">www.happimynd.com</a> to explore more.
+        </p>
+      </div>
+    );
+  };
+
   const isShortAssessment = useMemo(() => {
     if (!quiz) return false;
     const quizName = quiz.name?.toLowerCase() || '';
@@ -421,8 +544,15 @@ const ReportViewer = () => {
   }, [quiz, packets]);
 
   const showShortReportFeatures = useMemo(() => {
-    return isShortAssessment && !isSpecialReport;
-  }, [isShortAssessment, isSpecialReport]);
+    const isHappiEQOrLife = quiz?.name?.toLowerCase().includes('happieq') || 
+                            quiz?.name?.toLowerCase().includes('happi eq') ||
+                            quiz?.name?.toLowerCase().includes('happiness quotient') ||
+                            quiz?.name?.toLowerCase().includes('emotional intelligence assessment') ||
+                            quiz?.name?.toLowerCase().includes('happilife') ||
+                            quiz?.name?.toLowerCase().includes('happi life') ||
+                            quiz?.name?.toLowerCase().includes('happi assess ei');
+    return (isShortAssessment || isHappiEQOrLife) && !quiz?.name?.toLowerCase().includes('personality');
+  }, [isShortAssessment, quiz]);
 
   useEffect(() => {
     let cancelled = false;
@@ -444,6 +574,7 @@ const ReportViewer = () => {
         }
 
         const quizData = await quizRes.json();
+        enrichQuizWithInstructions(quizData);
         const attempts = await attemptsRes.json();
         const packetData = await packetsRes.json();
         let templateData = null;
@@ -860,8 +991,8 @@ const ReportViewer = () => {
 
       {/* Custom Header Text */}
       {quiz?.report_header && (
-        <div className="rv-card">
-          <div className="rv-markdown-content">
+        <div className="rv-card rv-card--intro">
+          <div className="rv-markdown-content animate-fade-in">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_header}</ReactMarkdown>
           </div>
         </div>
@@ -1071,9 +1202,11 @@ const ReportViewer = () => {
                     <div>
                       <h3 className="rv-analysis-card__title">{p.name}</h3>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: pColor }}>
-                          Score: {p.marks} / {p.totalMarks}
-                        </span>
+                        {(!showShortReportFeatures || isHappiEQ) && (
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: pColor }}>
+                            Score: {p.marks} / {p.totalMarks}
+                          </span>
+                        )}
                         {!showShortReportFeatures && (
                           <span className="rv-badge" style={{ backgroundColor: pColor }}>
                             {p.level?.label || 'Level'}
@@ -1120,7 +1253,7 @@ const ReportViewer = () => {
                             textShadow: (p.marks / p.totalMarks) > 0.4 ? '0 1px 2px rgba(0,0,0,0.4)' : 'none'
                           }}
                         >
-                          {p.level?.label} ({p.marks} / {p.totalMarks})
+                          {p.level?.label} {isHappiEQ && `(${p.marks} / ${p.totalMarks})`}
                         </span>
                       </div>
                     </div>
@@ -1138,14 +1271,32 @@ const ReportViewer = () => {
         </div>
       )}
 
-      {/* Custom Footer Text */}
-      {quiz?.report_footer && (
-        <div className="rv-card">
-          <div className="rv-markdown-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_footer}</ReactMarkdown>
+      {/* Custom Footer Text (Filtered to avoid duplicates in special reports) */}
+      {(() => {
+        if (!quiz?.report_footer) return null;
+        
+        const isHappiEQOrLife = quiz?.name?.toLowerCase().includes('happieq') || 
+                                quiz?.name?.toLowerCase().includes('happi eq') ||
+                                quiz?.name?.toLowerCase().includes('happiness quotient') ||
+                                quiz?.name?.toLowerCase().includes('emotional intelligence assessment') ||
+                                quiz?.name?.toLowerCase().includes('happilife') ||
+                                quiz?.name?.toLowerCase().includes('happi life') ||
+                                quiz?.name?.toLowerCase().includes('happi assess ei');
+                                
+        const footerMarkdown = isHappiEQOrLife 
+          ? getFilteredFooterMarkdown(quiz.report_footer) 
+          : quiz.report_footer;
+          
+        if (!footerMarkdown.trim()) return null;
+        
+        return (
+          <div className="rv-card">
+            <div className="rv-markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{footerMarkdown}</ReactMarkdown>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Next Steps Section */}
       {showShortReportFeatures && (
@@ -1169,13 +1320,7 @@ const ReportViewer = () => {
           <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 16px 0' }}>🤝 Support Services:</h3>
 
           <div className="rv-service-grid">
-            {[
-              { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
-              { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
-              { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
-              { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
-              { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
-            ].map((service) => (
+            {getServiceList().map((service) => (
               <div key={service.name} className="rv-service-card">
                 <h4 className="rv-service-card__name">{service.name}</h4>
                 <p className="rv-service-card__desc">{service.desc}</p>
@@ -1183,14 +1328,9 @@ const ReportViewer = () => {
             ))}
           </div>
 
-          <div className="rv-contact-details">
-            <h4 className="rv-contact-details__title">📞 Contact Details</h4>
-            <p className="rv-contact-details__text">
-              For further details you may contact us at <strong>info@happimynd.com</strong> or <strong>9110599581</strong> or visit our website at <a href="https://www.happimynd.com" target="_blank" rel="noopener noreferrer">www.happimynd.com</a> to explore more.
-            </p>
-          </div>
+          {renderContactDetails()}
 
-          <h4 style={{ fontWeight: 700, color: 'var(--color-secondary)', fontSize: '14px', margin: '0 0 12px 0' }}>⚠️ Disclaimer :</h4>
+          <h4 style={{ fontWeight: 700, color: 'var(--color-secondary)', fontSize: '14px', margin: '24px 0 12px 0' }}>⚠️ Disclaimer :</h4>
           
           <span className="rv-disclaimer-text">
             <strong>A.</strong> If the services are availed by a person who belongs/works with a company/organization which are enrolled with the services for its employees or has a tie up with HappiMynd, the services/tools available to the users are subject to the following terms:
@@ -1200,7 +1340,7 @@ const ReportViewer = () => {
           </span>
 
           <span className="rv-disclaimer-text">
-            <strong>B.</strong> This summary can support you in discovering yourself, knowing the areas of improvement and living a holistic life. However, it is indicative and not a replacement for medical advice. The statements used in HappiLIFE awareness tool are inspired by ICD-10 (WHO) & DSM-5® guidelines. If you are having difficult thoughts or going through rough times, consider calling the below listed helpline numbers:
+            {getDisclaimerTextB()}
             <br />• National Emergency No. - 112
             <br />• Women Helpline - 1091
             <br />• Senior Citizen Helpline - 14567

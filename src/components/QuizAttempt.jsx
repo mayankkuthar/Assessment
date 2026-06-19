@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import CheckCircle from '@mui/icons-material/CheckCircle';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import './QuizAttempt.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 // Helper function to get readable packet names
 const getPacketName = (packetId) => {
@@ -92,6 +96,7 @@ const QuizAttempt = () => {
         }
 
         const quizData = await quizRes.json();
+        enrichQuizWithInstructions(quizData);
         const questionsData = await questionsRes.json();
         const profilesData = profilesRes.ok ? await profilesRes.json() : [];
         const assignmentsData = assignmentsRes.ok ? await assignmentsRes.json() : [];
@@ -631,38 +636,45 @@ const QuizAttempt = () => {
                 <h2 className="quiz-attempt__desc-title">
                   Why should I take this assessment?
                 </h2>
-                
-                <div className="quiz-attempt__desc-body">
-                  <p>
-                    Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
-                  </p>
-                  <p>
-                    From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
-                  </p>
-                  <p>
-                    That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
-                  </p>
-                  <p>
-                    This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
-                  </p>
-                  <p className="underline">
-                    The better you understand your emotions, the better you live, connect and grow!!
-                  </p>
-                  <p>
-                    Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
-                  </p>
-                </div>
+                {quiz?.start_instructions ? (
+                  <div className="quiz-attempt__desc-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <>
+                    <div className="quiz-attempt__desc-body">
+                      <p>
+                        Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
+                      </p>
+                      <p>
+                        From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
+                      </p>
+                      <p>
+                        That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
+                      </p>
+                      <p>
+                        This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
+                      </p>
+                      <p className="underline">
+                        The better you understand your emotions, the better you live, connect and grow!!
+                      </p>
+                      <p>
+                        Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
+                      </p>
+                    </div>
 
-                <h3 className="quiz-attempt__instructions-title">Instructions:</h3>
-                
-                <ul className="quiz-attempt__instructions-list">
-                  <li>Read each statement carefully</li>
-                  <li>There is no right and wrong answer, so no judgement</li>
-                  <li>1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree</li>
-                  <li>Please avoid marking the neutral response and share real time experiences</li>
-                  <li>Please answer all the questions with your natural instinct</li>
-                  <li>Your responses will be kept 100% confidential</li>
-                </ul>
+                    <h3 className="quiz-attempt__instructions-title">Instructions:</h3>
+                    
+                    <ul className="quiz-attempt__instructions-list">
+                      <li>Read each statement carefully</li>
+                      <li>There is no right and wrong answer, so no judgement</li>
+                      <li>1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree</li>
+                      <li>Please avoid marking the neutral response and share real time experiences</li>
+                      <li>Please answer all the questions with your natural instinct</li>
+                      <li>Your responses will be kept 100% confidential</li>
+                    </ul>
+                  </>
+                )}
 
                 <button
                   className="quiz-attempt__start-btn"
@@ -671,7 +683,7 @@ const QuizAttempt = () => {
                     setShowQuizDescription(false);
                   }}
                 >
-                  Start
+                  Start Assessment
                 </button>
               </div>
             </div>

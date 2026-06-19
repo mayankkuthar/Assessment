@@ -652,3 +652,46 @@
     right: 16px;
   }
 }
+
+/* ── Custom Quiz Start Instructions Markdown Styles ────────── */
+.quiz-attempt__desc-markdown {
+  max-width: 850px;
+  width: 100%;
+  text-align: left;
+  padding: 0 var(--space-4);
+  color: var(--color-secondary);
+}
+
+.quiz-attempt__desc-markdown p {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.quiz-attempt__desc-markdown ul, 
+.quiz-attempt__desc-markdown ol {
+  padding-left: var(--space-6);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.quiz-attempt__desc-markdown li {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  margin-bottom: var(--space-1);
+}
+
+.quiz-attempt__desc-markdown h1,
+.quiz-attempt__desc-markdown h2,
+.quiz-attempt__desc-markdown h3,
+.quiz-attempt__desc-markdown h4,
+.quiz-attempt__desc-markdown h5,
+.quiz-attempt__desc-markdown h6 {
+  color: var(--color-primary);
+  font-weight: 700;
+  margin: var(--space-4) 0 var(--space-2) 0;
+}
+
+.quiz-attempt__desc-markdown strong {
+  font-weight: 700;
+}
+

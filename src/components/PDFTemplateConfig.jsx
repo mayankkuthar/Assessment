@@ -88,7 +88,7 @@ const PDFTemplateConfig = () => {
   const [template, setTemplate] = useState({
     header: { 
       enabled: true, 
-      backgroundColor: '#2563eb', 
+      backgroundColor: '#895BF5', 
       textColor: '#ffffff', 
       title: 'Assessment Report', 
       subtitle: 'Performance Analysis',
@@ -255,7 +255,7 @@ const PDFTemplateConfig = () => {
       letterSpacing: '0.5px'
     },
     colors: { 
-      primary: '#2563eb', 
+      primary: '#895BF5', 
       secondary: '#6b7280', 
       success: '#10b981', 
       warning: '#f59e0b', 
@@ -3139,7 +3139,7 @@ const PDFTemplateConfig = () => {
                                       border: config.highlightCurrentLevel ? '2px solid #059669' : 'none'
                                     }} 
                                   />
-                                  <Chip label="Excellent" size="small" sx={{ backgroundColor: '#dbeafe', color: '#2563eb' }} />
+                                  <Chip label="Excellent" size="small" sx={{ backgroundColor: '#F2F0FF', color: '#895BF5' }} />
                                 </Box>
                               </Box>
                             </Grid>
