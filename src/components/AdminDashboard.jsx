@@ -84,13 +84,30 @@ const AdminDashboard = () => {
         profile = (profiles || []).find(p => String(p.id) === String(attempt.profile_id)) || null
       }
 
-      const user = userData
-        ? {
-            name: userData.user_name || userData.email || 'Unknown User',
-            email: userData.email || 'No email',
-            organization: userData.organization || 'Not specified'
-          }
-        : { name: `User ${attempt.user_id || 'Unknown'}`, email: 'No email', organization: 'Not specified' }
+      // Prefer the freshly-fetched user record, but fall back to the user data
+      // already attached to the attempt (returned by /api/quiz-attempts) before
+      // resorting to a generic "User {id}" placeholder. This keeps the name and
+      // email correct even when the per-user fetch fails (e.g. legacy/guest ids).
+      const attemptUser = attempt.user || {}
+      const name =
+        userData?.user_name ||
+        userData?.email ||
+        attemptUser.user_name ||
+        attemptUser.name ||
+        attemptUser.email ||
+        `User ${attempt.user_id || 'Unknown'}`
+      const email =
+        userData?.email ||
+        attemptUser.email ||
+        'No email'
+      const user = {
+        name,
+        email,
+        organization:
+          userData?.organization ||
+          attemptUser.organization ||
+          'Not specified'
+      }
 
       return {
         ...attempt,

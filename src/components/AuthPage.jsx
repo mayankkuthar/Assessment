@@ -113,22 +113,26 @@ function AuthPage() {
     
     try {
       if (isSignUp) {
-        // Validate required fields for signup
-        if (!onboardingCode.trim() || !verifiedOrgName) {
-          setError('A valid user code is required to sign up.');
-          hasError = true;
-          setLoading(false);
-          return;
-        }
+        // Validate required fields for signup. The company code is optional —
+        // individuals (and anyone without a code) can sign up freely.
         if (!userName.trim() || !email.trim() || !profile || !password.trim()) {
-          setError('All fields are required for signup');
+          setError('Please fill in your name, email, profile and password.');
           hasError = true;
           setLoading(false);
           return;
         }
-        
-        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: verifiedOrgName, userCode: onboardingCode })
-        
+        // If a company code was entered, it must resolve to a valid organization.
+        const isIndividual = profile === 'Individual';
+        const trimmedCode = isIndividual ? '' : onboardingCode.trim();
+        if (trimmedCode && !verifiedOrgName) {
+          setError('The company code entered is not valid. Clear it to sign up individually.');
+          hasError = true;
+          setLoading(false);
+          return;
+        }
+
+        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: verifiedOrgName || 'Individual', userCode: trimmedCode })
+
         // Sign up using the API directly
         const response = await fetch('/api/auth/signup', {
           method: 'POST',
@@ -142,8 +146,8 @@ function AuthPage() {
             userName: userName,
             user_name: userName,
             profile: profile,
-            userCode: onboardingCode.trim().toUpperCase(),
-            organization: verifiedOrgName
+            userCode: trimmedCode ? trimmedCode.toUpperCase() : '',
+            organization: verifiedOrgName || 'Individual'
           })
         });
 
@@ -370,11 +374,13 @@ function AuthPage() {
                     disabled={loadingProfiles}
                   >
                     <option value="" disabled>Select a profile</option>
+                    {/* Individuals can sign up without a company — no code needed. */}
+                    <option value="Individual">Individual</option>
                     {loadingProfiles ? (
                       <option disabled>Loading profiles...</option>
                     ) : (
                       profiles
-                        .filter((profileItem) => profileItem.name !== 'SOLV')
+                        .filter((profileItem) => profileItem.name !== 'SOLV' && profileItem.name !== 'Individual')
                         .map((profileItem) => (
                           <option key={profileItem.id} value={profileItem.name}>
                             {profileItem.name}
@@ -384,41 +390,44 @@ function AuthPage() {
                   </select>
                 </div>
 
-                {/* Unique User Code Input */}
-                <div className="form-group">
-                  <label className="form-label">Your Unique Code *</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={onboardingCode}
-                    onChange={(e) => setOnboardingCode(e.target.value)}
-                    placeholder="e.g. AB12CD"
-                    required
-                    style={{ textTransform: 'uppercase' }}
-                  />
-                  
-                  {/* Real-time verification display */}
-                  <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
-                    {verifyingCode && (
-                      <span style={{ color: 'var(--color-muted-fg)' }}>Resolving user code...</span>
-                    )}
-                    {verifiedOrgName && (
-                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                        ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
-                      </span>
-                    )}
-                    {codeVerificationError && (
-                      <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
-                        ❌ {codeVerificationError}
-                      </span>
-                    )}
-                    {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
-                      <span style={{ color: 'var(--color-muted-fg)' }}>
-                        Please enter the unique user code shared by your company.
-                      </span>
-                    )}
+                {/* Unique User Code Input — only for company/organization users.
+                    Individuals don't have a code, so we hide it for them and it is
+                    never required for signup. */}
+                {profile !== 'Individual' && (
+                  <div className="form-group">
+                    <label className="form-label">Company Code (optional)</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={onboardingCode}
+                      onChange={(e) => setOnboardingCode(e.target.value)}
+                      placeholder="e.g. AB12CD"
+                      style={{ textTransform: 'uppercase' }}
+                    />
+
+                    {/* Real-time verification display */}
+                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
+                      {verifyingCode && (
+                        <span style={{ color: 'var(--color-muted-fg)' }}>Resolving company code...</span>
+                      )}
+                      {verifiedOrgName && (
+                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                          ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
+                        </span>
+                      )}
+                      {codeVerificationError && (
+                        <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
+                          ❌ {codeVerificationError}
+                        </span>
+                      )}
+                      {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
+                        <span style={{ color: 'var(--color-muted-fg)' }}>
+                          Only if your company gave you a code. Leave blank to sign up individually.
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
             
@@ -438,14 +447,15 @@ function AuthPage() {
               className="btn btn--primary"
               style={{ width: '100%', marginBottom: 'var(--space-4)' }}
               disabled={
-                loading || 
+                loading ||
                 (tab === 1 && (
-                  !userName.trim() || 
-                  !email.trim() || 
-                  !profile || 
-                  !password.trim() || 
-                  !onboardingCode.trim() || 
-                  !verifiedOrgName
+                  !userName.trim() ||
+                  !email.trim() ||
+                  !profile ||
+                  !password.trim() ||
+                  // Only block if a code was entered for a non-individual but
+                  // hasn't resolved to a valid organization yet.
+                  (profile !== 'Individual' && onboardingCode.trim() && !verifiedOrgName)
                 ))
               }
             >

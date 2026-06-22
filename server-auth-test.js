@@ -392,6 +392,32 @@ function getActor(req) {
   return mockData.users.find(u => String(u.id) === String(id)) || null;
 }
 
+// Resolve the display name, email and organization for a quiz attempt. Prefers
+// the identity snapshot stored on the attempt itself, then falls back to the
+// users/employees records (matched type-safely, since ids may be number/string).
+function resolveAttemptUser(attempt) {
+  const user = mockData.users.find(u => String(u.id) === String(attempt.user_id)) || null;
+  const email = attempt.user_email || user?.email || null;
+  const employee = email
+    ? mockData.employees.find(e => String(e.email).toLowerCase() === String(email).toLowerCase())
+    : null;
+  const org = user?.organization_id
+    ? mockData.organizations.find(o => String(o.id) === String(user.organization_id))
+    : null;
+  const name =
+    attempt.user_name ||
+    employee?.name ||
+    user?.user_name ||
+    (email ? String(email).split('@')[0] : null) ||
+    `User ${attempt.user_id || 'Unknown'}`;
+  return {
+    user_name: name,
+    name,
+    email,
+    organization: org?.name || 'Individual'
+  };
+}
+
 // Organization scope check. Super Admin bypasses entirely. An admin with no
 // organization is treated as an unscoped/global admin (legacy default), while
 // an admin assigned to an organization is confined to that organization.
@@ -630,10 +656,11 @@ app.get('/api/auth/verify-code', (req, res) => {
 app.post('/api/auth/signup', (req, res) => {
   const { email, password, role = 'user', userName, user_name, profile, userCode } = req.body;
   const targetUserName = userName || user_name;
-  console.log(`📝 Sign up attempt: ${email} with user code ${userCode}`);
-  
-  if (!userCode) {
-    return res.status(400).json({ error: 'User code is required for signup' });
+  const code = (userCode || '').trim();
+  console.log(`📝 Sign up attempt: ${email}${code ? ` with company code ${code}` : ' (individual)'}`);
+
+  if (!email || !email.trim() || !password) {
+    return res.status(400).json({ error: 'Email and password are required for signup' });
   }
 
   // Check if user already exists
@@ -645,44 +672,60 @@ app.post('/api/auth/signup', (req, res) => {
       error: 'User already exists'
     });
   }
-  
-  // Check if the selected profile exists
-  const existingProfile = mockData.profiles.find(p => p.name === profile);
+
+  // Resolve the selected profile. Individuals (and any new profile coming from
+  // the signup form) are accepted rather than rejected — the profile record is
+  // created on the fly if it doesn't exist yet, so signup never fails over it.
+  const profileName = (profile && profile.trim()) ? profile.trim() : 'Individual';
+  if (!mockData.profiles) {
+    mockData.profiles = [];
+  }
+  let existingProfile = mockData.profiles.find(
+    p => p.name.toLowerCase() === profileName.toLowerCase()
+  );
   if (!existingProfile) {
-    return res.status(400).json({
-      user: null,
-      session: null,
-      error: `Profile "${profile}" does not exist. Please select from available profiles.`
-    });
+    existingProfile = {
+      id: String(Date.now()),
+      name: profileName,
+      email: 'new@example.com',
+      role: 'student',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    mockData.profiles.push(existingProfile);
   }
 
-  if (!mockData.employees) {
-    mockData.employees = [];
-  }
-  const emp = mockData.employees.find(e => e.code === userCode.trim().toUpperCase());
-  if (!emp) {
-    return res.status(400).json({ error: 'Invalid user code' });
+  // The company code is optional. When provided it must resolve to a valid,
+  // active organization and match the pre-registered employee email. When
+  // omitted, the user signs up as an individual (no organization).
+  let organizationId = null;
+  let organizationName = 'Individual';
+
+  if (code) {
+    if (!mockData.employees) {
+      mockData.employees = [];
+    }
+    const emp = mockData.employees.find(e => e.code === code.toUpperCase());
+    if (!emp) {
+      return res.status(400).json({ error: 'Invalid company code' });
+    }
+    if (emp.email.toLowerCase() !== email.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'This company code does not belong to the entered email address.' });
+    }
+    if (!mockData.organizations) {
+      mockData.organizations = [];
+    }
+    const org = mockData.organizations.find(o => o.id === emp.organization_id);
+    if (!org) {
+      return res.status(400).json({ error: 'Associated organization not found' });
+    }
+    if (org.status !== 'active') {
+      return res.status(400).json({ error: 'This organization is currently inactive' });
+    }
+    organizationId = org.id;
+    organizationName = org.name;
   }
 
-  // Verify email matches pre-registered employee email
-  if (emp.email.toLowerCase() !== email.trim().toLowerCase()) {
-    return res.status(400).json({ error: 'This user code does not belong to the entered email address.' });
-  }
-
-  if (!mockData.organizations) {
-    mockData.organizations = [];
-  }
-  const org = mockData.organizations.find(o => o.id === emp.organization_id);
-  if (!org) {
-    return res.status(400).json({ error: 'Associated organization not found' });
-  }
-  if (org.status !== 'active') {
-    return res.status(400).json({ error: 'This organization is currently inactive' });
-  }
-
-  const organizationId = org.id;
-  const organizationName = org.name;
-  
   // Create new user
   const userId = String(Date.now());
   const newUser = {
@@ -691,7 +734,7 @@ app.post('/api/auth/signup', (req, res) => {
     password,
     role: ROLES.USER,
     user_name: targetUserName || email.split('@')[0],
-    profile: profile,
+    profile: existingProfile.name,
     organization_id: organizationId,
     organization: organizationName,
     permissions: [],
@@ -740,26 +783,33 @@ app.get('/api/users', (req, res) => {
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   console.log(`👤 Get user ${userId}`);
-  
-  const user = mockData.users.find(u => u.id === userId);
+
+  const user = mockData.users.find(u => String(u.id) === String(userId));
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
-  
-  // Return user data without password
+
+  // Return user data without password, enriched with the employee name (if any)
+  // so callers get a usable display name rather than just an email.
   const { password, ...userWithoutPassword } = user;
-  res.json(userWithoutPassword);
+  const employee = user.email
+    ? mockData.employees.find(e => String(e.email).toLowerCase() === String(user.email).toLowerCase())
+    : null;
+  res.json({
+    ...userWithoutPassword,
+    user_name: user.user_name || employee?.name || (user.email ? user.email.split('@')[0] : `User ${user.id}`)
+  });
 });
 
 app.get('/api/local-users/:id', (req, res) => {
   const userId = req.params.id;
   console.log(`👤 Get local user ${userId}`);
-  
-  const user = mockData.users.find(u => u.id === userId);
+
+  const user = mockData.users.find(u => String(u.id) === String(userId));
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
-  
+
   // Return user data without password
   const { password, ...userWithoutPassword } = user;
   res.json(userWithoutPassword);
@@ -1945,14 +1995,19 @@ app.get('/api/quiz-attempts', (req, res) => {
   console.log('📝 Get quiz attempts');
   
   const { quiz_id } = req.query;
-  
+
+  // Attach a resolved user (name + email) to every attempt so dashboards and
+  // reports render the real identity instead of a "User {id}" placeholder.
+  const withUser = (attempts) =>
+    attempts.map(a => ({ ...a, user: resolveAttemptUser(a) }));
+
   if (quiz_id) {
     // Filter attempts by quiz_id
     const filteredAttempts = mockData.quizAttempts.filter(a => a.quiz_id === quiz_id);
-    res.json(filteredAttempts);
+    res.json(withUser(filteredAttempts));
   } else {
     // Return all attempts
-    res.json(mockData.quizAttempts);
+    res.json(withUser(mockData.quizAttempts));
   }
 });
 
@@ -1966,12 +2021,20 @@ app.post('/api/quiz-attempts', (req, res) => {
     quiz_id: newAttempt.quiz_id || '1',
     profile_id: newAttempt.profile_id || newAttempt.user_id || '1',
     user_id: newAttempt.user_id || newAttempt.profile_id || '1', // Add user_id for dashboard
+    // Snapshot the taker's identity so the dashboard/report can show the correct
+    // name and email even when the user record can't be resolved later.
+    user_name: newAttempt.user_name || null,
+    user_email: newAttempt.user_email || null,
     score: newAttempt.score || 0,
     total_questions: newAttempt.total_questions || 10,
     correct_answers: newAttempt.correct_answers || 0,
     // New fields for marks-based scoring
     total_marks: newAttempt.total_marks || 0,
     packet_marks: newAttempt.packet_marks || {},
+    // Persist progress fields so a resumed attempt restores the saved answers and
+    // the position to continue from / navigate back through.
+    answers: newAttempt.answers || {},
+    current_question_index: newAttempt.current_question_index || 0,
     started_at: new Date().toISOString(),
     completed_at: newAttempt.completed_at || null,
     status: newAttempt.status || 'in_progress',
@@ -2004,6 +2067,8 @@ app.put('/api/quiz-attempts/:id', (req, res) => {
     quiz_id: updateData.quiz_id || mockData.quizAttempts[attemptIndex].quiz_id,
     profile_id: updateData.profile_id || updateData.user_id || mockData.quizAttempts[attemptIndex].profile_id,
     user_id: updateData.user_id || updateData.profile_id || mockData.quizAttempts[attemptIndex].user_id,
+    user_name: updateData.user_name || mockData.quizAttempts[attemptIndex].user_name || null,
+    user_email: updateData.user_email || mockData.quizAttempts[attemptIndex].user_email || null,
     score: updateData.score !== undefined ? updateData.score : mockData.quizAttempts[attemptIndex].score,
     total_questions: updateData.total_questions !== undefined ? updateData.total_questions : mockData.quizAttempts[attemptIndex].total_questions,
     correct_answers: updateData.correct_answers !== undefined ? updateData.correct_answers : mockData.quizAttempts[attemptIndex].correct_answers,

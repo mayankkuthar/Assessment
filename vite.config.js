@@ -31,7 +31,10 @@ export default defineConfig({
         secure: false
       },
       '/api': {
-        target: 'http://65.1.6.81:3001',
+        // LOCAL TESTING: pointed at the local server so quiz-attempts use the
+        // fixed answer/progress persistence. For production this targets the
+        // remote backend — restore to 'http://65.1.6.81:3001' before deploying.
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false
       }

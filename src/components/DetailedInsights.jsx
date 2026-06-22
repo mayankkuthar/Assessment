@@ -265,6 +265,10 @@ const BAND_KEYS = ['Excellent', 'Good', 'Needs Improvement']
 const BAND_COLOR = { Excellent: '#895BF5', Good: '#A68AF9', 'Needs Improvement': '#E06C9F' }
 const bandOf = (raw, scale) => bandForPct((raw / scale) * 100)
 
+// Default opening statement pre-filled into the report narrative. It appears in
+// the exported PDF by default and can be edited or cleared in the UI.
+const DEFAULT_OPENING_STATEMENT = "Mental health is an essential part of overall well-being and influences how individuals think, feel, connect with others, and navigate daily challenges. Factors such as work demands, relationships, life events, stress, sleep, and emotional experiences can all impact psychological well-being. The assessments included in this report provide valuable insights into various aspects of emotional, social, cognitive, and behavioral health, helping to identify areas of strength as well as opportunities for support and growth. These findings can serve as a useful resource for understanding well-being trends and informing initiatives that promote a healthier, more resilient, and engaged workforce."
+
 const strengthWord = (r) => {
   const a = Math.abs(r)
   return a >= 0.6 ? 'strong' : a >= 0.3 ? 'moderate' : a >= 0.15 ? 'weak' : 'no meaningful'
@@ -332,9 +336,10 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
   const [builderOpen, setBuilderOpen] = useState(false)   // custom-chart configuration pop-up
   // Optional narrative that brackets the PDF: an opening statement up front and
   // closing remarks at the end, both rendered as branded sections.
-  const [openingStatement, setOpeningStatement] = useState('')
+  const [openingStatement, setOpeningStatement] = useState(DEFAULT_OPENING_STATEMENT)
   const [closingStatement, setClosingStatement] = useState('')
   const [showNarrative, setShowNarrative] = useState(true)
+  const [editingOpening, setEditingOpening] = useState(false) // opening statement is frozen until user opts to edit
 
   const fileInputRef = useRef(null)
   const dashboardRef = useRef(null)
@@ -418,8 +423,9 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
     setTablePage(0)
     setViewMode('internal')
     setIdentityColumn('')
-    setOpeningStatement('')
+    setOpeningStatement(DEFAULT_OPENING_STATEMENT)
     setClosingStatement('')
+    setEditingOpening(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -1335,7 +1341,18 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
                     placeholder="Intro shown at the start of the PDF — e.g. purpose of this assessment review, period covered, audience…"
                     value={openingStatement}
                     onChange={(e) => setOpeningStatement(e.target.value)}
+                    readOnly={!editingOpening}
+                    aria-readonly={!editingOpening}
                   />
+                  <div className="di-narrative__actions">
+                    <button
+                      type="button"
+                      className="di-link"
+                      onClick={() => setEditingOpening(v => !v)}
+                    >
+                      {editingOpening ? 'Done' : 'Edit'}
+                    </button>
+                  </div>
                 </div>
                 <div className="di-narrative__field">
                   <label htmlFor="di-closing">Closing remarks</label>
@@ -1349,7 +1366,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
                   />
                 </div>
                 <p className="di-narrative__note">
-                  These appear only in the exported PDF — the opening as the first section after the cover, the closing remarks at the very end. Leave blank to omit.
+                  These appear only in the exported PDF — the opening as the first section after the cover, the closing remarks at the very end. The opening statement is pre-filled by default; edit it as needed or leave blank to omit.
                 </p>
               </div>
             )}

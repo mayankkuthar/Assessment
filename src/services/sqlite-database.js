@@ -781,7 +781,7 @@ export const userService = {
         email: r.email,
         role: r.role,
         organization_id: r.organization_id,
-        user_name: r.employee_name || r.email.split('@')[0],
+        user_name: r.employee_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
         organization: r.organization_name || 'Individual'
       }));
     } catch (error) {
@@ -808,7 +808,7 @@ export const userService = {
         email: r.email,
         role: r.role,
         organization_id: r.organization_id,
-        user_name: r.employee_name || r.email.split('@')[0],
+        user_name: r.employee_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
         organization: r.organization_name || 'Individual'
       };
     } catch (error) {
@@ -857,24 +857,38 @@ export const userService = {
   async getAllQuizAttempts() {
     try {
       const stmt = db.prepare(`
-        SELECT qa.*, q.name as quiz_name, p.name as profile_name, u.email as user_email
+        SELECT qa.*, q.name as quiz_name, p.name as profile_name,
+               u.email as user_email,
+               e.name as employee_name,
+               o.name as organization_name
         FROM quiz_attempts qa
         JOIN quizzes q ON qa.quiz_id = q.id
         JOIN users u ON qa.user_id = u.id
+        LEFT JOIN employees e ON LOWER(u.email) = LOWER(e.email) AND u.organization_id = e.organization_id
+        LEFT JOIN organizations o ON u.organization_id = o.id
         LEFT JOIN profiles p ON qa.profile_id = p.id
         ORDER BY qa.created_at DESC
       `);
-      
+
       const attempts = stmt.all();
-      
-      return attempts.map(attempt => ({
-        ...attempt,
-        quiz: { name: attempt.quiz_name },
-        profile: attempt.profile_name ? { name: attempt.profile_name } : null,
-        user: { email: attempt.user_email },
-        answers: parseJsonOptions(attempt.answers),
-        packet_marks: parseJsonOptions(attempt.packet_marks)
-      }));
+
+      return attempts.map(attempt => {
+        const userName = attempt.employee_name
+          || (attempt.user_email ? attempt.user_email.split('@')[0] : `User ${attempt.user_id}`);
+        return {
+          ...attempt,
+          quiz: { name: attempt.quiz_name },
+          profile: attempt.profile_name ? { name: attempt.profile_name } : null,
+          user: {
+            user_name: userName,
+            name: userName,
+            email: attempt.user_email || null,
+            organization: attempt.organization_name || 'Individual'
+          },
+          answers: parseJsonOptions(attempt.answers),
+          packet_marks: parseJsonOptions(attempt.packet_marks)
+        };
+      });
     } catch (error) {
       console.error('Error getting all quiz attempts:', error);
       throw new Error('Failed to fetch all quiz attempts');

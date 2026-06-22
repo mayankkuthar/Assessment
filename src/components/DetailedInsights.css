@@ -636,6 +636,15 @@
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
 }
+.di-textarea[readonly] {
+  background: var(--color-muted, rgba(0, 0, 0, 0.03));
+  cursor: default;
+}
+.di-narrative__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-1);
+}
 .di-narrative__note {
   grid-column: 1 / -1;
   margin: 0;

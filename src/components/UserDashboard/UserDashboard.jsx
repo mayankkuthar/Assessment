@@ -98,9 +98,19 @@ const UserDashboard = () => {
         .map(a => String(a.quiz_id))
     );
     const completedCount = completedQuizIds.size;
-    const pendingCount = assignedQuizzes.filter(
-      aq => !completedQuizIds.has(String(aq.quiz_id))
-    ).length;
+
+    // Pending = anything still to finish: quizzes with an in-progress attempt
+    // (started but not completed) plus assigned quizzes not yet completed.
+    // Counted as distinct quizzes and excluding already-completed ones, so an
+    // in-progress attempt shows up even if the quiz isn't a profile assignment.
+    const pendingQuizIds = new Set();
+    userQuizAttempts
+      .filter(a => !a.completed_at && a.status !== 'completed')
+      .forEach(a => pendingQuizIds.add(String(a.quiz_id)));
+    assignedQuizzes.forEach(aq => pendingQuizIds.add(String(aq.quiz_id)));
+    completedQuizIds.forEach(id => pendingQuizIds.delete(id));
+    const pendingCount = pendingQuizIds.size;
+
     return { completedCount, pendingCount };
   }, [userQuizAttempts, assignedQuizzes]);
 

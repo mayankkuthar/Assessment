@@ -43,6 +43,15 @@ const QuizAttempt = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [attemptId, setAttemptId] = useState(null);
+  // Mirror of attemptId for synchronous access in saveProgress. Using state alone
+  // risks a race: if the user answers before the create request resolves, the
+  // state may still be null and the answer would silently fail to save.
+  const attemptIdRef = useRef(null);
+  const setAttempt = (id) => { attemptIdRef.current = id; setAttemptId(id); };
+
+  // Latest answers, kept in a ref so async saves always persist the current set
+  // even across rapid changes / navigation.
+  const answersRef = useRef({});
 
   // Timestamp captured when the user actually starts the quiz
   const startedAtRef = useRef(null);
@@ -182,17 +191,49 @@ const QuizAttempt = () => {
         setQuiz(quizData);
         setQuestions(questionsData);
 
-        // Check for active incomplete attempt
-        const incompleteAttempt = attemptsData.find(a => 
-          String(a.quiz_id) === String(quizId) && 
-          (!a.completed_at && a.status !== 'completed')
-        );
+        // Normalize a stored answers payload into a plain object. Depending on the
+        // backend, `answers` may arrive as an object or as a JSON string; either
+        // way we want an object keyed by question id so saved answers show up as
+        // selected when the user navigates back.
+        const parseAnswers = (raw) => {
+          if (!raw) return {};
+          if (typeof raw === 'string') {
+            try { return JSON.parse(raw) || {}; } catch { return {}; }
+          }
+          return raw;
+        };
+        const answerCount = (a) => Object.keys(parseAnswers(a.answers)).length;
+
+        // Check for active incomplete attempt(s). There can be more than one
+        // (e.g. from earlier abandoned runs), so pick the MOST-progressed one —
+        // the one with the most saved answers, then the furthest question index.
+        // Using the first match could otherwise resume a stale, empty attempt and
+        // make earlier answers appear missing.
+        const incompleteAttempt = attemptsData
+          .filter(a =>
+            String(a.quiz_id) === String(quizId) &&
+            (!a.completed_at && a.status !== 'completed')
+          )
+          .sort((a, b) => {
+            const ans = answerCount(b) - answerCount(a)
+            if (ans !== 0) return ans
+            return (b.current_question_index || 0) - (a.current_question_index || 0)
+          })[0];
 
         if (incompleteAttempt) {
-          console.log('Resuming incomplete attempt:', incompleteAttempt);
-          setAttemptId(incompleteAttempt.id);
-          setAnswers(incompleteAttempt.answers || {});
-          setCurrentQuestionIndex(incompleteAttempt.current_question_index || 0);
+          const resumedAnswers = parseAnswers(incompleteAttempt.answers);
+          console.log('Resuming incomplete attempt:', incompleteAttempt, 'answers:', resumedAnswers);
+          setAttempt(incompleteAttempt.id);
+          setAnswers(resumedAnswers);
+          answersRef.current = resumedAnswers;
+          // Resume from the next unanswered question. Compute it from the saved
+          // answers so it's correct even if the stored index lags; fall back to
+          // the saved index, then the start.
+          const firstUnanswered = questionsData.findIndex(q => !(q.id in resumedAnswers));
+          const resumeIndex = firstUnanswered !== -1
+            ? firstUnanswered
+            : (incompleteAttempt.current_question_index || 0);
+          setCurrentQuestionIndex(resumeIndex);
           startedAtRef.current = incompleteAttempt.started_at;
           setShowQuizDescription(false);
         } else {
@@ -216,9 +257,11 @@ const QuizAttempt = () => {
   }, [quizId, accessDenied]);
 
   const saveProgress = async (updatedAnswers, index) => {
-    if (!attemptId) return;
+    const id = attemptIdRef.current;
+    if (!id) return;
+    answersRef.current = updatedAnswers;
     try {
-      await fetch(`/api/quiz-attempts/${attemptId}`, {
+      await fetch(`/api/quiz-attempts/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -236,14 +279,21 @@ const QuizAttempt = () => {
 
   const handleChange = (qid, value) => {
     setSelectedOption(value);
+    // Whether this question already had an answer. When it did, the user is
+    // reviewing/editing a previous answer (e.g. after using Previous to go back),
+    // so we must NOT auto-advance — otherwise changing an earlier answer would
+    // immediately yank them forward and make editing impossible.
+    const isEditingExisting = Object.prototype.hasOwnProperty.call(answers, qid);
     const updatedAnswers = { ...answers, [qid]: value };
     setAnswers(updatedAnswers);
+    answersRef.current = updatedAnswers;
 
     // Save progress to database
     saveProgress(updatedAnswers, currentQuestionIndex);
 
-    // Only auto-advance if not on the last question
-    if (currentQuestionIndex < questions.length - 1) {
+    // Only auto-advance when answering a question for the first time and not on
+    // the last question. Editing an existing answer keeps the user in place.
+    if (!isEditingExisting && currentQuestionIndex < questions.length - 1) {
       clearAdvance();
       const t1 = setTimeout(() => {
         setIsTransitioning(true);
@@ -269,25 +319,24 @@ const QuizAttempt = () => {
     }
   };
 
-  // Navigate between questions (with the same transition animation as auto-advance)
-  // so users can go back to review/change earlier answers and move forward again.
+  // Navigate between questions so users can go back to review/change earlier
+  // answers and move forward again. The index changes immediately (the question
+  // card re-mounts via questionAnimationKey to play a fade-in), so rapid clicks
+  // are never swallowed — earlier this waited behind a 300ms transition that
+  // disabled the buttons, making Previous feel like it "wasn't working".
   // Cancels any pending auto-advance so manual navigation always wins.
   const goToQuestion = (index) => {
     if (index < 0 || index > questions.length - 1) return;
     clearAdvance();
-    setIsTransitioning(true);
-    const t = setTimeout(() => {
-      setCurrentQuestionIndex(index);
-      setQuestionAnimationKey(prev => prev + 1);
-      setIsTransitioning(false);
-      setSelectedOption('');
-      
-      // Save progress to database with the new index
-      saveProgress(answers, index);
-      
-      showMotivationalNotification(index);
-    }, 300);
-    advanceTimers.current.push(t);
+    setIsTransitioning(false);
+    setCurrentQuestionIndex(index);
+    setQuestionAnimationKey(prev => prev + 1);
+    setSelectedOption('');
+
+    // Save progress to database with the new index
+    saveProgress(answers, index);
+
+    showMotivationalNotification(index);
   };
 
   const handlePrevious = () => goToQuestion(currentQuestionIndex - 1);
@@ -434,6 +483,10 @@ const QuizAttempt = () => {
         quiz_id: quizId,
         profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
         user_id: user?.id,
+        // Persist the taker's identity on the attempt so reports/dashboards show
+        // the correct name and email even if the user lookup later fails.
+        user_name: user?.user_name || user?.email || null,
+        user_email: user?.email || null,
         score: score,
         total_questions: totalQuestions,
         correct_answers: totalMarks,
@@ -460,9 +513,10 @@ const QuizAttempt = () => {
       console.log('Final Attempt Data:', attemptData);
 
       let attemptResponse;
-      if (attemptId) {
+      const submitId = attemptIdRef.current || attemptId;
+      if (submitId) {
         // Update existing attempt to completed
-        attemptResponse = await fetch(`/api/quiz-attempts/${attemptId}`, {
+        attemptResponse = await fetch(`/api/quiz-attempts/${submitId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -613,7 +667,10 @@ const QuizAttempt = () => {
     return (
       <div className="quiz-attempt__options">
         {options.map((opt, i) => {
-          const isSelected = answers[currentQuestion.id] === opt.value;
+          // Compare as strings so a previously-saved answer reliably shows as
+          // selected when navigating back, regardless of stored value type.
+          const saved = answers[currentQuestion.id];
+          const isSelected = saved !== undefined && saved !== null && String(saved) === String(opt.value);
           return (
             <div
               key={i}
@@ -750,6 +807,8 @@ const QuizAttempt = () => {
                           quiz_id: quizId,
                           profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
                           user_id: user?.id,
+                          user_name: user?.user_name || user?.email || null,
+                          user_email: user?.email || null,
                           score: 0,
                           total_questions: questions.length,
                           correct_answers: 0,
@@ -762,7 +821,7 @@ const QuizAttempt = () => {
                       
                       if (newAttemptResponse.ok) {
                         const newAttempt = await newAttemptResponse.json();
-                        setAttemptId(newAttempt.id);
+                        setAttempt(newAttempt.id);
                       }
                     } catch (e) {
                       console.error('Error creating quiz attempt:', e);
@@ -803,7 +862,7 @@ const QuizAttempt = () => {
             <button
               className="quiz-attempt__nav-btn"
               onClick={handlePrevious}
-              disabled={currentQuestionIndex === 0 || isTransitioning}
+              disabled={currentQuestionIndex === 0}
             >
               <ArrowBack style={{ width: 18, height: 18 }} />
               Previous
@@ -824,7 +883,6 @@ const QuizAttempt = () => {
               <button
                 className="quiz-attempt__nav-btn quiz-attempt__nav-btn--next"
                 onClick={handleNext}
-                disabled={isTransitioning}
               >
                 Next
                 <ArrowForward style={{ width: 18, height: 18 }} />
