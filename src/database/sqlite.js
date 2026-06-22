@@ -34,6 +34,33 @@ export function generateOnboardingCode() {
   return code;
 }
 
+export function generateUniqueEmployeeCode(dbInstance = null) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  const targetDb = dbInstance || db;
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (targetDb) {
+      try {
+        const stmt = targetDb.prepare('SELECT COUNT(*) as count FROM employees WHERE code = ?');
+        const result = stmt.get(code);
+        if (result.count === 0) {
+          isUnique = true;
+        }
+      } catch (e) {
+        isUnique = true;
+      }
+    } else {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Initialize database connection
 let db;
 try {
@@ -77,6 +104,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     description TEXT,
     status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
     onboarding_code TEXT UNIQUE NOT NULL,
+    onboarded_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -87,6 +115,7 @@ CREATE TABLE IF NOT EXISTS employees (
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
+    code TEXT UNIQUE,
     metadata TEXT, -- JSON stored as text
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -167,7 +196,12 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     started_at TEXT DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT,
     answers TEXT, -- JSON stored as text
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    status TEXT DEFAULT 'completed',
+    current_question_index INTEGER DEFAULT 0,
+    packet_marks TEXT,
+    total_marks INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create sessions table for authentication
@@ -245,6 +279,12 @@ CREATE TRIGGER IF NOT EXISTS update_quizzes_updated_at
     BEGIN
         UPDATE quizzes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
+
+CREATE TRIGGER IF NOT EXISTS update_quiz_attempts_updated_at
+    AFTER UPDATE ON quiz_attempts
+    BEGIN
+        UPDATE quiz_attempts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
 `;
 
 // Sample data SQL
@@ -290,6 +330,70 @@ function runMigrations() {
       console.log('⚠️ Migrating database: Adding organization_id column to users...');
       db.exec(`ALTER TABLE users ADD COLUMN organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL;`);
       console.log('✅ Migrated organization_id column for users.');
+    }
+
+    // 3. Check/Add onboarded_at to organizations table
+    const tableInfoOrgs2 = db.prepare("PRAGMA table_info(organizations)").all();
+    const hasOnboardedAt = tableInfoOrgs2.some(c => c.name === 'onboarded_at');
+    if (!hasOnboardedAt) {
+      console.log('⚠️ Migrating database: Adding onboarded_at column to organizations...');
+      db.exec(`ALTER TABLE organizations ADD COLUMN onboarded_at TEXT;`);
+      db.exec(`UPDATE organizations SET onboarded_at = created_at;`);
+      console.log('✅ Migrated onboarded_at column for organizations.');
+    }
+
+    // 4. Check/Add code to employees table
+    const tableInfoEmployees = db.prepare("PRAGMA table_info(employees)").all();
+    const hasEmployeeCode = tableInfoEmployees.some(c => c.name === 'code');
+    if (!hasEmployeeCode) {
+      console.log('⚠️ Migrating database: Adding code column to employees...');
+      db.exec(`ALTER TABLE employees ADD COLUMN code TEXT;`);
+      
+      const employeesWithoutCode = db.prepare('SELECT id FROM employees WHERE code IS NULL').all();
+      const updateEmployeeCode = db.prepare('UPDATE employees SET code = ? WHERE id = ?');
+      for (const emp of employeesWithoutCode) {
+        const empCode = generateUniqueEmployeeCode(db);
+        updateEmployeeCode.run(empCode, emp.id);
+      }
+      console.log(`✅ Migrated code for ${employeesWithoutCode.length} existing employees.`);
+    }
+
+    // 5. Check/Add status, current_question_index, packet_marks, total_marks, updated_at to quiz_attempts table
+    const tableInfoAttempts = db.prepare("PRAGMA table_info(quiz_attempts)").all();
+    
+    const hasStatus = tableInfoAttempts.some(c => c.name === 'status');
+    if (!hasStatus) {
+      console.log('⚠️ Migrating database: Adding status column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN status TEXT DEFAULT 'completed';`);
+      console.log('✅ Migrated status column for quiz_attempts.');
+    }
+
+    const hasQIndex = tableInfoAttempts.some(c => c.name === 'current_question_index');
+    if (!hasQIndex) {
+      console.log('⚠️ Migrating database: Adding current_question_index column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN current_question_index INTEGER DEFAULT 0;`);
+      console.log('✅ Migrated current_question_index column for quiz_attempts.');
+    }
+
+    const hasPacketMarks = tableInfoAttempts.some(c => c.name === 'packet_marks');
+    if (!hasPacketMarks) {
+      console.log('⚠️ Migrating database: Adding packet_marks column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN packet_marks TEXT;`);
+      console.log('✅ Migrated packet_marks column for quiz_attempts.');
+    }
+
+    const hasTotalMarks = tableInfoAttempts.some(c => c.name === 'total_marks');
+    if (!hasTotalMarks) {
+      console.log('⚠️ Migrating database: Adding total_marks column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN total_marks INTEGER DEFAULT 0;`);
+      console.log('✅ Migrated total_marks column for quiz_attempts.');
+    }
+
+    const hasAttemptsUpdatedAt = tableInfoAttempts.some(c => c.name === 'updated_at');
+    if (!hasAttemptsUpdatedAt) {
+      console.log('⚠️ Migrating database: Adding updated_at column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP;`);
+      console.log('✅ Migrated updated_at column for quiz_attempts.');
     }
   } catch (error) {
     console.error('❌ Error running database migrations:', error);

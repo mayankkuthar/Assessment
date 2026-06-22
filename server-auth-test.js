@@ -458,10 +458,27 @@ function generateOnboardingCode(organizations = []) {
   return code;
 }
 
+function generateUniqueEmployeeCode(employees = []) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const exists = employees.some(e => e.code === code);
+    if (!exists) {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Load initial data
 let mockData = loadData();
 
-// Migrate mockData organizations to add onboarding_code
+// Migrate mockData organizations to add onboarding_code and onboarded_at
 if (mockData.organizations) {
   let migrated = false;
   mockData.organizations.forEach(o => {
@@ -469,9 +486,28 @@ if (mockData.organizations) {
       o.onboarding_code = generateOnboardingCode(mockData.organizations);
       migrated = true;
     }
+    if (!o.onboarded_at) {
+      o.onboarded_at = o.created_at || new Date().toISOString();
+      migrated = true;
+    }
   });
   if (migrated) {
-    console.log('⚠️ Migrating mockData: Assigned onboarding codes to existing organizations');
+    console.log('⚠️ Migrating mockData: Assigned onboarding codes and dates to existing organizations');
+    saveData(mockData);
+  }
+}
+
+// Migrate mockData employees to add code
+if (mockData.employees) {
+  let migrated = false;
+  mockData.employees.forEach(e => {
+    if (!e.code) {
+      e.code = generateUniqueEmployeeCode(mockData.employees);
+      migrated = true;
+    }
+  });
+  if (migrated) {
+    console.log('⚠️ Migrating mockData: Assigned unique codes to existing employees');
     saveData(mockData);
   }
 }
@@ -567,30 +603,41 @@ app.post('/api/auth/signin', (req, res) => {
 
 app.get('/api/auth/verify-code', (req, res) => {
   const { code } = req.query;
-  console.log(`🔑 Verify onboarding code: ${code}`);
+  console.log(`🔑 Verify employee user code: ${code}`);
   if (!code) {
     return res.status(400).json({ error: 'Code is required' });
+  }
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const emp = mockData.employees.find(e => e.code === code.trim().toUpperCase());
+  if (!emp) {
+    return res.status(404).json({ error: 'Invalid user code' });
   }
   if (!mockData.organizations) {
     mockData.organizations = [];
   }
-  const org = mockData.organizations.find(o => o.onboarding_code === code.trim().toUpperCase());
+  const org = mockData.organizations.find(o => o.id === emp.organization_id);
   if (!org) {
-    return res.status(404).json({ error: 'Invalid onboarding code' });
+    return res.status(404).json({ error: 'Associated organization not found' });
   }
   if (org.status !== 'active') {
-    return res.status(400).json({ error: 'This organization is currently inactive' });
+    return res.status(400).json({ error: 'Your organization is currently inactive' });
   }
-  res.json({ id: org.id, name: org.name });
+  res.json({ id: org.id, name: org.name, email: emp.email, userName: emp.name });
 });
 
 app.post('/api/auth/signup', (req, res) => {
-  const { email, password, role = 'user', userName, user_name, profile, onboardingCode } = req.body;
+  const { email, password, role = 'user', userName, user_name, profile, userCode } = req.body;
   const targetUserName = userName || user_name;
-  console.log(`📝 Sign up attempt: ${email} as ${role}`);
+  console.log(`📝 Sign up attempt: ${email} with user code ${userCode}`);
   
+  if (!userCode) {
+    return res.status(400).json({ error: 'User code is required for signup' });
+  }
+
   // Check if user already exists
-  const existingUser = mockData.users.find(u => u.email === email);
+  const existingUser = mockData.users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
   if (existingUser) {
     return res.status(400).json({
       user: null,
@@ -609,42 +656,34 @@ app.post('/api/auth/signup', (req, res) => {
     });
   }
 
-  let organizationId = null;
-  let organizationName = 'Individual';
-
-  if (onboardingCode) {
-    if (!mockData.organizations) {
-      mockData.organizations = [];
-    }
-    const org = mockData.organizations.find(o => o.onboarding_code === onboardingCode.trim().toUpperCase());
-    if (!org) {
-      return res.status(400).json({ error: 'Invalid onboarding code' });
-    }
-    if (org.status !== 'active') {
-      return res.status(400).json({ error: 'This organization is currently inactive' });
-    }
-    organizationId = org.id;
-    organizationName = org.name;
-
-    // Cross-organization validation: check if email is registered under another org
-    if (mockData.employees) {
-      const existingEmp = mockData.employees.find(e => e.email.toLowerCase() === email.trim().toLowerCase());
-      if (existingEmp && existingEmp.organization_id !== organizationId) {
-        return res.status(400).json({ error: 'This email is already registered under a different organization.' });
-      }
-    }
-
-    // Verify email is pre-registered under this organization
-    const hasPreRegistered = mockData.employees && mockData.employees.some(
-      e => e.organization_id === organizationId && e.email.toLowerCase() === email.trim().toLowerCase()
-    );
-    if (!hasPreRegistered) {
-      return res.status(400).json({ error: 'This email is not pre-registered in the organization directory. Please contact your organization administrator.' });
-    }
+  if (!mockData.employees) {
+    mockData.employees = [];
   }
+  const emp = mockData.employees.find(e => e.code === userCode.trim().toUpperCase());
+  if (!emp) {
+    return res.status(400).json({ error: 'Invalid user code' });
+  }
+
+  // Verify email matches pre-registered employee email
+  if (emp.email.toLowerCase() !== email.trim().toLowerCase()) {
+    return res.status(400).json({ error: 'This user code does not belong to the entered email address.' });
+  }
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  const org = mockData.organizations.find(o => o.id === emp.organization_id);
+  if (!org) {
+    return res.status(400).json({ error: 'Associated organization not found' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+
+  const organizationId = org.id;
+  const organizationName = org.name;
   
-  // Create new user. Self-signup can never grant elevated roles — only a
-  // Super Admin may mint admins/super-admins (see POST /api/admin/users).
+  // Create new user
   const userId = String(Date.now());
   const newUser = {
     id: userId,
@@ -983,6 +1022,7 @@ app.post('/api/organizations', requireSuperAdmin, (req, res) => {
     description: org.description || '',
     status: org.status || 'active',
     onboarding_code: generateOnboardingCode(mockData.organizations || []),
+    onboarded_at: org.onboarded_at || new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -1117,6 +1157,7 @@ app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) 
     .map(e => e.email.toLowerCase());
 
   const imported = [];
+  const allCurrentEmployees = [...(mockData.employees || [])];
   for (const emp of employees) {
     if (!emp.name || !emp.email) {
       return res.status(400).json({ error: 'Name and Email are mandatory fields' });
@@ -1125,17 +1166,20 @@ app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) 
       return res.status(400).json({ error: `Email ${emp.email} already exists in this organization` });
     }
     
+    const code = generateUniqueEmployeeCode(allCurrentEmployees);
     const newEmp = {
       id: String(Date.now() + Math.random()),
       organization_id: orgId,
       name: emp.name.trim(),
       email: emp.email.trim(),
+      code,
       metadata: emp.metadata || {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     
     imported.push(newEmp);
+    allCurrentEmployees.push(newEmp);
     existingEmails.push(newEmp.email.toLowerCase());
   }
 
@@ -1960,19 +2004,21 @@ app.put('/api/quiz-attempts/:id', (req, res) => {
     quiz_id: updateData.quiz_id || mockData.quizAttempts[attemptIndex].quiz_id,
     profile_id: updateData.profile_id || updateData.user_id || mockData.quizAttempts[attemptIndex].profile_id,
     user_id: updateData.user_id || updateData.profile_id || mockData.quizAttempts[attemptIndex].user_id,
-    score: updateData.score || mockData.quizAttempts[attemptIndex].score,
-    total_questions: updateData.total_questions || mockData.quizAttempts[attemptIndex].total_questions,
-    correct_answers: updateData.correct_answers || mockData.quizAttempts[attemptIndex].correct_answers,
+    score: updateData.score !== undefined ? updateData.score : mockData.quizAttempts[attemptIndex].score,
+    total_questions: updateData.total_questions !== undefined ? updateData.total_questions : mockData.quizAttempts[attemptIndex].total_questions,
+    correct_answers: updateData.correct_answers !== undefined ? updateData.correct_answers : mockData.quizAttempts[attemptIndex].correct_answers,
     // New fields for marks-based scoring
-    total_marks: updateData.total_marks || mockData.quizAttempts[attemptIndex].total_marks || 0,
-    packet_marks: updateData.packet_marks || mockData.quizAttempts[attemptIndex].packet_marks || {},
-    completed_at: updateData.completed_at || mockData.quizAttempts[attemptIndex].completed_at,
+    total_marks: updateData.total_marks !== undefined ? updateData.total_marks : mockData.quizAttempts[attemptIndex].total_marks,
+    packet_marks: updateData.packet_marks !== undefined ? updateData.packet_marks : mockData.quizAttempts[attemptIndex].packet_marks,
+    completed_at: updateData.completed_at !== undefined ? updateData.completed_at : mockData.quizAttempts[attemptIndex].completed_at,
     status: updateData.status || mockData.quizAttempts[attemptIndex].status,
+    answers: updateData.answers !== undefined ? updateData.answers : mockData.quizAttempts[attemptIndex].answers,
+    current_question_index: updateData.current_question_index !== undefined ? updateData.current_question_index : mockData.quizAttempts[attemptIndex].current_question_index,
     updated_at: new Date().toISOString()
   };
   
   saveData(mockData);
-  res.json(mockData.quizAttempts[attemptId]);
+  res.json(mockData.quizAttempts[attemptIndex]);
 });
 
 app.delete('/api/quiz-attempts/:id', (req, res) => {

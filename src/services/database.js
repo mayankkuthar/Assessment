@@ -70,7 +70,8 @@ export const userService = {
   getAllQuizAttempts: userApi.getAllQuizAttempts,
   getUserStats: userApi.getUserStats,
   getAssignedQuizzesForUser: userApi.getAssignedQuizzesForUser,
-  createQuizAttempt: userApi.createQuizAttempt
+  createQuizAttempt: userApi.createQuizAttempt,
+  updateQuizAttempt: userApi.updateQuizAttempt
 };
 
  

@@ -511,6 +511,12 @@ const AdminDashboard = () => {
         >
           Quiz Analytics
         </button>
+        <button 
+          className={`admin-tab ${tab === 3 ? 'admin-tab--active' : ''}`}
+          onClick={() => setTab(3)}
+        >
+          Incomplete Assessments
+        </button>
       </div>
 
       {tab === 0 && (
@@ -975,6 +981,69 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {tab === 3 && (() => {
+        const incompleteAttempts = enrichedAttempts.filter(a => !a.completed_at && a.status !== 'completed')
+        return (
+          <>
+            <div className="admin-table-container">
+              {incompleteAttempts.length === 0 ? (
+                <div className="coming-soon">
+                  <CheckCircleIcon />
+                  <h3>No incomplete assessments</h3>
+                  <p>All users have completed their assessments</p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Assessment</th>
+                      <th>Started At</th>
+                      <th>Last Activity</th>
+                      <th>Questions Attempted</th>
+                      <th>Total Questions</th>
+                      <th>Completion %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {incompleteAttempts.map(attempt => {
+                      const answersCount = attempt.answers && typeof attempt.answers === 'object'
+                        ? Object.keys(attempt.answers).length
+                        : 0
+                      const totalQ = attempt.total_questions || 0
+                      const completionPct = totalQ > 0 ? Math.round((answersCount / totalQ) * 100) : 0
+                      return (
+                        <tr key={attempt.id}>
+                          <td>
+                            <div className="admin-user-cell">
+                              <span className="admin-user-cell__name">{attempt.user?.name || 'Unknown User'}</span>
+                              <span className="admin-user-cell__email">
+                                <EmailIcon style={{ width: '13px', height: '13px', marginRight: '4px' }} />
+                                {attempt.user?.email || 'No email'}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{attempt.quiz?.name || 'Unknown'}</td>
+                          <td style={{ fontSize: 'var(--text-sm)' }}>{attempt.started_at ? formatDate(attempt.started_at) : '—'}</td>
+                          <td style={{ fontSize: 'var(--text-sm)' }}>{attempt.updated_at ? formatDate(attempt.updated_at) : (attempt.started_at ? formatDate(attempt.started_at) : '—')}</td>
+                          <td style={{ textAlign: 'center' }}>{answersCount}</td>
+                          <td style={{ textAlign: 'center' }}>{totalQ}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`badge ${completionPct >= 75 ? 'badge--success' : completionPct >= 25 ? 'badge--warning' : 'badge--outline'}`}>
+                              {completionPct}%
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
       {showProfileBreakdown && (
         <div className="admin-modal-overlay" onClick={() => setShowProfileBreakdown(false)}>

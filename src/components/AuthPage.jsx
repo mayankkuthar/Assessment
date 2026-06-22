@@ -20,14 +20,13 @@ function AuthPage() {
 
   // Onboarding Code State
   const [onboardingCode, setOnboardingCode] = useState('')
-  const [isIndividual, setIsIndividual] = useState(false)
   const [verifyingCode, setVerifyingCode] = useState(false)
   const [verifiedOrgName, setVerifiedOrgName] = useState('')
   const [codeVerificationError, setCodeVerificationError] = useState('')
 
-  // Verify onboarding code with debounce
+  // Verify user code with debounce
   useEffect(() => {
-    if (isIndividual || !onboardingCode.trim()) {
+    if (!onboardingCode.trim()) {
       setVerifiedOrgName('')
       setCodeVerificationError('')
       setVerifyingCode(false)
@@ -43,9 +42,11 @@ function AuthPage() {
         if (response.ok) {
           const data = await response.json()
           setVerifiedOrgName(data.name)
+          if (data.email) setEmail(data.email)
+          if (data.userName) setUserName(data.userName)
         } else {
           const errData = await response.json()
-          setCodeVerificationError(errData.error || 'Invalid organization code')
+          setCodeVerificationError(errData.error || 'Invalid user code')
         }
       } catch (err) {
         console.error('Error verifying code:', err)
@@ -60,7 +61,7 @@ function AuthPage() {
     }, 500)
 
     return () => clearTimeout(debounceTimer)
-  }, [onboardingCode, isIndividual])
+  }, [onboardingCode])
 
   // Fetch available profiles from the database
   useEffect(() => {
@@ -113,8 +114,8 @@ function AuthPage() {
     try {
       if (isSignUp) {
         // Validate required fields for signup
-        if (!isIndividual && (!onboardingCode.trim() || !verifiedOrgName)) {
-          setError('A valid onboarding code is required to join an organization. Otherwise, select "Register as an Individual"');
+        if (!onboardingCode.trim() || !verifiedOrgName) {
+          setError('A valid user code is required to sign up.');
           hasError = true;
           setLoading(false);
           return;
@@ -126,8 +127,7 @@ function AuthPage() {
           return;
         }
         
-        const targetOrgName = isIndividual ? 'Individual' : verifiedOrgName;
-        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: targetOrgName, onboardingCode })
+        console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: verifiedOrgName, userCode: onboardingCode })
         
         // Sign up using the API directly
         const response = await fetch('/api/auth/signup', {
@@ -142,8 +142,8 @@ function AuthPage() {
             userName: userName,
             user_name: userName,
             profile: profile,
-            onboardingCode: isIndividual ? '' : onboardingCode.trim().toUpperCase(),
-            organization: targetOrgName
+            userCode: onboardingCode.trim().toUpperCase(),
+            organization: verifiedOrgName
           })
         });
 
@@ -175,7 +175,6 @@ function AuthPage() {
             setProfile('');
             setOrganization(''); // Clear organization field
             setOnboardingCode('');
-            setIsIndividual(false);
             setVerifiedOrgName('');
             setCodeVerificationError('');
             setUserRole('user');
@@ -374,77 +373,52 @@ function AuthPage() {
                     {loadingProfiles ? (
                       <option disabled>Loading profiles...</option>
                     ) : (
-                      profiles.map((profileItem) => (
-                        <option key={profileItem.id} value={profileItem.name}>
-                          {profileItem.name}
-                        </option>
-                      ))
+                      profiles
+                        .filter((profileItem) => profileItem.name !== 'SOLV')
+                        .map((profileItem) => (
+                          <option key={profileItem.id} value={profileItem.name}>
+                            {profileItem.name}
+                          </option>
+                        ))
                     )}
                   </select>
                 </div>
 
-                {/* Individual Checkbox */}
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                {/* Unique User Code Input */}
+                <div className="form-group">
+                  <label className="form-label">Your Unique Code *</label>
                   <input
-                    type="checkbox"
-                    id="is-individual-checkbox"
-                    checked={isIndividual}
-                    onChange={(e) => {
-                      setIsIndividual(e.target.checked);
-                      if (e.target.checked) {
-                        setOnboardingCode('');
-                        setVerifiedOrgName('');
-                        setCodeVerificationError('');
-                      }
-                    }}
-                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    className="form-input"
+                    type="text"
+                    value={onboardingCode}
+                    onChange={(e) => setOnboardingCode(e.target.value)}
+                    placeholder="e.g. AB12CD"
+                    required
+                    style={{ textTransform: 'uppercase' }}
                   />
-                  <label htmlFor="is-individual-checkbox" style={{ fontSize: 'var(--text-sm)', cursor: 'pointer', userSelect: 'none', fontWeight: 500 }}>
-                    Register as an Individual (Not joining a company)
-                  </label>
+                  
+                  {/* Real-time verification display */}
+                  <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
+                    {verifyingCode && (
+                      <span style={{ color: 'var(--color-muted-fg)' }}>Resolving user code...</span>
+                    )}
+                    {verifiedOrgName && (
+                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                        ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
+                      </span>
+                    )}
+                    {codeVerificationError && (
+                      <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
+                        ❌ {codeVerificationError}
+                      </span>
+                    )}
+                    {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
+                      <span style={{ color: 'var(--color-muted-fg)' }}>
+                        Please enter the unique user code shared by your company.
+                      </span>
+                    )}
+                  </div>
                 </div>
-
-                {/* Onboarding Code Input */}
-                {!isIndividual ? (
-                  <div className="form-group">
-                    <label className="form-label">Organization Onboarding Code *</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      value={onboardingCode}
-                      onChange={(e) => setOnboardingCode(e.target.value)}
-                      placeholder="e.g. ACME1234"
-                      required
-                      style={{ textTransform: 'uppercase' }}
-                    />
-                    
-                    {/* Real-time verification display */}
-                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
-                      {verifyingCode && (
-                        <span style={{ color: 'var(--color-muted-fg)' }}>Resolving organization...</span>
-                      )}
-                      {verifiedOrgName && (
-                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                          ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
-                        </span>
-                      )}
-                      {codeVerificationError && (
-                        <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
-                          ❌ {codeVerificationError}
-                        </span>
-                      )}
-                      {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
-                        <span style={{ color: 'var(--color-muted-fg)' }}>
-                          Please enter the onboarding code shared by your company.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="alert" style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-3)', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted-fg)', marginBottom: 'var(--space-4)' }}>
-                    ℹ️ Individual registration. You will not be linked to any corporate organization.
-                  </div>
-                )}
               </>
             )}
             
@@ -470,7 +444,8 @@ function AuthPage() {
                   !email.trim() || 
                   !profile || 
                   !password.trim() || 
-                  (!isIndividual && (!onboardingCode.trim() || !verifiedOrgName))
+                  !onboardingCode.trim() || 
+                  !verifiedOrgName
                 ))
               }
             >

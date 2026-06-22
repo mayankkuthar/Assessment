@@ -1,4 +1,4 @@
-import { db, generateId, generateOnboardingCode } from '../database/sqlite.js';
+import { db, generateId, generateOnboardingCode, generateUniqueEmployeeCode } from '../database/sqlite.js';
 import crypto from 'crypto';
 
 // Helper function to hash passwords
@@ -103,12 +103,13 @@ export const organizationService = {
       const id = generateId();
       const status = org.status || 'active';
       const code = generateOnboardingCode();
+      const onboardedAt = org.onboarded_at || new Date().toISOString();
       const stmt = db.prepare(`
-        INSERT INTO organizations (id, name, description, status, onboarding_code)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO organizations (id, name, description, status, onboarding_code, onboarded_at)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
       
-      stmt.run(id, org.name, org.description || null, status, code);
+      stmt.run(id, org.name, org.description || null, status, code, onboardedAt);
       
       const getStmt = db.prepare('SELECT * FROM organizations WHERE id = ?');
       return getStmt.get(id);
@@ -192,20 +193,22 @@ export const employeeService = {
   async importEmployees(orgId, employeesList) {
     const insertTransaction = db.transaction((list) => {
       const stmt = db.prepare(`
-        INSERT INTO employees (id, organization_id, name, email, metadata)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO employees (id, organization_id, name, email, code, metadata)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
       
       const imported = [];
       for (const emp of list) {
-        const id = uuidv4();
+        const id = generateId();
+        const code = generateUniqueEmployeeCode(db);
         const metadataStr = JSON.stringify(emp.metadata || {});
-        stmt.run(id, orgId, emp.name, emp.email, metadataStr);
+        stmt.run(id, orgId, emp.name, emp.email, code, metadataStr);
         imported.push({
           id,
           organization_id: orgId,
           name: emp.name,
           email: emp.email,
+          code,
           metadata: emp.metadata || {}
         });
       }
@@ -738,10 +741,15 @@ export const userService = {
 
   async findOrganizationByCode(code) {
     try {
-      const stmt = db.prepare('SELECT id, name, status FROM organizations WHERE onboarding_code = ?');
+      const stmt = db.prepare(`
+        SELECT o.id, o.name, o.status, e.email, e.name as employeeName
+        FROM employees e
+        JOIN organizations o ON e.organization_id = o.id
+        WHERE e.code = ?
+      `);
       return stmt.get(code) || null;
     } catch (error) {
-      console.error('Error finding organization by code:', error);
+      console.error('Error finding organization by employee code:', error);
       return null;
     }
   },
@@ -837,7 +845,8 @@ export const userService = {
         ...attempt,
         quiz: { name: attempt.quiz_name },
         profile: attempt.profile_name ? { name: attempt.profile_name } : null,
-        answers: parseJsonOptions(attempt.answers)
+        answers: parseJsonOptions(attempt.answers),
+        packet_marks: parseJsonOptions(attempt.packet_marks)
       }));
     } catch (error) {
       console.error('Error getting user quiz attempts:', error);
@@ -863,7 +872,8 @@ export const userService = {
         quiz: { name: attempt.quiz_name },
         profile: attempt.profile_name ? { name: attempt.profile_name } : null,
         user: { email: attempt.user_email },
-        answers: parseJsonOptions(attempt.answers)
+        answers: parseJsonOptions(attempt.answers),
+        packet_marks: parseJsonOptions(attempt.packet_marks)
       }));
     } catch (error) {
       console.error('Error getting all quiz attempts:', error);
@@ -912,13 +922,14 @@ export const userService = {
 
   async createQuizAttempt(attemptData) {
     try {
-      const id = generateId();
+      const id = attemptData.id || generateId();
       const stmt = db.prepare(`
         INSERT INTO quiz_attempts (
           id, quiz_id, user_id, profile_id, score, total_questions, 
-          correct_answers, time_taken, started_at, completed_at, answers
+          correct_answers, time_taken, started_at, completed_at, answers,
+          status, current_question_index, packet_marks, total_marks
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       stmt.run(
@@ -926,13 +937,17 @@ export const userService = {
         attemptData.quiz_id,
         attemptData.user_id,
         attemptData.profile_id,
-        attemptData.score,
-        attemptData.total_questions,
-        attemptData.correct_answers,
-        attemptData.time_taken,
-        attemptData.started_at,
-        attemptData.completed_at,
-        stringifyJson(attemptData.answers)
+        attemptData.score || 0,
+        attemptData.total_questions || 0,
+        attemptData.correct_answers || 0,
+        attemptData.time_taken || null,
+        attemptData.started_at || new Date().toISOString(),
+        attemptData.completed_at || null,
+        stringifyJson(attemptData.answers || {}),
+        attemptData.status || 'completed',
+        attemptData.current_question_index || 0,
+        stringifyJson(attemptData.packet_marks || {}),
+        attemptData.total_marks || 0
       );
       
       // Return the created attempt
@@ -941,11 +956,61 @@ export const userService = {
       
       return {
         ...attempt,
-        answers: parseJsonOptions(attempt.answers)
+        answers: parseJsonOptions(attempt.answers),
+        packet_marks: parseJsonOptions(attempt.packet_marks)
       };
     } catch (error) {
       console.error('Error creating quiz attempt:', error);
       throw new Error('Failed to create quiz attempt');
+    }
+  },
+
+  async updateQuizAttempt(attemptId, attemptData) {
+    try {
+      const getStmt = db.prepare('SELECT * FROM quiz_attempts WHERE id = ?');
+      const attempt = getStmt.get(attemptId);
+      if (!attempt) {
+        throw new Error('Attempt not found');
+      }
+
+      const stmt = db.prepare(`
+        UPDATE quiz_attempts
+        SET score = ?,
+            total_questions = ?,
+            correct_answers = ?,
+            time_taken = ?,
+            completed_at = ?,
+            answers = ?,
+            status = ?,
+            current_question_index = ?,
+            packet_marks = ?,
+            total_marks = ?
+        WHERE id = ?
+      `);
+
+      stmt.run(
+        attemptData.score !== undefined ? attemptData.score : attempt.score,
+        attemptData.total_questions !== undefined ? attemptData.total_questions : attempt.total_questions,
+        attemptData.correct_answers !== undefined ? attemptData.correct_answers : attempt.correct_answers,
+        attemptData.time_taken !== undefined ? attemptData.time_taken : attempt.time_taken,
+        attemptData.completed_at !== undefined ? attemptData.completed_at : attempt.completed_at,
+        attemptData.answers ? stringifyJson(attemptData.answers) : attempt.answers,
+        attemptData.status !== undefined ? attemptData.status : attempt.status,
+        attemptData.current_question_index !== undefined ? attemptData.current_question_index : attempt.current_question_index,
+        attemptData.packet_marks ? stringifyJson(attemptData.packet_marks) : attempt.packet_marks,
+        attemptData.total_marks !== undefined ? attemptData.total_marks : attempt.total_marks,
+        attemptId
+      );
+
+      const updatedAttempt = getStmt.get(attemptId);
+      return {
+        ...updatedAttempt,
+        answers: parseJsonOptions(updatedAttempt.answers),
+        packet_marks: parseJsonOptions(updatedAttempt.packet_marks)
+      };
+    } catch (error) {
+      console.error('Error updating quiz attempt:', error);
+      throw new Error('Failed to update quiz attempt');
     }
   },
 

@@ -308,6 +308,13 @@ export const userApi = {
     });
   },
 
+  async updateQuizAttempt(id, attemptData) {
+    return await apiCall(`/quiz-attempts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(attemptData),
+    });
+  },
+
   // --- Access-control: user management (role-gated on the server) ---
 
   // Admin/Super Admin: add a user with initial password + dashboard views.

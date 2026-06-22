@@ -92,15 +92,17 @@ const UserDashboard = () => {
   // (The /stats endpoint returns totalQuizzes/completedQuizzes, not the
   // totalAttempts field the cards used to read — hence the stale "0".)
   const stats = useMemo(() => {
-    const totalAttempts = userQuizAttempts.length;
-    const completedAttempts = userQuizAttempts.filter(
-      a => a.completed_at || a.status === 'completed'
+    const completedQuizIds = new Set(
+      userQuizAttempts
+        .filter(a => a.completed_at || a.status === 'completed')
+        .map(a => String(a.quiz_id))
+    );
+    const completedCount = completedQuizIds.size;
+    const pendingCount = assignedQuizzes.filter(
+      aq => !completedQuizIds.has(String(aq.quiz_id))
     ).length;
-    const completionRate = totalAttempts
-      ? Math.round((completedAttempts / totalAttempts) * 100)
-      : 0;
-    return { totalAttempts, completionRate };
-  }, [userQuizAttempts]);
+    return { completedCount, pendingCount };
+  }, [userQuizAttempts, assignedQuizzes]);
 
   // Estimate time the same way the admin's Assessment Results does: based on the
   // quiz's question count (≈40s per question), not the stale stored time_limit.
@@ -203,11 +205,11 @@ const UserDashboard = () => {
         <div className="stat-card stat-card--primary">
           <div className="stat-card__content">
             <div>
-              <div className="stat-card__value">{stats.totalAttempts}</div>
-              <div className="stat-card__label">Total Attempts</div>
+              <div className="stat-card__value">{stats.completedCount}</div>
+              <div className="stat-card__label">Completed Assessments</div>
             </div>
             <div className="stat-card__icon">
-              <QuizIcon />
+              <CheckCircleIcon />
             </div>
           </div>
         </div>
@@ -215,8 +217,8 @@ const UserDashboard = () => {
         <div className="stat-card stat-card--warning">
           <div className="stat-card__content">
             <div>
-              <div className="stat-card__value">{stats.completionRate}%</div>
-              <div className="stat-card__label">Completion Rate</div>
+              <div className="stat-card__value">{stats.pendingCount}</div>
+              <div className="stat-card__label">Pending Assessments</div>
             </div>
             <div className="stat-card__icon">
               <ScheduleIcon />
@@ -243,33 +245,43 @@ const UserDashboard = () => {
             </div>
           ) : (
             <div>
-              {assignedQuizzes.map((assignment) => (
-                <article key={assignment.id} className="list-item">
-                  <div className="list-item__content">
-                    <div className="list-item__header">
-                      <QuizIcon className="list-item__icon" />
-                      <h3 className="list-item__title">{assignment.quiz?.name}</h3>
+              {assignedQuizzes.map((assignment) => {
+                const incompleteAttempt = userQuizAttempts.find(
+                  a => String(a.quiz_id) === String(assignment.quiz_id) && (!a.completed_at && a.status !== 'completed')
+                );
+                return (
+                  <article key={assignment.id} className="list-item">
+                    <div className="list-item__content">
+                      <div className="list-item__header">
+                        <QuizIcon className="list-item__icon" />
+                        <h3 className="list-item__title">{assignment.quiz?.name}</h3>
+                      </div>
+                      <p className="list-item__desc">{assignment.quiz?.description}</p>
+                      <div className="list-item__tags">
+                        <span className="badge badge--primary">{assignment.profile?.name}</span>
+                        {incompleteAttempt && (
+                          <span className="badge badge--warning" style={{ display: 'flex', alignItems: 'center' }}>
+                            <HourglassEmptyIcon sx={{ fontSize: 14, mr: 0.5 }} /> Pending Completion
+                          </span>
+                        )}
+                        {questionCounts[assignment.quiz_id] > 0 && (
+                          <span className="badge badge--outline" style={{ display: 'flex', alignItems: 'center' }}>
+                            <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5 }} /> {estimateTimeLimit(questionCounts[assignment.quiz_id])}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="list-item__desc">{assignment.quiz?.description}</p>
-                    <div className="list-item__tags">
-                      <span className="badge badge--primary">{assignment.profile?.name}</span>
-                      {questionCounts[assignment.quiz_id] > 0 && (
-                        <span className="badge badge--outline" style={{ display: 'flex', alignItems: 'center' }}>
-                          <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5 }} /> {estimateTimeLimit(questionCounts[assignment.quiz_id])}
-                        </span>
-                      )}
+                    <div className="list-item__action">
+                      <button
+                        className="btn btn--primary"
+                        onClick={() => window.open(`/attempt/${assignment.quiz_id}`, '_blank')}
+                      >
+                        {incompleteAttempt ? 'Resume Assessment' : 'Start Quiz'} &rarr;
+                      </button>
                     </div>
-                  </div>
-                  <div className="list-item__action">
-                    <button
-                      className="btn btn--primary"
-                      onClick={() => window.open(`/attempt/${assignment.quiz_id}`, '_blank')}
-                    >
-                      Start Quiz &rarr;
-                    </button>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -291,48 +303,60 @@ const UserDashboard = () => {
             </div>
           ) : (
             <div>
-              {userQuizAttempts.slice(0, 5).map((attempt) => (
-                <article key={attempt.id} className="list-item">
-                  <div className="list-item__content">
-                    <div className="list-item__header">
-                      {attempt.completed_at ? (
-                        <CheckCircleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
-                      ) : (
-                        <ScheduleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
-                      )}
-                      <div>
-                        <h3 className="list-item__title" style={{ marginBottom: '4px' }}>
-                          {attempt.quiz?.name || 'Quiz'}
-                        </h3>
-                        <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center' }}>
-                          <EventIcon sx={{ fontSize: 16, mr: 0.5 }} /> {formatDate(attempt.started_at)}
+              {userQuizAttempts.slice(0, 5).map((attempt) => {
+                const isCompleted = attempt.completed_at || attempt.status === 'completed';
+                return (
+                  <article key={attempt.id} className="list-item">
+                    <div className="list-item__content">
+                      <div className="list-item__header">
+                        {isCompleted ? (
+                          <CheckCircleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
+                        ) : (
+                          <ScheduleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
+                        )}
+                        <div>
+                          <h3 className="list-item__title" style={{ marginBottom: '4px' }}>
+                            {attempt.quiz?.name || 'Quiz'}
+                          </h3>
+                          <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center' }}>
+                            <EventIcon sx={{ fontSize: 16, mr: 0.5 }} /> {formatDate(attempt.started_at)}
+                          </div>
                         </div>
                       </div>
+                      <div className="list-item__tags" style={{ marginTop: '12px' }}>
+                        <span className="badge badge--primary">{attempt.profile?.name}</span>
+                        {isCompleted ? (
+                          <span className="badge badge--success" style={{ display: 'flex', alignItems: 'center' }}>
+                            <CheckCircleIcon sx={{ fontSize: 14, mr: 0.5 }} /> Completed
+                          </span>
+                        ) : (
+                          <span className="badge badge--warning" style={{ display: 'flex', alignItems: 'center' }}>
+                            <HourglassEmptyIcon sx={{ fontSize: 14, mr: 0.5 }} /> Pending Completion
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="list-item__tags" style={{ marginTop: '12px' }}>
-                      <span className="badge badge--primary">{attempt.profile?.name}</span>
-                      {attempt.completed_at ? (
-                        <span className="badge badge--success" style={{ display: 'flex', alignItems: 'center' }}>
-                          <CheckCircleIcon sx={{ fontSize: 14, mr: 0.5 }} /> Completed
-                        </span>
+                    <div className="list-item__action">
+                      {isCompleted ? (
+                        <button
+                          className="btn btn--secondary"
+                          onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
+                        >
+                          <VisibilityIcon className="btn-icon" />
+                          View Report
+                        </button>
                       ) : (
-                        <span className="badge badge--warning" style={{ display: 'flex', alignItems: 'center' }}>
-                          <HourglassEmptyIcon sx={{ fontSize: 14, mr: 0.5 }} /> In Progress
-                        </span>
+                        <button
+                          className="btn btn--primary"
+                          onClick={() => window.open(`/attempt/${attempt.quiz_id}`, '_blank')}
+                        >
+                          Resume &rarr;
+                        </button>
                       )}
                     </div>
-                  </div>
-                  <div className="list-item__action">
-                    <button
-                      className="btn btn--secondary"
-                      onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
-                    >
-                      <VisibilityIcon className="btn-icon" />
-                      View Report
-                    </button>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
 
               {userQuizAttempts.length > 5 && (
                 <div style={{ textAlign: 'center', marginTop: 'var(--space-6)' }}>

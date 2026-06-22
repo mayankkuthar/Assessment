@@ -31,6 +31,17 @@ const OrganizationManager = ({
   const [orgDescription, setOrgDescription] = useState('');
   const [orgStatus, setOrgStatus] = useState('active');
 
+  const getDaysSinceOnboarded = (dateString) => {
+    if (!dateString) return 0;
+    const created = new Date(dateString);
+    const now = new Date();
+    created.setHours(0, 0, 0, 0);
+    now.setHours(0, 0, 0, 0);
+    const diffTime = now - created;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays < 0 ? 0 : diffDays;
+  };
+
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -430,7 +441,7 @@ const OrganizationManager = ({
         <h3 className="section-card__header">Add New Organization</h3>
         <form onSubmit={handleAddOrg} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <div className="form-group" style={{ flex: 2, minWidth: '200px', marginBottom: 0 }}>
+            <div className="form-group" style={{ flex: 3, minWidth: '200px', marginBottom: 0 }}>
               <label className="form-label">Organization Name *</label>
               <input
                 type="text"
@@ -523,8 +534,8 @@ const OrganizationManager = ({
                       {org.description}
                     </span>
                   )}
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
-                    Created: {new Date(org.created_at).toLocaleDateString()}
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }} title={`Onboarded: ${new Date(org.created_at).toLocaleString()}`}>
+                    Onboarded At: {new Date(org.created_at).toLocaleDateString()} ({getDaysSinceOnboarded(org.created_at)} days ago)
                   </span>
                 </div>
               </div>
@@ -590,7 +601,7 @@ const OrganizationManager = ({
                   required
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
                 <label className="form-label">Status</label>
                 <select
                   className="form-input"
@@ -692,32 +703,7 @@ const OrganizationManager = ({
                   <div style={{ fontSize: 'var(--text-md)', fontWeight: 600 }}>{viewingOrg.name}</div>
                 </div>
 
-                <div>
-                  <label className="form-label" style={{ color: 'var(--color-muted-fg)', fontSize: 'var(--text-xs)', textTransform: 'uppercase' }}>Onboarding Code</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, letterSpacing: '1.5px', background: 'var(--color-bg)', padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontFamily: 'monospace', color: 'var(--color-primary)' }}>
-                      {viewingOrg.onboarding_code || 'N/A'}
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn--outline"
-                      style={{ height: '36px', padding: '0 var(--space-3)', fontSize: 'var(--text-xs)', display: 'inline-flex', alignItems: 'center' }}
-                      onClick={async () => {
-                        if (window.confirm('Are you sure you want to regenerate the onboarding code? New employees will need to use the new code to register.')) {
-                          try {
-                            const newCode = await regenerateOnboardingCode(viewingOrg.id);
-                            setViewingOrg(prev => ({ ...prev, onboarding_code: newCode }));
-                            alert(`Onboarding code successfully regenerated: ${newCode}`);
-                          } catch (err) {
-                            alert(err.message || 'Failed to regenerate onboarding code.');
-                          }
-                        }
-                      }}
-                    >
-                      Regenerate
-                    </button>
-                  </div>
-                </div>
+
 
                 <div>
                   <label className="form-label" style={{ color: 'var(--color-muted-fg)', fontSize: 'var(--text-xs)', textTransform: 'uppercase' }}>Status</label>
@@ -738,9 +724,9 @@ const OrganizationManager = ({
 
                 <div style={{ display: 'flex', gap: 'var(--space-6)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
                   <div>
-                    <label className="form-label" style={{ color: 'var(--color-muted-fg)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', marginBottom: '2px' }}>Created At</label>
-                    <div style={{ fontSize: 'var(--text-xs)' }}>
-                      {new Date(viewingOrg.created_at).toLocaleString()}
+                    <label className="form-label" style={{ color: 'var(--color-muted-fg)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', marginBottom: '2px' }}>Onboarded At</label>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                      {new Date(viewingOrg.created_at).toLocaleDateString()} ({getDaysSinceOnboarded(viewingOrg.created_at)} days since onboarded)
                     </div>
                   </div>
                   <div>
@@ -914,6 +900,18 @@ const OrganizationManager = ({
                     ) : (
                       /* EXCEL FILE UPLOAD & PREVIEW */
                       <div>
+                        <div style={{ 
+                          padding: 'var(--space-3) var(--space-4)', 
+                          background: 'rgba(137, 91, 245, 0.05)', 
+                          border: '1px dashed var(--color-primary)', 
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: 'var(--text-xs)',
+                          color: 'var(--color-fg)',
+                          lineHeight: '1.4',
+                          marginBottom: 'var(--space-4)'
+                        }}>
+                          <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Important Note:</span> Name and Email are mandatory fields in the Excel sheet when importing employees for the organization.
+                        </div>
                         {!excelFile ? (
                           /* UPLOAD DROP BOX */
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -1220,6 +1218,7 @@ const OrganizationManager = ({
                                 <tr>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Name</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Email</th>
+                                  <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>User Code</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Additional Fields</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Status</th>
                                   <th style={{ padding: 'var(--space-3)', width: '60px' }}></th>
@@ -1230,6 +1229,7 @@ const OrganizationManager = ({
                                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                                     <td style={{ padding: 'var(--space-3)', fontWeight: 500 }}>{emp.name}</td>
                                     <td style={{ padding: 'var(--space-3)' }}>{emp.email}</td>
+                                    <td style={{ padding: 'var(--space-3)', fontWeight: 600, fontFamily: 'monospace', color: 'var(--color-primary)' }}>{emp.code || '—'}</td>
                                     <td style={{ padding: 'var(--space-3)' }}>
                                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                         {Object.entries(emp.metadata || {}).map(([k, v]) => (

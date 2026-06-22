@@ -42,6 +42,7 @@ const QuizAttempt = () => {
   const [showQuizDescription, setShowQuizDescription] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [attemptId, setAttemptId] = useState(null);
 
   // Timestamp captured when the user actually starts the quiz
   const startedAtRef = useRef(null);
@@ -84,11 +85,12 @@ const QuizAttempt = () => {
         }
 
         // Load quiz data
-        const [quizRes, questionsRes, profilesRes, assignmentsRes] = await Promise.all([
+        const [quizRes, questionsRes, profilesRes, assignmentsRes, attemptsRes] = await Promise.all([
           fetch(`/api/quizzes/${quizId}`),
           fetch(`/api/questions?quiz_id=${quizId}`),
           fetch('/api/profiles'),
-          fetch('/api/quiz-assignments')
+          fetch('/api/quiz-assignments'),
+          fetch(`/api/users/${currentUser.id}/quiz-attempts`)
         ]);
 
         if (!quizRes.ok || !questionsRes.ok) {
@@ -100,6 +102,7 @@ const QuizAttempt = () => {
         const questionsData = await questionsRes.json();
         const profilesData = profilesRes.ok ? await profilesRes.json() : [];
         const assignmentsData = assignmentsRes.ok ? await assignmentsRes.json() : [];
+        const attemptsData = attemptsRes.ok ? await attemptsRes.json() : [];
 
         // Find user's profile and assignment - try multiple matching strategies
         const foundProfile = profilesData.find(p => 
@@ -179,10 +182,25 @@ const QuizAttempt = () => {
         setQuiz(quizData);
         setQuestions(questionsData);
 
-        // Fallback start time: ensures started_at is recorded even if the
-        // description screen is skipped. The Start button refines this.
-        if (!startedAtRef.current) {
-          startedAtRef.current = new Date().toISOString();
+        // Check for active incomplete attempt
+        const incompleteAttempt = attemptsData.find(a => 
+          String(a.quiz_id) === String(quizId) && 
+          (!a.completed_at && a.status !== 'completed')
+        );
+
+        if (incompleteAttempt) {
+          console.log('Resuming incomplete attempt:', incompleteAttempt);
+          setAttemptId(incompleteAttempt.id);
+          setAnswers(incompleteAttempt.answers || {});
+          setCurrentQuestionIndex(incompleteAttempt.current_question_index || 0);
+          startedAtRef.current = incompleteAttempt.started_at;
+          setShowQuizDescription(false);
+        } else {
+          // Fallback start time: ensures started_at is recorded even if the
+          // description screen is skipped. The Start button refines this.
+          if (!startedAtRef.current) {
+            startedAtRef.current = new Date().toISOString();
+          }
         }
 
         console.log('Quiz and questions set successfully');
@@ -197,9 +215,32 @@ const QuizAttempt = () => {
     loadQuiz();
   }, [quizId, accessDenied]);
 
+  const saveProgress = async (updatedAnswers, index) => {
+    if (!attemptId) return;
+    try {
+      await fetch(`/api/quiz-attempts/${attemptId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answers: updatedAnswers,
+          current_question_index: index,
+          status: 'in_progress'
+        })
+      });
+    } catch (err) {
+      console.error('Error auto-saving progress:', err);
+    }
+  };
+
   const handleChange = (qid, value) => {
     setSelectedOption(value);
-    setAnswers(prev => ({ ...prev, [qid]: value }));
+    const updatedAnswers = { ...answers, [qid]: value };
+    setAnswers(updatedAnswers);
+
+    // Save progress to database
+    saveProgress(updatedAnswers, currentQuestionIndex);
 
     // Only auto-advance if not on the last question
     if (currentQuestionIndex < questions.length - 1) {
@@ -213,6 +254,9 @@ const QuizAttempt = () => {
           setQuestionAnimationKey(prev => prev + 1);
           setIsTransitioning(false);
           setSelectedOption('');
+
+          // Also save progress with the new index
+          saveProgress(updatedAnswers, nextIndex);
 
           // Show motivational notification after every 10 questions
           showMotivationalNotification(nextIndex);
@@ -237,6 +281,10 @@ const QuizAttempt = () => {
       setQuestionAnimationKey(prev => prev + 1);
       setIsTransitioning(false);
       setSelectedOption('');
+      
+      // Save progress to database with the new index
+      saveProgress(answers, index);
+      
       showMotivationalNotification(index);
     }, 300);
     advanceTimers.current.push(t);
@@ -383,9 +431,8 @@ const QuizAttempt = () => {
       console.log('Formatted Packet Marks:', formattedPacketMarks);
       
       const attemptData = {
-        id: Date.now().toString(),
         quiz_id: quizId,
-        profile_id: quizAssignment?.profile_id || `profile_${user?.id}`,
+        profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
         user_id: user?.id,
         score: score,
         total_questions: totalQuestions,
@@ -399,7 +446,6 @@ const QuizAttempt = () => {
         time_taken: startedAtRef.current
           ? Math.max(0, Math.round((new Date(currentTime) - new Date(startedAtRef.current)) / 1000))
           : null,
-        created_at: currentTime,
         updated_at: currentTime
       };
 
@@ -413,14 +459,30 @@ const QuizAttempt = () => {
       
       console.log('Final Attempt Data:', attemptData);
 
-      // Save quiz attempt to mock data
-      const attemptResponse = await fetch('/api/quiz-attempts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(attemptData)
-      });
+      let attemptResponse;
+      if (attemptId) {
+        // Update existing attempt to completed
+        attemptResponse = await fetch(`/api/quiz-attempts/${attemptId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attemptData)
+        });
+      } else {
+        // Fallback POST if attemptId is missing
+        attemptResponse = await fetch('/api/quiz-attempts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...attemptData,
+            id: Date.now().toString(),
+            created_at: currentTime
+          })
+        });
+      }
 
       if (!attemptResponse.ok) {
         throw new Error('Failed to save quiz attempt');
@@ -614,12 +676,7 @@ const QuizAttempt = () => {
       </div>
       
       {/* Progress Bar */}
-      {!showQuizDescription && (
-        <div className="quiz-attempt__progress">
-          <div className="quiz-attempt__progress-fill" style={{ width: `${progress}%` }} />
-          <div className="quiz-attempt__progress-label">{progress}%</div>
-        </div>
-      )}
+      {/* Progress Bar hidden per requirements */}
 
       {/* Main Content */}
       <div className="quiz-attempt__body">
@@ -678,8 +735,39 @@ const QuizAttempt = () => {
 
                 <button
                   className="quiz-attempt__start-btn"
-                  onClick={() => {
-                    startedAtRef.current = new Date().toISOString();
+                  onClick={async () => {
+                    const startTime = new Date().toISOString();
+                    startedAtRef.current = startTime;
+                    
+                    // Create an incomplete attempt immediately in database
+                    try {
+                      const newAttemptResponse = await fetch('/api/quiz-attempts', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          quiz_id: quizId,
+                          profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
+                          user_id: user?.id,
+                          score: 0,
+                          total_questions: questions.length,
+                          correct_answers: 0,
+                          started_at: startTime,
+                          status: 'in_progress',
+                          answers: {},
+                          current_question_index: 0
+                        })
+                      });
+                      
+                      if (newAttemptResponse.ok) {
+                        const newAttempt = await newAttemptResponse.json();
+                        setAttemptId(newAttempt.id);
+                      }
+                    } catch (e) {
+                      console.error('Error creating quiz attempt:', e);
+                    }
+                    
                     setShowQuizDescription(false);
                   }}
                 >
@@ -721,9 +809,7 @@ const QuizAttempt = () => {
               Previous
             </button>
 
-            <span className="quiz-attempt__nav-counter">
-              Question {currentQuestionIndex + 1} of {questions.length}
-            </span>
+            {/* Question counter metrics hidden per requirements */}
 
             {isLastQuestion ? (
               <button

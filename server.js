@@ -39,46 +39,34 @@ app.get('/api/auth/verify-code', asyncHandler(async (req, res) => {
   }
   const org = await userService.findOrganizationByCode(code.trim().toUpperCase());
   if (!org) {
-    return res.status(404).json({ error: 'Invalid onboarding code' });
+    return res.status(404).json({ error: 'Invalid user code' });
   }
   if (org.status !== 'active') {
     return res.status(400).json({ error: 'This organization is currently inactive' });
   }
-  res.json({ id: org.id, name: org.name });
+  res.json({ id: org.id, name: org.name, email: org.email, userName: org.employeeName });
 }));
 
 app.post('/api/auth/signup', asyncHandler(async (req, res) => {
-  const { email, password, role = 'user', userName, onboardingCode } = req.body;
+  const { email, password, role = 'user', userName, userCode } = req.body;
   
-  let organizationId = null;
+  if (!userCode) {
+    return res.status(400).json({ error: 'User code is required for signup' });
+  }
   
-  if (onboardingCode) {
-    const org = await userService.findOrganizationByCode(onboardingCode.trim().toUpperCase());
-    if (!org) {
-      return res.status(400).json({ error: 'Invalid onboarding code' });
-    }
-    if (org.status !== 'active') {
-      return res.status(400).json({ error: 'This organization is currently inactive' });
-    }
-    organizationId = org.id;
-
-    // Cross-organization validation: check if email is registered under another org
-    const checkOtherOrgStmt = db.prepare('SELECT organization_id FROM employees WHERE LOWER(email) = ?');
-    const existingEmp = checkOtherOrgStmt.get(email.trim().toLowerCase());
-    if (existingEmp && existingEmp.organization_id !== organizationId) {
-      return res.status(400).json({ error: 'This email is already registered under a different organization.' });
-    }
-
-    // Verify email is pre-registered under this organization
-    const checkEmpStmt = db.prepare('SELECT id FROM employees WHERE organization_id = ? AND LOWER(email) = ?');
-    const hasPreRegistered = checkEmpStmt.get(organizationId, email.trim().toLowerCase());
-    if (!hasPreRegistered) {
-      return res.status(400).json({ error: 'This email is not pre-registered in the organization directory. Please contact your organization administrator.' });
-    }
+  const org = await userService.findOrganizationByCode(userCode.trim().toUpperCase());
+  if (!org) {
+    return res.status(400).json({ error: 'Invalid user code' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+  if (org.email.toLowerCase() !== email.trim().toLowerCase()) {
+    return res.status(400).json({ error: 'This user code does not belong to the entered email address.' });
   }
 
   // Create User
-  const result = await authService.signUp(email, password, role, organizationId);
+  const result = await authService.signUp(email, password, role, org.id);
 
   res.json(result);
 }));
@@ -305,6 +293,11 @@ app.get('/api/quiz-attempts', asyncHandler(async (req, res) => {
 
 app.post('/api/quiz-attempts', asyncHandler(async (req, res) => {
   const data = await userService.createQuizAttempt(req.body);
+  res.json(data);
+}));
+
+app.put('/api/quiz-attempts/:id', asyncHandler(async (req, res) => {
+  const data = await userService.updateQuizAttempt(req.params.id, req.body);
   res.json(data);
 }));
 
