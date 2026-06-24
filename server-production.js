@@ -3,6 +3,8 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
+
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -70,6 +72,26 @@ function saveData(data) {
 
 // Load initial data
 let data = loadData();
+
+// Ensure all user passwords are hashed with bcrypt
+if (data.users) {
+  let migrated = false;
+  data.users.forEach(u => {
+    if (u.password && typeof u.password === 'string') {
+      const isHashed = u.password.startsWith('$2a$') || u.password.startsWith('$2b$') || u.password.startsWith('$2y$');
+      if (!isHashed) {
+        console.log(`🔐 Hashing password for user: ${u.email}`);
+        u.password = bcrypt.hashSync(u.password, 10);
+        migrated = true;
+      }
+    }
+  });
+  if (migrated) {
+    console.log('✅ Migrating mockData in production server: Hashed all plain text user passwords');
+    saveData(data);
+  }
+}
+
 console.log('📂 Loaded persistent data:', {
   users: data.users.length,
   profiles: data.profiles.length,
@@ -94,11 +116,21 @@ app.get('/api/test', (req, res) => {
 });
 
 // Auth routes
-app.post('/api/auth/signin', (req, res) => {
+app.post('/api/auth/signin', async (req, res) => {
   const { email, password } = req.body;
-  const user = data.users.find(u => u.email === email && u.password === password);
+  const user = data.users.find(u => u.email && u.email.toLowerCase() === (email || '').trim().toLowerCase());
   
-  if (user) {
+  let isValid = false;
+  if (user && password && user.password) {
+    const isHashed = user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$');
+    if (isHashed) {
+      isValid = await bcrypt.compare(password, user.password);
+    } else {
+      isValid = user.password === password;
+    }
+  }
+  
+  if (isValid) {
     res.json({ 
       success: true, 
       user: { id: user.id, email: user.email, role: user.role },
@@ -111,6 +143,7 @@ app.post('/api/auth/signin', (req, res) => {
     });
   }
 });
+
 
 // Profile routes
 app.get('/api/profiles', (req, res) => {
@@ -189,9 +222,10 @@ app.post('/api/quiz-attempts', (req, res) => {
 });
 
 // Catch-all handler: serve React app
-app.get('*', (req, res) => {
+app.get('*any', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Production server running on port ${PORT}`);

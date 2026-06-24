@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -589,6 +590,28 @@ const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@123
   }
 })();
 
+// Ensure all user passwords are hashed with bcrypt
+(function hashPlainPasswords() {
+  if (mockData.users) {
+    let migrated = false;
+    mockData.users.forEach(u => {
+      if (u.password && typeof u.password === 'string') {
+        const isHashed = u.password.startsWith('$2a$') || u.password.startsWith('$2b$') || u.password.startsWith('$2y$');
+        if (!isHashed) {
+          console.log(`🔐 Hashing password for user: ${u.email}`);
+          u.password = bcrypt.hashSync(u.password, 10);
+          migrated = true;
+        }
+      }
+    });
+    if (migrated) {
+      console.log('✅ Migrating mockData: Hashed all plain text user passwords');
+      saveData(mockData);
+    }
+  }
+})();
+
+
 console.log('📂 Loaded persistent data:', {
   users: mockData.users.length,
   profiles: mockData.profiles.length,
@@ -603,13 +626,23 @@ app.get('/api/test', (req, res) => {
 });
 
 // Auth routes
-app.post('/api/auth/signin', (req, res) => {
+app.post('/api/auth/signin', async (req, res) => {
   const { email, password } = req.body;
   console.log(`🔐 Sign in attempt: ${email}`);
   
-  const user = mockData.users.find(u => u.email === email && u.password === password);
+  const user = mockData.users.find(u => u.email && u.email.toLowerCase() === (email || '').trim().toLowerCase());
   
-  if (user) {
+  let isValid = false;
+  if (user && password && user.password) {
+    const isHashed = user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$');
+    if (isHashed) {
+      isValid = await bcrypt.compare(password, user.password);
+    } else {
+      isValid = user.password === password;
+    }
+  }
+  
+  if (isValid) {
     const { password: _, ...userWithoutPassword } = user;
     console.log(`✅ Login successful for: ${email}`);
     res.json({
@@ -626,6 +659,7 @@ app.post('/api/auth/signin', (req, res) => {
     });
   }
 });
+
 
 app.get('/api/auth/verify-code', (req, res) => {
   const { code } = req.query;
@@ -653,7 +687,7 @@ app.get('/api/auth/verify-code', (req, res) => {
   res.json({ id: org.id, name: org.name, email: emp.email, userName: emp.name });
 });
 
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   const { email, password, role = 'user', userName, user_name, profile, userCode } = req.body;
   const targetUserName = userName || user_name;
   const code = (userCode || '').trim();
@@ -726,12 +760,15 @@ app.post('/api/auth/signup', (req, res) => {
     organizationName = org.name;
   }
 
+  // Hash password before saving
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   // Create new user
   const userId = String(Date.now());
   const newUser = {
     id: userId,
     email,
-    password,
+    password: hashedPassword,
     role: ROLES.USER,
     user_name: targetUserName || email.split('@')[0],
     profile: existingProfile.name,
@@ -755,6 +792,7 @@ app.post('/api/auth/signup', (req, res) => {
     error: null
   });
 });
+
 
 app.post('/api/auth/signout', (req, res) => {
   console.log('👋 Sign out');
@@ -823,7 +861,7 @@ app.get('/api/local-users/:id', (req, res) => {
 // of dashboard views they may see. Permissions are locked immediately after
 // this initial setup; only a Super Admin can change them afterwards. Admins are
 // scoped to their own organization and may only create regular users.
-app.post('/api/admin/users', requireAdmin, (req, res) => {
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
   const { email, password, user_name, profile, role = ROLES.USER, permissions = [], organization_id = null } = req.body;
   console.log(`➕ ${req.actor.role} (${req.actor.email}) creating user: ${email}`);
 
@@ -842,10 +880,12 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
   const finalOrgId = isSuperAdmin(req.actor) ? organization_id : (req.actor.organization_id || null);
   const sanitizedPerms = (Array.isArray(permissions) ? permissions : []).filter(p => DASHBOARD_VIEWS.includes(p));
 
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   const newUser = {
     id: String(Date.now()),
     email,
-    password,
+    password: hashedPassword,
     role: finalRole,
     user_name: user_name || email.split('@')[0],
     profile: profile || null,
@@ -863,6 +903,7 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
   const { password: _pw, ...safe } = newUser;
   res.status(201).json(safe);
 });
+
 
 // Update a user's dashboard view permissions.
 //   Super Admin : always allowed.
@@ -898,7 +939,7 @@ app.put('/api/users/:id/permissions', requireAdmin, (req, res) => {
 //   Super Admin : may reset at any time.
 //   Admin       : may set the password ONCE during onboarding (own org only);
 //                 any subsequent reset must be routed to Super Admin.
-app.post('/api/users/:id/password', requireAdmin, (req, res) => {
+app.post('/api/users/:id/password', requireAdmin, async (req, res) => {
   const actor = req.actor;
   const user = mockData.users.find(u => u.id === req.params.id);
   if (!user) {
@@ -912,8 +953,10 @@ app.post('/api/users/:id/password', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'New password is required.' });
   }
 
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   if (isSuperAdmin(actor)) {
-    user.password = password;
+    user.password = hashedPassword;
     user.password_set_by_admin = false; // super admin reset clears the admin lock
     saveData(mockData);
     logAction(actor, 'password.reset', user, {});
@@ -926,12 +969,13 @@ app.post('/api/users/:id/password', requireAdmin, (req, res) => {
       error: 'Password was already set during onboarding. For any further password changes or resets, please connect with Super Admin (HappiMynd).'
     });
   }
-  user.password = password;
+  user.password = hashedPassword;
   user.password_set_by_admin = true;
   saveData(mockData);
   logAction(actor, 'password.set', user, { onboarding: true });
   res.json({ success: true, message: 'Onboarding password set successfully.' });
 });
+
 
 // Delete a user. Admins cannot remove users — only a Super Admin can.
 app.delete('/api/users/:id', (req, res) => {
