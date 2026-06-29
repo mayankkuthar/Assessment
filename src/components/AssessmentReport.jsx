@@ -8,61 +8,21 @@ import {
 import PDFGenerator from '../services/pdfGenerator';
 import './AssessmentReport.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+import { useDatabase } from '../hooks/useDatabase';
 
 
 const AssessmentReport = () => {
-  const [quizzes, setQuizzes] = useState([]);
+  const { quizzes, profiles, users, loading: dbLoading, error: dbError } = useDatabase();
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [quizAttempts, setQuizAttempts] = useState([]);
   const [quizPackets, setQuizPackets] = useState([]);
-  const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showDetails, setShowDetails] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [users, setUsers] = useState([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError('');
-
-      // Load all data in parallel
-      const [quizzesRes, profilesRes, usersRes] = await Promise.all([
-        fetch('/api/quizzes'),
-        fetch('/api/profiles'),
-        fetch('/api/users').catch(() => null)
-      ]);
-
-      if (!quizzesRes.ok || !profilesRes.ok) {
-        throw new Error('Failed to load data');
-      }
-
-      const quizzesData = await quizzesRes.json();
-      const profilesData = await profilesRes.json();
-      let usersData = [];
-      if (usersRes && usersRes.ok) {
-        usersData = await usersRes.json();
-      }
-
-      if (quizzesData && Array.isArray(quizzesData)) {
-        quizzesData.forEach(q => enrichQuizWithInstructions(q));
-      }
-      setQuizzes(quizzesData);
-      setProfiles(profilesData);
-      setUsers(usersData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleQuizSelect = async (quiz) => {
     try {
@@ -342,7 +302,7 @@ const AssessmentReport = () => {
     return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Not specified' };
   };
 
-  if (loading && !selectedQuiz) {
+  if ((loading || dbLoading) && !selectedQuiz) {
     return (
       <div className="report-spinner-wrap">
         <div className="report-spinner" />
@@ -350,10 +310,10 @@ const AssessmentReport = () => {
     );
   }
 
-  if (error) {
+  if (error || dbError) {
     return (
       <div className="report-alert">
-        {error}
+        {error || dbError}
       </div>
     );
   }

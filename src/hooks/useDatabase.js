@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react'
 import { 
   profileService, 
   organizationService,
@@ -11,7 +11,9 @@ import {
 } from '../services/database'
 import { enrichQuizWithInstructions } from '../components/QuizInstructionsMap'
 
-export const useDatabase = () => {
+const DatabaseContext = createContext(null);
+
+const useDatabaseState = () => {
   const [profiles, setProfiles] = useState([])
   const [organizations, setOrganizations] = useState([])
   const [employees, setEmployees] = useState([])
@@ -517,3 +519,16 @@ export const useDatabase = () => {
     getAssignedQuizzesForUser
   }
 }
+
+export const DatabaseProvider = ({ children }) => {
+  const db = useDatabaseState();
+  return React.createElement(DatabaseContext.Provider, { value: db }, children);
+};
+
+export const useDatabase = () => {
+  const context = useContext(DatabaseContext);
+  if (!context) {
+    throw new Error('useDatabase must be used within a DatabaseProvider');
+  }
+  return context;
+};
