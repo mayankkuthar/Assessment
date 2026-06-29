@@ -85,6 +85,15 @@ const loadImage = (src) =>
 const ActiveTracking = () => {
   const { allQuizAttempts, loadAllQuizAttempts, quizzes, organizations: dbOrganizations, employees, loadEmployees, users } = useDatabase()
 
+  const currentUser = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const [userMap, setUserMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -150,7 +159,7 @@ const ActiveTracking = () => {
 
   // Enrich each attempt with quiz name, employee name and organization
   const attempts = useMemo(() => {
-    return (allQuizAttempts || []).map(a => {
+    const all = (allQuizAttempts || []).map(a => {
       const quiz = (quizzes || []).find(q => String(q.id) === String(a.quiz_id))
       const u = userMap[a.user_id] || null
       return {
@@ -161,7 +170,16 @@ const ActiveTracking = () => {
         organization: (u?.organization && u.organization.trim()) || 'Unspecified'
       }
     })
-  }, [allQuizAttempts, quizzes, userMap])
+
+    const isScopedAdmin = currentUser && currentUser.role === 'admin' && currentUser.organization_id;
+    if (isScopedAdmin) {
+      const myOrgId = currentUser.organization_id;
+      const myOrg = (dbOrganizations || []).find(o => String(o.id) === String(myOrgId));
+      const myOrgName = myOrg ? myOrg.name : currentUser.organization;
+      return all.filter(a => a.organization === myOrgName);
+    }
+    return all;
+  }, [allQuizAttempts, quizzes, userMap, currentUser, dbOrganizations])
 
   // Flatten enriched attempts into a tabular dataset so Detailed Insights can
   // analyze the live tracking data without requiring a spreadsheet upload.
@@ -181,13 +199,21 @@ const ActiveTracking = () => {
 
   // Organizations available in the data (combining database organizations and attempts)
   const organizations = useMemo(() => {
+    const isScopedAdmin = currentUser && currentUser.role === 'admin' && currentUser.organization_id;
+    if (isScopedAdmin) {
+      const myOrgId = currentUser.organization_id;
+      const myOrg = (dbOrganizations || []).find(o => String(o.id) === String(myOrgId));
+      const myOrgName = myOrg ? myOrg.name : currentUser.organization;
+      return myOrgName ? [myOrgName] : [];
+    }
+
     const dbNames = (dbOrganizations || [])
       .filter(o => o.status === 'active')
       .map(o => o.name);
     const attemptNames = (attempts || []).map(a => a.organization);
     const combined = new Set([...dbNames, ...attemptNames]);
     return [...combined].filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [dbOrganizations, attempts])
+  }, [dbOrganizations, attempts, currentUser])
 
   // Default selection to the first organization once data is loaded
   useEffect(() => {
