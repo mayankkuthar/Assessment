@@ -6,35 +6,33 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
-    strictPort: true,
+    port: 5175,
+    strictPort: false,
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
       '/api/organizations': {
-        target: 'http://localhost:3001',
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
         secure: false
       },
       '/api/auth': {
-        target: 'http://localhost:3001',
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
         secure: false
       },
       '/api/employees': {
-        target: 'http://localhost:3001',
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
         secure: false
       },
       '/api/local-users': {
-        target: 'http://localhost:3001',
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
         secure: false
       },
       '/api': {
-        // LOCAL TESTING: pointed at the local server so quiz-attempts use the
-        // fixed answer/progress persistence. For production this targets the
-        // remote backend — restore to 'http://65.1.6.81:3001' before deploying.
-        target: 'http://localhost:3001',
+        // Targeted at the live Vercel backend backed by Google Sheets
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
         secure: false
       }

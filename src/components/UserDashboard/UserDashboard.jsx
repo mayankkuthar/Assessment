@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import './UserDashboard.css';
 
-const UserDashboard = () => {
+const UserDashboard = ({ setTab }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -370,7 +370,7 @@ const UserDashboard = () => {
 
               {userQuizAttempts.length > 5 && (
                 <div style={{ textAlign: 'center', marginTop: 'var(--space-6)' }}>
-                  <button className="btn btn--outline">
+                  <button className="btn btn--outline" onClick={() => setTab && setTab(1)}>
                     View All {userQuizAttempts.length} Attempts &rarr;
                   </button>
                 </div>

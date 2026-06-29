@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "vite",
+    "dev:local": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite",
     "server": "node server-auth-test.js",
     "build": "vite build",

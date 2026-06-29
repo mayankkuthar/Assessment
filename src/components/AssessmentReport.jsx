@@ -22,6 +22,7 @@ const AssessmentReport = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showDetails, setShowDetails] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -33,9 +34,10 @@ const AssessmentReport = () => {
       setError('');
 
       // Load all data in parallel
-      const [quizzesRes, profilesRes] = await Promise.all([
+      const [quizzesRes, profilesRes, usersRes] = await Promise.all([
         fetch('/api/quizzes'),
-        fetch('/api/profiles')
+        fetch('/api/profiles'),
+        fetch('/api/users').catch(() => null)
       ]);
 
       if (!quizzesRes.ok || !profilesRes.ok) {
@@ -44,12 +46,17 @@ const AssessmentReport = () => {
 
       const quizzesData = await quizzesRes.json();
       const profilesData = await profilesRes.json();
+      let usersData = [];
+      if (usersRes && usersRes.ok) {
+        usersData = await usersRes.json();
+      }
 
       if (quizzesData && Array.isArray(quizzesData)) {
         quizzesData.forEach(q => enrichQuizWithInstructions(q));
       }
       setQuizzes(quizzesData);
       setProfiles(profilesData);
+      setUsers(usersData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,25 +93,13 @@ const AssessmentReport = () => {
       } : 'No packets found');
 
       // Enrich attempts with user information
-      const enrichedAttempts = await Promise.all(
-        attemptsData.map(async (attempt) => {
-          try {
-            // Fetch user data for each attempt
-            const userRes = await fetch(`/api/users/${attempt.user_id}`);
-            if (userRes.ok) {
-              const userData = await userRes.json();
-              return {
-                ...attempt,
-                user: userData
-              };
-            }
-            return attempt;
-          } catch (err) {
-            console.error('Failed to fetch user data:', err);
-            return attempt;
-          }
-        })
-      );
+      const enrichedAttempts = attemptsData.map((attempt) => {
+        const userData = (users || []).find(u => String(u.id) === String(attempt.user_id)) || attempt.user || null;
+        return {
+          ...attempt,
+          user: userData
+        };
+      });
 
       setQuizAttempts(enrichedAttempts);
       setQuizPackets(packetsData);
@@ -123,13 +118,20 @@ const AssessmentReport = () => {
       // Get user data
       let userData = attempt.userData;
       if (!userData && attempt.user_id) {
-        try {
-          const userRes = await fetch(`/api/users/${attempt.user_id}`);
-          if (userRes.ok) {
-            userData = await userRes.json();
+        const found = (users || []).find(u => String(u.id) === String(attempt.user_id));
+        if (found) {
+          userData = found;
+        } else if (attempt.user) {
+          userData = attempt.user;
+        } else {
+          try {
+            const userRes = await fetch(`/api/users/${attempt.user_id}`);
+            if (userRes.ok) {
+              userData = await userRes.json();
+            }
+          } catch (err) {
+            console.error('Failed to fetch user data:', err);
           }
-        } catch (err) {
-          console.error('Failed to fetch user data:', err);
         }
       }
       

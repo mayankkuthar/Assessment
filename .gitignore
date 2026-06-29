@@ -24,4 +24,6 @@ dist-ssr
 *.sw?
 mock-data.json
 mock-data-clean.json
+scratch/
+
 

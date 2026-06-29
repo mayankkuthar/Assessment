@@ -583,7 +583,7 @@ const ReportViewer = () => {
           templateData = t?.template || t;
         }
 
-        const foundAttempt = attempts.find(a => a.id === attemptId);
+        const foundAttempt = attempts.find(a => String(a.id) === String(attemptId));
         if (!foundAttempt) {
           throw new Error('Attempt not found');
         }

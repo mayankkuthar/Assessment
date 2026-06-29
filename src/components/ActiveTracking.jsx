@@ -113,25 +113,31 @@ const ActiveTracking = () => {
         setLoading(true)
         setError(null)
         const attempts = await loadAllQuizAttempts()
-        const userIds = [...new Set((attempts || []).map(a => a.user_id).filter(Boolean))]
-        const entries = await Promise.all(
-          userIds.map(async (id) => {
-            try {
-              const res = await fetch(`${API_BASE}/api/users/${id}`)
-              if (res.ok) {
-                return [id, await res.json()]
-              }
-              if (res.status === 404) {
-                const localRes = await fetch(`${API_BASE}/api/local-users/${id}`)
-                if (localRes.ok) {
-                  return [id, await localRes.json()]
-                }
-              }
-            } catch (e) { /* ignore */ }
-            return [id, null]
+        
+        // Build user map locally from users loaded by useDatabase hook
+        const localUserMap = {}
+        if (users && Array.isArray(users)) {
+          users.forEach(u => {
+            if (u && u.id) {
+              localUserMap[u.id] = u
+            }
           })
-        )
-        setUserMap(Object.fromEntries(entries))
+        }
+        
+        // Fallback to attempts user enrichment
+        if (attempts && Array.isArray(attempts)) {
+          attempts.forEach(a => {
+            if (a.user_id && a.user && !localUserMap[a.user_id]) {
+              localUserMap[a.user_id] = {
+                id: a.user_id,
+                user_name: a.user.user_name || a.user.name,
+                email: a.user.email,
+                organization: a.user.organization
+              }
+            }
+          })
+        }
+        setUserMap(localUserMap)
       } catch (err) {
         console.error('Active Tracking load error:', err)
         setError(err.message)
@@ -140,7 +146,7 @@ const ActiveTracking = () => {
       }
     }
     load()
-  }, [loadAllQuizAttempts])
+  }, [loadAllQuizAttempts, users])
 
   // Enrich each attempt with quiz name, employee name and organization
   const attempts = useMemo(() => {

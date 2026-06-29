@@ -15,7 +15,7 @@ const AssessmentResults = () => {
   const [quizPackets, setQuizPackets] = useState([]);
   const [questionCounts, setQuestionCounts] = useState({});
 
-  const { quizzes, packets, profiles, loading: dataLoading, error: dataError } = useDatabase();
+  const { quizzes, packets, profiles, users, loading: dataLoading, error: dataError } = useDatabase();
 
   // Fetch the number of questions for each quiz (sum of questions across its packets)
   useEffect(() => {
@@ -76,66 +76,63 @@ const AssessmentResults = () => {
       const allAttempts = await response.json();
       
       // Filter attempts for this specific quiz
-      const filteredAttempts = allAttempts.filter(attempt => attempt.quiz_id === quizId);
+      const filteredAttempts = allAttempts.filter(attempt => String(attempt.quiz_id) === String(quizId));
       
       // Enrich attempts with user and profile data
-      const enrichedAttempts = await Promise.all(
-        filteredAttempts.map(async (attempt) => {
-          try {
-            // Fetch actual user data for each attempt
-            let userData = null;
-            if (attempt.user_id) {
-              const userResponse = await fetch(`/api/users/${attempt.user_id}`);
-              if (userResponse.ok) {
-                userData = await userResponse.json();
-              }
-            }
-            
-            // Find profile by name (since users now store profile name as string)
-            let profile = null;
-            if (userData && userData.profile) {
-              profile = profiles.find(p => p.name === userData.profile);
-            }
-            
-            // Fallback: try to find by profile_id if available
-            if (!profile && attempt.profile_id) {
-              profile = profiles.find(p => p.id === attempt.profile_id);
-            }
-            
-            // Create user object with actual user data
-            let user = null;
-            if (userData) {
-              user = {
-                name: userData.user_name || userData.email || 'Unknown User',
-                email: userData.email || 'No email'
-              };
-            } else if (profile) {
-              user = {
-                name: profile.name || 'Unknown User',
-                email: profile.email || 'No email'
-              };
-            } else {
-              user = { 
-                name: `User ${attempt.user_id || attempt.profile_id || 'Unknown'}`, 
-                email: 'No email' 
-              };
-            }
-            
-            return {
-              ...attempt,
-              profile: profile || { name: 'Unknown Profile', email: 'No email', role: 'No role' },
-              user: user || { name: 'Unknown User', email: 'No email' }
+      const enrichedAttempts = filteredAttempts.map((attempt) => {
+        try {
+          // Get user data from locally cached users list
+          const userData = (users || []).find(u => String(u.id) === String(attempt.user_id)) || null;
+          
+          // Find profile by name (since users now store profile name as string)
+          let profile = null;
+          if (userData && userData.profile) {
+            profile = profiles.find(p => p.name === userData.profile);
+          }
+          
+          // Fallback: try to find by profile_id if available
+          if (!profile && attempt.profile_id) {
+            profile = profiles.find(p => p.id === attempt.profile_id);
+          }
+          
+          // Create user object with actual user data or attempt.user fallback
+          let user = null;
+          if (userData) {
+            user = {
+              name: userData.user_name || userData.email || 'Unknown User',
+              email: userData.email || 'No email'
             };
-          } catch (err) {
-            console.error('Failed to fetch user data for attempt:', attempt.id, err);
-            return {
-              ...attempt,
-              profile: { name: 'Unknown Profile', email: 'No email', role: 'No role' },
-              user: { name: 'Unknown User', email: 'No email' }
+          } else if (attempt.user) {
+            user = {
+              name: attempt.user.name || attempt.user.user_name || 'Unknown User',
+              email: attempt.user.email || 'No email'
+            };
+          } else if (profile) {
+            user = {
+              name: profile.name || 'Unknown User',
+              email: profile.email || 'No email'
+            };
+          } else {
+            user = { 
+              name: `User ${attempt.user_id || attempt.profile_id || 'Unknown'}`, 
+              email: 'No email' 
             };
           }
-        })
-      );
+          
+          return {
+            ...attempt,
+            profile: profile || { name: 'Unknown Profile', email: 'No email', role: 'No role' },
+            user: user || { name: 'Unknown User', email: 'No email' }
+          };
+        } catch (err) {
+          console.error('Failed to resolve user data for attempt:', attempt.id, err);
+          return {
+            ...attempt,
+            profile: { name: 'Unknown Profile', email: 'No email', role: 'No role' },
+            user: attempt.user || { name: 'Unknown User', email: 'No email' }
+          };
+        }
+      });
       
       setQuizAttempts(enrichedAttempts);
     } catch (err) {

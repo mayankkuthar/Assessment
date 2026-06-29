@@ -876,7 +876,7 @@ function App() {
                 ) : (
                   // User Mode
                   <>
-                    {tab === 0 && <UserDashboard user={user} userStats={userStats} />}
+                    {tab === 0 && <UserDashboard user={user} userStats={userStats} setTab={setTab} />}
                     {tab === 1 && (
                       <Box sx={{ width: '100%' }}>
                         <Typography variant="h4" sx={{ mb: 3 }}>Quiz Records</Typography>
@@ -905,9 +905,6 @@ function App() {
                                         hour: '2-digit',
                                         minute: '2-digit'
                                       })}
-                                    </Typography>
-                                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                                      Score: {attempt.score}% ({attempt.correct_answers}/{attempt.total_questions})
                                     </Typography>
                                     <Button
                                       variant="contained"
