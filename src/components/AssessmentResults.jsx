@@ -1,39 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Chip,
-  Divider,
-  IconButton,
-  Tooltip,
-  CircularProgress,
-  Alert,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
-} from '@mui/material';
-import {
+  Assessment as AssessmentIcon,
   Quiz as QuizIcon,
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Score as ScoreIcon,
-  CalendarToday as CalendarIcon,
-  ArrowBack as ArrowBackIcon,
-  Assessment as AssessmentIcon
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useDatabase } from '../hooks/useDatabase';
+import './AssessmentResults.css';
 
 const AssessmentResults = () => {
   const [selectedQuiz, setSelectedQuiz] = useState(null);
@@ -41,8 +13,47 @@ const AssessmentResults = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [quizPackets, setQuizPackets] = useState([]);
+  const [questionCounts, setQuestionCounts] = useState({});
 
-  const { quizzes, packets, profiles, loading: dataLoading, error: dataError } = useDatabase();
+  const { quizzes, packets, profiles, users, loading: dataLoading, error: dataError } = useDatabase();
+
+  // Fetch the number of questions for each quiz (sum of questions across its packets)
+  useEffect(() => {
+    if (!quizzes || quizzes.length === 0) return;
+
+    let cancelled = false;
+
+    const loadQuestionCounts = async () => {
+      try {
+        const entries = await Promise.all(
+          quizzes.map(async (quiz) => {
+            try {
+              const response = await fetch(`/api/quiz-packets/${quiz.id}`);
+              if (!response.ok) return [quiz.id, 0];
+              const packetsData = await response.json();
+              const count = packetsData.reduce(
+                (sum, packet) => sum + (packet.questions ? packet.questions.length : 0),
+                0
+              );
+              return [quiz.id, count];
+            } catch {
+              return [quiz.id, 0];
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setQuestionCounts(Object.fromEntries(entries));
+        }
+      } catch (err) {
+        console.warn('Failed to load question counts:', err);
+      }
+    };
+
+    loadQuestionCounts();
+
+    return () => { cancelled = true; };
+  }, [quizzes]);
 
   // Fetch attempts for a specific quiz
   const fetchQuizAttempts = async (quizId) => {
@@ -51,13 +62,13 @@ const AssessmentResults = () => {
     
     try {
       // First get the quiz packets to know what columns to show
-      const packetsResponse = await fetch(`http://65.1.6.81:3001/api/quiz-packets/${quizId}`);
+      const packetsResponse = await fetch(`/api/quiz-packets/${quizId}`);
       if (packetsResponse.ok) {
         const quizPacketsData = await packetsResponse.json();
         setQuizPackets(quizPacketsData);
       }
 
-      const response = await fetch(`http://65.1.6.81:3001/api/quiz-attempts`);
+      const response = await fetch(`/api/quiz-attempts`);
       if (!response.ok) {
         throw new Error('Failed to fetch quiz attempts');
       }
@@ -65,70 +76,63 @@ const AssessmentResults = () => {
       const allAttempts = await response.json();
       
       // Filter attempts for this specific quiz
-      const quizAttempts = allAttempts.filter(attempt => attempt.quiz_id === quizId);
+      const filteredAttempts = allAttempts.filter(attempt => String(attempt.quiz_id) === String(quizId));
       
       // Enrich attempts with user and profile data
-      const enrichedAttempts = await Promise.all(
-        quizAttempts.map(async (attempt) => {
-          try {
-            // Fetch actual user data for each attempt
-            let userData = null;
-            if (attempt.user_id) {
-              const userResponse = await fetch(`http://65.1.6.81:3001/api/users/${attempt.user_id}`);
-              if (userResponse.ok) {
-                userData = await userResponse.json();
-              }
-            }
-            
-            // Find profile by name (since users now store profile name as string)
-            let profile = null;
-            if (userData && userData.profile) {
-              // Find profile by the name stored in user data
-              profile = profiles.find(p => p.name === userData.profile);
-            }
-            
-            // Fallback: try to find by profile_id if available
-            if (!profile && attempt.profile_id) {
-              profile = profiles.find(p => p.id === attempt.profile_id);
-            }
-            
-            // Create user object with actual user data
-            let user = null;
-            if (userData) {
-              user = {
-                name: userData.user_name || userData.email || 'Unknown User',
-                email: userData.email || 'No email'
-              };
-            } else if (profile) {
-              // Fallback to profile data if no user data
-              user = {
-                name: profile.name || 'Unknown User',
-                email: profile.email || 'No email'
-              };
-            } else {
-              // Last resort: show user ID
-              user = { 
-                name: `User ${attempt.user_id || attempt.profile_id || 'Unknown'}`, 
-                email: 'No email' 
-              };
-            }
-            
-            return {
-              ...attempt,
-              profile: profile || { name: 'Unknown Profile', email: 'No email', role: 'No role' },
-              user: user || { name: 'Unknown User', email: 'No email' }
+      const enrichedAttempts = filteredAttempts.map((attempt) => {
+        try {
+          // Get user data from locally cached users list
+          const userData = (users || []).find(u => String(u.id) === String(attempt.user_id)) || null;
+          
+          // Find profile by name (since users now store profile name as string)
+          let profile = null;
+          if (userData && userData.profile) {
+            profile = profiles.find(p => p.name === userData.profile);
+          }
+          
+          // Fallback: try to find by profile_id if available
+          if (!profile && attempt.profile_id) {
+            profile = profiles.find(p => p.id === attempt.profile_id);
+          }
+          
+          // Create user object with actual user data or attempt.user fallback
+          let user = null;
+          if (userData) {
+            user = {
+              name: userData.user_name || userData.email || 'Unknown User',
+              email: userData.email || 'No email'
             };
-          } catch (err) {
-            console.error('Failed to fetch user data for attempt:', attempt.id, err);
-            // Return attempt with fallback data
-            return {
-              ...attempt,
-              profile: { name: 'Unknown Profile', email: 'No email', role: 'No role' },
-              user: { name: 'Unknown User', email: 'No email' }
+          } else if (attempt.user) {
+            user = {
+              name: attempt.user.name || attempt.user.user_name || 'Unknown User',
+              email: attempt.user.email || 'No email'
+            };
+          } else if (profile) {
+            user = {
+              name: profile.name || 'Unknown User',
+              email: profile.email || 'No email'
+            };
+          } else {
+            user = { 
+              name: `User ${attempt.user_id || attempt.profile_id || 'Unknown'}`, 
+              email: 'No email' 
             };
           }
-        })
-      );
+          
+          return {
+            ...attempt,
+            profile: profile || { name: 'Unknown Profile', email: 'No email', role: 'No role' },
+            user: user || { name: 'Unknown User', email: 'No email' }
+          };
+        } catch (err) {
+          console.error('Failed to resolve user data for attempt:', attempt.id, err);
+          return {
+            ...attempt,
+            profile: { name: 'Unknown Profile', email: 'No email', role: 'No role' },
+            user: attempt.user || { name: 'Unknown User', email: 'No email' }
+          };
+        }
+      });
       
       setQuizAttempts(enrichedAttempts);
     } catch (err) {
@@ -150,12 +154,23 @@ const AssessmentResults = () => {
     setQuizPackets([]);
   };
 
+  // Estimate the time needed to complete a quiz based on its question count.
+  // Each question is assumed to take up to 40 seconds to answer.
+  // The exact estimate is rounded to the nearest 5-minute boundary and shown
+  // as a fuzzy range (e.g. 7 min -> "<5 mins", 34 min -> ">30 mins").
+  const estimateTimeLimit = (questionCount) => {
+    if (!questionCount || questionCount <= 0) return 'N/A';
+    const maxMinutes = Math.ceil((questionCount * 40) / 60);
+    let rounded = Math.round(maxMinutes / 5) * 5;
+    if (rounded < 5) rounded = 5;
+    if (rounded >= 30) return '<30 mins';
+    return `<${rounded} mins`;
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Not submitted';
-    
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Invalid date';
-    
     return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -165,76 +180,36 @@ const AssessmentResults = () => {
     });
   };
 
-
-
   // Get performance level based on marks using custom scoring scale
   const getPerformanceLevel = (marks, packetName) => {
-    // Try to get custom scaling from localStorage for this packet
     try {
       const savedScaling = localStorage.getItem('packetScaling_' + packetName);
       if (savedScaling) {
         const customScale = JSON.parse(savedScaling);
         if (customScale.enabled && customScale.scales && customScale.scales.length > 0) {
-          // Use custom scale for this packet
           const level = customScale.scales.find(range => marks >= range.min && marks <= range.max);
-          if (level) {
-            return level;
-          }
+          if (level) return level;
         }
       }
     } catch (error) {
       console.warn('Failed to parse custom scaling for packet:', packetName, error);
     }
     
-    // Fallback to default scoring scale
     const defaultScale = [
-      { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚" },
-      { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊" },
-      { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯" },
-      { min: 9, max: 12, label: "Excellent", color: "#4ecdc4", image: "🏆" }
+      { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "" },
+      { min: 3, max: 5, label: "Average", color: "#895BF5", image: "" },
+      { min: 6, max: 8, label: "Good", color: "#895BF5", image: "" },
+      { min: 9, max: 12, label: "Excellent", color: "#895BF5", image: "" }
     ];
     
-    // Find the performance level for the given marks
     const level = defaultScale.find(range => marks >= range.min && marks <= range.max);
-    return level || defaultScale[0]; // Return first level if no match found
-  };
-
-  // Calculate overall performance level for the entire quiz attempt
-  const getOverallPerformanceLevel = (attempt) => {
-    if (attempt.packet_marks && Object.keys(attempt.packet_marks).length > 0) {
-      // Calculate total marks and find overall performance
-      const totalMarks = attempt.total_marks || 0;
-      const totalQuestions = attempt.total_questions || 0;
-      
-      // Use a default scale for overall performance (can be customized later)
-      const overallScale = [
-        { min: 0, max: 10, label: "Needs Improvement", color: "#ff6b6b", image: "📚" },
-        { min: 11, max: 20, label: "Average", color: "#ffd93d", image: "📊" },
-        { min: 21, max: 30, label: "Good", color: "#6bcf7f", image: "🎯" },
-        { min: 31, max: 50, label: "Excellent", color: "#4ecdc4", image: "🏆" }
-      ];
-      
-      const level = overallScale.find(range => totalMarks >= range.min && totalMarks <= range.max);
-      return {
-        level: level || overallScale[0],
-        totalMarks,
-        totalQuestions
-      };
-    }
-    
-    // Fallback for old data
-    return {
-      level: { label: "Unknown", color: "#999", image: "❓" },
-      totalMarks: 0,
-      totalQuestions: 0
-    };
+    return level || defaultScale[0];
   };
 
   // Calculate packet-based scores for an attempt
   const calculatePacketScores = (attempt) => {
     const packetScores = {};
     
-    // Use packet_marks (new marks-based system)
     if (attempt.packet_marks && Object.keys(attempt.packet_marks).length > 0) {
       quizPackets.forEach(packet => {
         const packetData = attempt.packet_marks[packet.name];
@@ -253,7 +228,6 @@ const AssessmentResults = () => {
         }
       });
     } else {
-      // Fallback for attempts without packet_marks
       quizPackets.forEach(packet => {
         packetScores[packet.id] = {
           marks: 0,
@@ -266,301 +240,207 @@ const AssessmentResults = () => {
     return packetScores;
   };
 
+  // ── Loading state ──────────────────────────────────────────
   if (dataLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
+      <div className="results-spinner-wrap">
+        <div className="results-spinner" />
+      </div>
     );
   }
 
+  // ── Error state ────────────────────────────────────────────
   if (dataError) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        Error loading data: {dataError}
-      </Alert>
+      <div className="assessment-results">
+        <div className="report-alert">Error loading data: {dataError}</div>
+      </div>
     );
   }
 
-  // If a quiz is selected, show the attempts view
+  // ── Detail view (quiz selected) ────────────────────────────
   if (selectedQuiz) {
     return (
-      <Box sx={{ p: 3 }}>
+      <div className="assessment-results">
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <IconButton onClick={handleBackToQuizzes} sx={{ mr: 2 }}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Box>
-            <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <AssessmentIcon sx={{ mr: 2, color: 'primary.main' }} />
+        <div className="results-header" style={{ flexWrap: 'wrap' }}>
+          <button className="results-back-btn" onClick={handleBackToQuizzes} style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}>
+            <ArrowBackIcon style={{ color: '#fff' }} />
+          </button>
+          <div className="results-header__text">
+            <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AssessmentIcon style={{ width: 28, height: 28 }} />
               Assessment Results: {selectedQuiz.name}
-            </Typography>
-                         <Typography variant="body1" color="text.secondary">
-               View all attempt records for this quiz with performance levels and packet-by-packet analysis
-             </Typography>
-          </Box>
-        </Box>
+            </h1>
+            <p>View all attempt records for this quiz with performance levels and packet-by-packet analysis</p>
+          </div>
+        </div>
 
-        {/* Quiz Info Card */}
-        <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-          <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  Quiz Details
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Description:</strong> {selectedQuiz.description || 'No description'}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Time Limit:</strong> {selectedQuiz.time_limit ? `${selectedQuiz.time_limit} minutes` : 'No time limit'}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Passing Score:</strong> {selectedQuiz.passing_score ? `${selectedQuiz.passing_score}%` : 'Not set'}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  Statistics
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Attempts:</strong> {quizAttempts.length}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Packets:</strong> {quizPackets.length}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Completion Rate:</strong> {
-                    quizAttempts.length > 0
-                      ? `${quizAttempts.filter(a => a.status === 'completed').length}/${quizAttempts.length}`
-                      : 'No attempts'
-                  }
-                </Typography>
+        {/* Quiz Info Banner */}
+        <div className="results-info-banner">
+          <div>
+            <h3>Quiz Details</h3>
+            <p><strong>Description:</strong> {selectedQuiz.description || 'No description'}</p>
+            <p><strong>Time Limit:</strong> {estimateTimeLimit(quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0))}</p>
+            <p><strong>No. of Questions:</strong> {quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0)}</p>
+          </div>
+          <div>
+            <h3>Statistics</h3>
+            <p><strong>Total Attempts:</strong> {quizAttempts.length}</p>
+            <p><strong>Packets:</strong> {quizPackets.length}</p>
+            <p><strong>Completion Rate:</strong> {
+              quizAttempts.length > 0
+                ? `${quizAttempts.filter(a => a.status === 'completed').length}/${quizAttempts.length}`
+                : 'No attempts'
+            }</p>
+          </div>
+        </div>
 
-
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Attempts List */}
+        {/* Attempts Table */}
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
+          <div className="results-spinner-wrap">
+            <div className="results-spinner" />
+          </div>
         ) : error ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <div className="report-alert">{error}</div>
         ) : quizAttempts.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
-            <AssessmentIcon sx={{ fontSize: '3rem', color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-              No attempts found
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              This quiz hasn't been attempted by any users yet.
-            </Typography>
-          </Paper>
+          <div className="results-empty">
+            <AssessmentIcon />
+            <h3>No attempts found</h3>
+            <p>This quiz hasn't been attempted by any users yet.</p>
+          </div>
         ) : (
-          <TableContainer component={Paper} sx={{ boxShadow: 3, overflowX: 'auto' }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-                  <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Profile</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Organization</TableCell> {/* Added Organization column */}
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
-                  {/* Dynamic packet columns */}
+          <div className="results-table-container">
+            <table className="results-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Profile</th>
+                  <th>Organization</th>
+                  <th>Status</th>
+                  <th>Completed</th>
                   {quizPackets.map(packet => (
-                    <TableCell key={packet.id} sx={{ fontWeight: 600, minWidth: 120 }}>
-                      {packet.name}
-                    </TableCell>
+                    <th key={packet.id} style={{ minWidth: 120 }}>{packet.name}</th>
                   ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
+                </tr>
+              </thead>
+              <tbody>
                 {quizAttempts.map((attempt) => {
                   const packetScores = calculatePacketScores(attempt);
                   
                   return (
-                    <TableRow key={attempt.id} hover>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {attempt.user?.name || 'Unknown User'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {attempt.user?.email || 'No email'}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {attempt.profile?.name || 'Unknown Profile'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {attempt.profile?.role || 'No role'}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      {/* Added Organization cell */}
-                      <TableCell>
-                        <Chip 
-                          label={attempt.user?.organization || 'Not specified'} 
-                          size="small" 
-                          color={attempt.user?.organization === 'HappiMynd' ? 'primary' : 'secondary'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={attempt.status || 'Unknown'}
-                          color={attempt.status === 'completed' ? 'success' : 'warning'}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatDate(attempt.completed_at)}
-                        </Typography>
-                      </TableCell>
-                      {/* Packet score columns */}
+                    <tr key={attempt.id}>
+                      <td>
+                        <p className="results-table__user-name">{attempt.user?.name || 'Unknown User'}</p>
+                        <p className="results-table__user-email">{attempt.user?.email || 'No email'}</p>
+                      </td>
+                      <td>
+                        <p className="results-table__user-name">{attempt.profile?.name || 'Unknown Profile'}</p>
+                        <p className="results-table__user-email">{attempt.profile?.role || 'No role'}</p>
+                      </td>
+                      <td>
+                        <span className="results-badge results-badge--outline">
+                          {attempt.user?.organization || 'Not specified'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`results-badge ${attempt.status === 'completed' ? 'results-badge--completed' : 'results-badge--warning'}`}>
+                          {attempt.status || 'Unknown'}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--color-secondary)' }}>
+                        {formatDate(attempt.completed_at)}
+                      </td>
                       {quizPackets.map(packet => {
                         const packetScore = packetScores[packet.id];
                         return (
-                          <TableCell key={packet.id}>
-                            <Box sx={{ textAlign: 'center' }}>
-                              <Chip
-                                label={`${packetScore.performanceLevel.image} ${packetScore.performanceLevel.label}`}
-                                sx={{
-                                  backgroundColor: packetScore.performanceLevel.color,
-                                  color: 'white',
-                                  fontWeight: 'bold',
-                                  mb: 0.5
-                                }}
-                                size="small"
-                              />
-                              <Typography variant="caption" color="text.secondary" display="block">
-                                {packetScore.questions} questions
-                              </Typography>
-                            </Box>
-                          </TableCell>
+                          <td key={packet.id} className="results-performance-cell">
+                            <span
+                              className="results-performance-badge"
+                              style={{ backgroundColor: packetScore.performanceLevel.color }}
+                            >
+                              {packetScore.performanceLevel.label}
+                            </span>
+                            <br />
+                            <span className="results-performance-sub">
+                              {packetScore.questions} questions
+                            </span>
+                          </td>
                         );
                       })}
-                    </TableRow>
+                    </tr>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              </tbody>
+            </table>
+          </div>
         )}
-      </Box>
+      </div>
     );
   }
 
-  // Show quizzes grid
+  // ── Quiz selection grid ────────────────────────────────────
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="assessment-results">
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <AssessmentIcon sx={{ mr: 2, color: 'primary.main' }} />
-          Assessment Results
-        </Typography>
-                 <Typography variant="body1" color="text.secondary">
-           Click on any quiz to view detailed attempt records with performance levels and packet-by-packet analysis
-         </Typography>
-      </Box>
+      <div className="results-header">
+        <div className="results-header__icon">
+          <AssessmentIcon />
+        </div>
+        <div className="results-header__text">
+          <h1>Assessment Results</h1>
+          <p>Click on any quiz to view detailed attempt records with performance levels and packet-by-packet analysis</p>
+        </div>
+      </div>
 
       {/* Quizzes Grid */}
       {quizzes.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <QuizIcon sx={{ fontSize: '3rem', color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-            No quizzes available
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Create some quizzes first to view assessment results.
-          </Typography>
-        </Paper>
+        <div className="results-empty">
+          <QuizIcon />
+          <h3>No quizzes available</h3>
+          <p>Create some quizzes first to view assessment results.</p>
+        </div>
       ) : (
-        <Grid container spacing={3}>
+        <div className="results-quiz-grid">
           {quizzes.map((quiz) => (
-            <Grid item xs={12} sm={6} md={4} key={quiz.id}>
-              <Card 
-                sx={{ 
-                  height: '100%',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
-                  }
-                }}
-                onClick={() => handleQuizClick(quiz)}
-              >
-                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Box sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      borderRadius: '50%',
-                      p: 1,
-                      display: 'flex',
-                      mr: 2
-                    }}>
-                      <QuizIcon sx={{ color: 'white', fontSize: '1.5rem' }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
-                      {quiz.name}
-                    </Typography>
-                  </Box>
-                  
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flex: 1 }}>
-                    {quiz.description || 'No description available'}
-                  </Typography>
-                  
-                  <Box sx={{ mt: 'auto' }}>
-                    <Divider sx={{ mb: 2 }} />
-                    <Grid container spacing={1}>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="text.secondary">
-                          Time Limit
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {quiz.time_limit ? `${quiz.time_limit} min` : 'No limit'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="text.secondary">
-                          Passing Score
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {quiz.passing_score ? `${quiz.passing_score}%` : 'Not set'}
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                    
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      sx={{ mt: 2 }}
-                      startIcon={<AssessmentIcon />}
-                    >
-                      View Results
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+            <div
+              key={quiz.id}
+              className="results-quiz-card"
+              onClick={() => handleQuizClick(quiz)}
+            >
+              <div className="results-quiz-card__header">
+                <div className="results-quiz-card__icon">
+                  <img src="/happimynd_logo.png" alt="HappiMynd" />
+                </div>
+                <h3 className="results-quiz-card__name">{quiz.name}</h3>
+              </div>
+              
+              <p className="results-quiz-card__desc">
+                {quiz.description || 'No description available'}
+              </p>
+              
+              <div className="results-quiz-card__footer">
+                <div className="results-quiz-card__meta">
+                  <div>
+                    <span className="results-quiz-card__meta-label">Time Limit</span>
+                    <span className="results-quiz-card__meta-value">{questionCounts[quiz.id] != null ? estimateTimeLimit(questionCounts[quiz.id]) : '—'}</span>
+                  </div>
+                  <div>
+                    <span className="results-quiz-card__meta-label">No. of Questions</span>
+                    <span className="results-quiz-card__meta-value">{questionCounts[quiz.id] ?? '—'}</span>
+                  </div>
+                </div>
+                
+                <button className="results-quiz-card__action-btn">
+                  <AssessmentIcon style={{ width: 18, height: 18 }} />
+                  View Results
+                </button>
+              </div>
+            </div>
           ))}
-        </Grid>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

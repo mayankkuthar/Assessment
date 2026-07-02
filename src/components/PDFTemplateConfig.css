@@ -1,0 +1,302 @@
+/* src/components/PDFTemplateConfig.css */
+
+.pdf-config-container {
+  width: 100%;
+  max-width: 100%;
+  padding: var(--space-4);
+  background-color: var(--color-bg);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .pdf-config-container {
+    padding: var(--space-6);
+  }
+}
+
+/* Page Header Block */
+.pdf-config-header {
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: relative;
+}
+
+.pdf-config-header__title {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+@media (min-width: 640px) {
+  .pdf-config-header__title {
+    font-size: var(--text-4xl);
+  }
+}
+
+.pdf-config-header__subtitle {
+  font-size: var(--text-sm);
+  opacity: 0.9;
+  text-align: center;
+  margin: 0;
+}
+
+/* Toolbar & Selector Group */
+.pdf-config-toolbar {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@media (min-width: 768px) {
+  .pdf-config-toolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.pdf-config-search {
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid var(--color-border);
+}
+
+.pdf-config-search svg {
+  color: var(--color-secondary);
+  margin-right: var(--space-2);
+  width: 18px;
+  height: 18px;
+}
+
+.pdf-config-search input {
+  border: none;
+  padding: 10px 0;
+  outline: none;
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+  width: 100%;
+  background: transparent;
+}
+
+.pdf-config-select-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.pdf-config-select {
+  padding: 10px var(--space-4);
+  font-size: var(--text-sm);
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.pdf-config-select option {
+  background-color: var(--color-surface);
+  color: var(--color-fg);
+}
+
+/* Layout System */
+.pdf-config-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .pdf-config-layout {
+    grid-template-columns: 360px 1fr;
+  }
+}
+
+/* Left panel (Tabs & Sidebar settings) */
+.pdf-config-sidebar {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-config-sidebar__header {
+  background: var(--color-primary);
+  color: #ffffff;
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.pdf-config-sidebar__title {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  margin: 0 0 var(--space-1);
+}
+
+.pdf-config-sidebar__subtitle {
+  font-size: var(--text-xs);
+  opacity: 0.8;
+  margin: 0;
+}
+
+/* Sidebar Custom Tabs */
+.pdf-config-tabs-nav {
+  display: flex;
+  overflow-x: auto;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  scrollbar-width: none;
+}
+
+.pdf-config-tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.pdf-config-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.pdf-config-tab-btn:hover {
+  color: var(--color-primary);
+  background-color: rgba(137, 91, 245, 0.05);
+}
+
+.pdf-config-tab-btn--active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background-color: var(--color-surface);
+}
+
+.pdf-config-tab-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.pdf-config-panel-content {
+  padding: var(--space-5);
+  max-height: 700px;
+  overflow-y: auto;
+}
+
+/* Right Content Panels */
+.pdf-config-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.pdf-config-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.pdf-config-card__header {
+  padding: var(--space-4);
+  color: #ffffff;
+  font-size: var(--text-base);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.pdf-config-card__header--preview {
+  background: var(--color-primary);
+}
+
+.pdf-config-card__header--history {
+  background: var(--color-primary);
+}
+
+.pdf-config-card__header--stats {
+  background: var(--color-primary);
+}
+
+.pdf-config-card__header svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pdf-config-card__content {
+  padding: var(--space-5);
+}
+
+/* Floating Actions Button Container */
+.pdf-config-actions-dock {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: 50;
+}
+
+.pdf-config-action-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.pdf-config-action-fab:hover {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 12px 28px rgba(137, 91, 245, 0.4);
+}
+
+.pdf-config-action-fab svg {
+  width: 24px;
+  height: 24px;
+}

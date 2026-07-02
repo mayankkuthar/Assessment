@@ -4,6 +4,63 @@ import path from 'path';
 
 const DB_PATH = path.join(process.cwd(), 'assessment.db');
 
+export function generateOnboardingCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    // Check if code already exists in DB (only if db is initialized)
+    if (db) {
+      try {
+        const stmt = db.prepare('SELECT COUNT(*) as count FROM organizations WHERE onboarding_code = ?');
+        const result = stmt.get(code);
+        if (result.count === 0) {
+          isUnique = true;
+        }
+      } catch (e) {
+        // Table or column might not exist yet during initial schema run
+        isUnique = true;
+      }
+    } else {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
+export function generateUniqueEmployeeCode(dbInstance = null) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  const targetDb = dbInstance || db;
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (targetDb) {
+      try {
+        const stmt = targetDb.prepare('SELECT COUNT(*) as count FROM employees WHERE code = ?');
+        const result = stmt.get(code);
+        if (result.count === 0) {
+          isUnique = true;
+        }
+      } catch (e) {
+        isUnique = true;
+      }
+    } else {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Initialize database connection
 let db;
 try {
@@ -24,6 +81,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('user', 'admin')) DEFAULT 'user',
+    organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,6 +95,31 @@ CREATE TABLE IF NOT EXISTS user_roles (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id)
+);
+
+-- Create organizations table
+CREATE TABLE IF NOT EXISTS organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
+    onboarding_code TEXT UNIQUE NOT NULL,
+    onboarded_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create employees table
+CREATE TABLE IF NOT EXISTS employees (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    code TEXT UNIQUE,
+    metadata TEXT, -- JSON stored as text
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(organization_id, email)
 );
 
 -- Create profiles table
@@ -113,7 +196,12 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     started_at TEXT DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT,
     answers TEXT, -- JSON stored as text
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    status TEXT DEFAULT 'completed',
+    current_question_index INTEGER DEFAULT 0,
+    packet_marks TEXT,
+    total_marks INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create sessions table for authentication
@@ -139,6 +227,9 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_employees_organization_id ON employees(organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_onboarding_code ON organizations(onboarding_code);
+CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id);
 
 -- Triggers for updated_at timestamp
 CREATE TRIGGER IF NOT EXISTS update_users_updated_at
@@ -151,6 +242,18 @@ CREATE TRIGGER IF NOT EXISTS update_user_roles_updated_at
     AFTER UPDATE ON user_roles
     BEGIN
         UPDATE user_roles SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_organizations_updated_at
+    AFTER UPDATE ON organizations
+    BEGIN
+        UPDATE organizations SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_employees_updated_at
+    AFTER UPDATE ON employees
+    BEGIN
+        UPDATE employees SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_profiles_updated_at
@@ -176,6 +279,12 @@ CREATE TRIGGER IF NOT EXISTS update_quizzes_updated_at
     BEGIN
         UPDATE quizzes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
+
+CREATE TRIGGER IF NOT EXISTS update_quiz_attempts_updated_at
+    AFTER UPDATE ON quiz_attempts
+    BEGIN
+        UPDATE quiz_attempts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
 `;
 
 // Sample data SQL
@@ -195,6 +304,102 @@ INSERT OR IGNORE INTO packets (id, name, description) VALUES
     ('${uuidv4()}', 'Technical Skills', 'Technical knowledge and problem solving');
 `;
 
+function runMigrations() {
+  try {
+    // 1. Check/Add onboarding_code to organizations table
+    const tableInfoOrgs = db.prepare("PRAGMA table_info(organizations)").all();
+    const hasOnboardingCode = tableInfoOrgs.some(c => c.name === 'onboarding_code');
+    if (!hasOnboardingCode) {
+      console.log('⚠️ Migrating database: Adding onboarding_code column to organizations...');
+      db.exec(`ALTER TABLE organizations ADD COLUMN onboarding_code TEXT;`);
+      
+      // Populate unique codes for any existing organizations that have NULL onboarding_code
+      const orgsWithoutCode = db.prepare('SELECT id FROM organizations WHERE onboarding_code IS NULL').all();
+      const updateCode = db.prepare('UPDATE organizations SET onboarding_code = ? WHERE id = ?');
+      for (const org of orgsWithoutCode) {
+        const code = generateOnboardingCode();
+        updateCode.run(code, org.id);
+      }
+      console.log(`✅ Migrated onboarding_code for ${orgsWithoutCode.length} existing organizations.`);
+    }
+
+    // 2. Check/Add organization_id to users table
+    const tableInfoUsers = db.prepare("PRAGMA table_info(users)").all();
+    const hasOrgId = tableInfoUsers.some(c => c.name === 'organization_id');
+    if (!hasOrgId) {
+      console.log('⚠️ Migrating database: Adding organization_id column to users...');
+      db.exec(`ALTER TABLE users ADD COLUMN organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL;`);
+      console.log('✅ Migrated organization_id column for users.');
+    }
+
+    // 3. Check/Add onboarded_at to organizations table
+    const tableInfoOrgs2 = db.prepare("PRAGMA table_info(organizations)").all();
+    const hasOnboardedAt = tableInfoOrgs2.some(c => c.name === 'onboarded_at');
+    if (!hasOnboardedAt) {
+      console.log('⚠️ Migrating database: Adding onboarded_at column to organizations...');
+      db.exec(`ALTER TABLE organizations ADD COLUMN onboarded_at TEXT;`);
+      db.exec(`UPDATE organizations SET onboarded_at = created_at;`);
+      console.log('✅ Migrated onboarded_at column for organizations.');
+    }
+
+    // 4. Check/Add code to employees table
+    const tableInfoEmployees = db.prepare("PRAGMA table_info(employees)").all();
+    const hasEmployeeCode = tableInfoEmployees.some(c => c.name === 'code');
+    if (!hasEmployeeCode) {
+      console.log('⚠️ Migrating database: Adding code column to employees...');
+      db.exec(`ALTER TABLE employees ADD COLUMN code TEXT;`);
+      
+      const employeesWithoutCode = db.prepare('SELECT id FROM employees WHERE code IS NULL').all();
+      const updateEmployeeCode = db.prepare('UPDATE employees SET code = ? WHERE id = ?');
+      for (const emp of employeesWithoutCode) {
+        const empCode = generateUniqueEmployeeCode(db);
+        updateEmployeeCode.run(empCode, emp.id);
+      }
+      console.log(`✅ Migrated code for ${employeesWithoutCode.length} existing employees.`);
+    }
+
+    // 5. Check/Add status, current_question_index, packet_marks, total_marks, updated_at to quiz_attempts table
+    const tableInfoAttempts = db.prepare("PRAGMA table_info(quiz_attempts)").all();
+    
+    const hasStatus = tableInfoAttempts.some(c => c.name === 'status');
+    if (!hasStatus) {
+      console.log('⚠️ Migrating database: Adding status column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN status TEXT DEFAULT 'completed';`);
+      console.log('✅ Migrated status column for quiz_attempts.');
+    }
+
+    const hasQIndex = tableInfoAttempts.some(c => c.name === 'current_question_index');
+    if (!hasQIndex) {
+      console.log('⚠️ Migrating database: Adding current_question_index column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN current_question_index INTEGER DEFAULT 0;`);
+      console.log('✅ Migrated current_question_index column for quiz_attempts.');
+    }
+
+    const hasPacketMarks = tableInfoAttempts.some(c => c.name === 'packet_marks');
+    if (!hasPacketMarks) {
+      console.log('⚠️ Migrating database: Adding packet_marks column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN packet_marks TEXT;`);
+      console.log('✅ Migrated packet_marks column for quiz_attempts.');
+    }
+
+    const hasTotalMarks = tableInfoAttempts.some(c => c.name === 'total_marks');
+    if (!hasTotalMarks) {
+      console.log('⚠️ Migrating database: Adding total_marks column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN total_marks INTEGER DEFAULT 0;`);
+      console.log('✅ Migrated total_marks column for quiz_attempts.');
+    }
+
+    const hasAttemptsUpdatedAt = tableInfoAttempts.some(c => c.name === 'updated_at');
+    if (!hasAttemptsUpdatedAt) {
+      console.log('⚠️ Migrating database: Adding updated_at column to quiz_attempts...');
+      db.exec(`ALTER TABLE quiz_attempts ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP;`);
+      console.log('✅ Migrated updated_at column for quiz_attempts.');
+    }
+  } catch (error) {
+    console.error('❌ Error running database migrations:', error);
+  }
+}
+
 // Initialize database with schema
 export function initializeDatabase() {
   try {
@@ -203,6 +408,9 @@ export function initializeDatabase() {
     // Execute schema creation
     db.exec(SCHEMA_SQL);
     console.log('✅ Database schema created successfully');
+    
+    // Run migrations
+    runMigrations();
     
     // Check if we need to insert sample data
     const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get();

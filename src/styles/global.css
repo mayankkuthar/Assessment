@@ -1,0 +1,129 @@
+/* src/styles/global.css */
+:root {
+  /* Brand */
+  --color-primary: #895BF5;
+  --color-primary-fg: #F2F0FF;
+  --color-secondary: #505058;
+  --color-secondary-fg: #FAFAFA;
+  --color-tertiary: #FAF5FF;
+  --color-accent-fg: #A655F7;
+
+  /* Neutral / Surface */
+  --color-bg: #F2F2F3;
+  --color-fg: #18181B;
+  --color-card: #FAFAFA;
+  --color-popover: #E4E4E7;
+  --color-muted: #D2D2D5;
+  --color-muted-fg: #18181B;
+  --color-border: #D2D2D5;
+  --color-input: #D2D2D5;
+  --color-surface: #FFFFFF;
+
+  /* Semantic */
+  --color-destructive: #DB2424;
+  --color-destructive-fg: #FEF1F1;
+  --color-ring: #895BF5;
+
+  /* Chart Palette */
+  --chart-1: #A68AF9;
+  --chart-2: #BF83FC;
+  --chart-3: #7D89F7;
+  --chart-4: #895BF5;
+  --chart-5: #727279;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-base: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+  --shadow-focus: 0 0 0 3px rgba(137, 91, 245, 0.20);
+
+  /* Spacing (8px grid) */
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px; --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  /* Typography Scale */
+  --text-xs: 12px;   --text-sm: 14px;  --text-base: 16px;
+  --text-lg: 18px;   --text-xl: 20px;  --text-2xl: 24px;
+  --text-4xl: 36px;  --text-5xl: 48px;
+
+  /* Animation */
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+}
+
+[data-theme="dark"], body.dark {
+  --color-primary: #A68AF9;
+  --color-primary-fg: #1A0B3D;
+  --color-secondary: #A1A1AA;
+  --color-secondary-fg: #FAFAFA;
+  --color-tertiary: #2A1052;
+  --color-accent-fg: #C9A6FF;
+
+  /* Layered neutrals: bg (deepest) < card < surface for visible depth */
+  --color-bg: #161618;
+  --color-fg: #FAFAFA;
+  --color-card: #1F1F23;
+  --color-surface: #27272B;
+  --color-popover: #2A2A30;
+  --color-muted: #34343A;
+  --color-muted-fg: #A1A1AA;
+  --color-border: #34343A;
+  --color-input: #34343A;
+
+  --color-destructive: #F87171;
+  --color-destructive-fg: #2A1212;
+  --color-ring: #A68AF9;
+
+  /* Shadows need higher opacity to read against dark surfaces */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
+  --shadow-focus: 0 0 0 3px rgba(166, 138, 249, 0.35);
+}
+
+/* Base Resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* The brand logo is a dark/colored PNG on a transparent background, so it
+   disappears on dark surfaces. In dark mode, sit it on a white chip (via a
+   box-shadow spread, which adds the backdrop without resizing the image or
+   shifting layout). Harmless where the logo already sits on a light area. */
+body.dark img[src*="happimynd_logo"] {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 6px #ffffff;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* General Layout Utilities */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

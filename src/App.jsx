@@ -22,6 +22,7 @@ import ListItem from '@mui/material/ListItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Divider from '@mui/material/Divider'
+import MenuIcon from '@mui/icons-material/Menu'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import Brightness4Icon from '@mui/icons-material/Brightness4'
 import Brightness7Icon from '@mui/icons-material/Brightness7'
@@ -35,6 +36,9 @@ import AssessmentIcon from '@mui/icons-material/Assessment'
 import HomeIcon from '@mui/icons-material/Home'
 import HistoryIcon from '@mui/icons-material/History'
 import VisibilityIcon from '@mui/icons-material/Visibility'
+import InsightsIcon from '@mui/icons-material/Insights'
+import DeleteIcon from '@mui/icons-material/Delete'
+import BusinessIcon from '@mui/icons-material/Business'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { Grid, Card, CardContent, Tooltip, Alert, CircularProgress } from '@mui/material'
@@ -45,30 +49,35 @@ import AssessmentResults from './components/AssessmentResults'
 import AssessmentReport from './components/AssessmentReport'
 import ReportViewer from './components/ReportViewer'
 import AuthPage from './components/AuthPage'
-import UserDashboard from './components/UserDashboard'
+import UserDashboard from './components/UserDashboard/UserDashboard'
 import AdminDashboard from './components/AdminDashboard'
 import PasswordReset from './components/PasswordReset'
 import PDFTemplateConfig from './components/PDFTemplateConfig'
+import ActiveTracking from './components/ActiveTracking'
+import OrganizationManager from './components/OrganizationManager'
 
 
 const drawerWidth = 220
 
-// Admin navigation items
+// Admin navigation items. The `permission` key maps to the dashboard "views"
+// granted to a member; the menu is filtered by these (see navItems below).
 const adminNavItems = [
-  { label: 'Admin Dashboard', icon: <PersonIcon /> },
-  { label: 'Profile Management', icon: <PeopleIcon /> },
-  { label: 'Packet Management', icon: <CategoryIcon /> },
-  { label: 'Quiz Builder', icon: <QuizIcon /> },
-  { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon /> },
-  { label: 'Assessment Results', icon: <AssessmentIcon /> },
-  { label: 'Assessment Report', icon: <AssessmentIcon /> },
-  { label: 'PDF Templates', icon: <ShareIcon /> },
+  { label: 'Admin Dashboard', icon: <PersonIcon />, permission: 'admin_dashboard' },
+  { label: 'Organization Management', icon: <BusinessIcon />, permission: 'organizations' },
+  { label: 'Profile Management', icon: <PeopleIcon />, permission: 'profiles' },
+  { label: 'Packet Management', icon: <CategoryIcon />, permission: 'packets' },
+  { label: 'Quiz Builder', icon: <QuizIcon />, permission: 'quiz_builder' },
+  { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon />, permission: 'assigned_quizzes' },
+  { label: 'Assessment Results', icon: <AssessmentIcon />, permission: 'results' },
+  { label: 'Assessment Report', icon: <AssessmentIcon />, permission: 'reports' },
+  { label: 'Active Tracking', icon: <InsightsIcon />, permission: 'active_tracking' },
+  { label: 'PDF Templates', icon: <ShareIcon />, permission: 'pdf_templates' },
 ]
 
 // User navigation items
 const userNavItems = [
-  { label: 'Home', icon: <HomeIcon /> },
-  { label: 'Quiz Records', icon: <HistoryIcon /> },
+  { label: 'Home', icon: <HomeIcon />, permission: 'home' },
+  { label: 'Quiz Records', icon: <HistoryIcon />, permission: 'quiz_records' },
 ]
 
 function App() {
@@ -97,6 +106,8 @@ function App() {
     removePacketsFromQuiz,
     assignQuizToProfiles,
     removeQuizAssignment,
+    assignQuizToUsers,
+    removeUserQuizAssignment,
     getQuizPackets,
     loadData,
     quizAssignments,
@@ -104,26 +115,85 @@ function App() {
     loadUserQuizAttempts,
     loadUserStats,
     userQuizAttempts,
-    userStats
+    userStats,
+    users,
+    organizations,
+    addOrganization,
+    updateOrganization,
+    deleteOrganization,
+    regenerateOnboardingCode,
+    employees,
+    loadEmployees,
+    importEmployees,
+    deleteEmployee
   } = useDatabase()
 
   // UI state
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true')
   const [tab, setTab] = useState(0)
   const [howToOpen, setHowToOpen] = useState(false)
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // Get navigation items based on user type
-  const navItems = isAdmin ? adminNavItems : userNavItems
+  // Assign Quizzes widget state
+  const [formQuizId, setFormQuizId] = useState('')
+  const [formTargetType, setFormTargetType] = useState('profile') // 'profile' or 'user'
+  const [formSelectedProfiles, setFormSelectedProfiles] = useState([])
+  const [formSelectedUsers, setFormSelectedUsers] = useState([])
 
-  // Sync darkMode with body class
+  const handleFormAssign = async () => {
+    if (!formQuizId) {
+      alert('Please select a quiz.')
+      return
+    }
+    try {
+      if (formTargetType === 'profile') {
+        if (formSelectedProfiles.length === 0) {
+          alert('Please select at least one profile.')
+          return
+        }
+        await assignQuizToProfiles(formQuizId, formSelectedProfiles)
+        alert('Quiz successfully assigned to selected profiles!')
+        setFormSelectedProfiles([])
+      } else {
+        if (formSelectedUsers.length === 0) {
+          alert('Please select at least one user.')
+          return
+        }
+        await assignQuizToUsers(formQuizId, formSelectedUsers)
+        alert('Quiz successfully assigned to selected users!')
+        setFormSelectedUsers([])
+      }
+      setFormQuizId('')
+      await loadData()
+    } catch (err) {
+      console.error('Error in handleFormAssign:', err)
+      alert('Failed to assign quiz. Please try again.')
+    }
+  }
+
+  // Get navigation items based on role + assigned permissions.
+  //   Super Admin            : sees every item.
+  //   Admin / User           : sees only items whose `permission` was granted.
+  //   Legacy (no permissions): falls back to the full set for their role so
+  //                            existing accounts keep working after migration.
+  const navItems = (() => {
+    const base = isAdmin ? adminNavItems : userNavItems
+    const perms = Array.isArray(user?.permissions) ? user.permissions : []
+    if (isSuperAdmin || perms.length === 0) return base
+    return base.filter(item => !item.permission || perms.includes(item.permission))
+  })()
+
+  // Sync darkMode with body class and persist the choice
   useEffect(() => {
     if (darkMode) {
       document.body.classList.add('dark')
     } else {
       document.body.classList.remove('dark')
     }
+    localStorage.setItem('darkMode', String(darkMode))
   }, [darkMode])
 
   // Auth state management - using local storage
@@ -145,20 +215,26 @@ function App() {
   // Check if user is admin
   const checkUserRole = async (user) => {
     try {
-      // For our SQLite setup, the user object already contains the role
+      // For our SQLite setup, the user object already contains the role.
+      // Super Admin (HappiMynd) and Admin both get the admin experience;
+      // Super Admin additionally unlocks restricted actions.
       if (user && user.role) {
-        const isAdminUser = user.role === 'admin';
+        const superAdminUser = user.role === 'super_admin';
+        const isAdminUser = superAdminUser || user.role === 'admin';
         setIsAdmin(isAdminUser);
-        console.log('✅ User role detected:', user.role, 'isAdmin:', isAdminUser);
+        setIsSuperAdmin(superAdminUser);
+        console.log('✅ User role detected:', user.role, 'isAdmin:', isAdminUser, 'isSuperAdmin:', superAdminUser);
         return;
       }
 
       // Fallback: try to get role from API
       console.warn('No role in user object, trying API fallback');
       setIsAdmin(false);
+      setIsSuperAdmin(false);
     } catch (err) {
       console.warn('Role check failed:', err)
       setIsAdmin(false)
+      setIsSuperAdmin(false)
     }
   }
 
@@ -315,7 +391,7 @@ function App() {
   const theme = createTheme({
     palette: {
       mode: darkMode ? 'dark' : 'light',
-      primary: { main: '#2563eb' },
+      primary: { main: '#895BF5' },
     },
     typography: {
       fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
@@ -391,74 +467,85 @@ function App() {
         <Route path="/report/:quizId/:attemptId" element={<ReportViewer />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="*" element={
-          <Box sx={{ display: 'flex' }}>
-            <Drawer
-              variant="permanent"
-              sx={{
-                width: drawerWidth,
-                flexShrink: 0,
-                [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
-              }}
-            >
-              <Toolbar />
-              <Box sx={{ overflow: 'auto', mt: 2 }}>
-                <List>
-                  {navItems.map((item, idx) => (
-                    <ListItem button key={item.label} selected={tab === idx} onClick={() => setTab(idx)}>
-                      <ListItemIcon>{item.icon}</ListItemIcon>
-                      <ListItemText primary={item.label} />
-                    </ListItem>
-                  ))}
-                </List>
-                <Divider sx={{ my: 2 }} />
-                <List>
-                  <ListItem button onClick={() => setHowToOpen(true)}>
-                    <ListItemIcon><InfoOutlinedIcon /></ListItemIcon>
-                    <ListItemText primary="How to Use" />
-                  </ListItem>
-                </List>
-              </Box>
-            </Drawer>
-            <Box
-              component="main"
-              sx={{
-                flexGrow: 1,
-                minHeight: '100vh',
-                background: 'inherit',
-                overflow: 'auto',
-              }}
-            >
-              <AppBar position="fixed" color="primary" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-                <Toolbar>
-                  <Typography variant="h6" sx={{ mr: 2 }}>
-                    Assessment Tool {isAdmin ? '(Admin)' : '(User)'} {useFallback && '(Fallback Mode)'}
-                  </Typography>
-                  <Box sx={{ flexGrow: 1 }} />
+          <div className="app-layout">
+            <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+              <div className="sidebar__header">
+                <img src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png" alt="HappiMynd" className="sidebar__logo" />
+                <span className="sidebar__title">Assessment Tool</span>
+              </div>
+              <nav className="sidebar__nav">
+                {navItems.map((item, idx) => (
+                  <div 
+                    key={item.label} 
+                    className={`nav-item ${tab === idx ? 'nav-item--active' : ''}`} 
+                    onClick={() => {
+                       setTab(idx)
+                       setSidebarOpen(false)
+                    }}
+                  >
+                    <div className="nav-item__icon">{item.icon}</div>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </nav>
+              <div className="sidebar__footer">
+                <div className="nav-item" onClick={() => setHowToOpen(true)}>
+                  <div className="nav-item__icon"><InfoOutlinedIcon /></div>
+                  <span>How to Use</span>
+                </div>
+              </div>
+            </aside>
+            <div className={`overlay ${sidebarOpen ? 'overlay--visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
+
+            <main className="main-content">
+              <header className="navbar">
+                <div className="navbar__left">
+                  <button className="menu-btn" onClick={() => setSidebarOpen(true)}>
+                    <MenuIcon />
+                  </button>
+                  <div className="navbar__title">
+                    {isAdmin ? 'Admin Dashboard' : 'User Dashboard'} {useFallback && '(Fallback Mode)'}
+                  </div>
+                </div>
+                <div className="navbar__right">
                   {isAdmin && (
-                    <Button component="label" color="inherit" variant="outlined" sx={{ mr: 2 }}>
+                    <label className="btn btn--outline" style={{ margin: 0, cursor: 'pointer' }}>
                       Upload Excel
                       <input type="file" accept=".xlsx,.xls" hidden onChange={uploadExcel} />
-                    </Button>
+                    </label>
                   )}
-                  <IconButton color="inherit" onClick={() => setDarkMode((prev) => !prev)}>
+                  <IconButton onClick={() => setDarkMode((prev) => !prev)} style={{ color: 'var(--color-fg)' }}>
                     {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
                   </IconButton>
-                  <Button color="inherit" onClick={() => {
+                  <button className="btn btn--secondary" onClick={() => {
                     localStorage.removeItem('currentUser');
                     setUser(null);
                     setIsAdmin(false);
-                  }}>Logout</Button>
-                </Toolbar>
-              </AppBar>
-              <Toolbar />
+                    setIsSuperAdmin(false);
+                  }}>Logout</button>
+                </div>
+              </header>
               
               {/* Content Area */}
-              <Box sx={{ mt: 2, width: '100%' }}>
+              <div className="content-area">
                 {isAdmin ? (
                   // Admin Mode
                   <>
                     {tab === 0 && <AdminDashboard />}
                     {tab === 1 && (
+                      <OrganizationManager 
+                        organizations={organizations} 
+                        addOrganization={addOrganization}
+                        updateOrganization={updateOrganization}
+                        deleteOrganization={deleteOrganization}
+                        regenerateOnboardingCode={regenerateOnboardingCode}
+                        employees={employees}
+                        loadEmployees={loadEmployees}
+                        importEmployees={importEmployees}
+                        deleteEmployee={deleteEmployee}
+                      />
+                    )}
+                    {tab === 2 && (
                       <ProfileManager 
                         profiles={profiles} 
                         addProfile={addProfile}
@@ -466,7 +553,7 @@ function App() {
                         deleteProfile={deleteProfile}
                       />
                     )}
-                    {tab === 2 && (
+                    {tab === 3 && (
                       <PacketManager 
                         packets={packets} 
                         addPacket={addPacket}
@@ -478,7 +565,7 @@ function App() {
                         onDataChange={loadData}
                       />
                     )}
-                    {tab === 3 && (
+                    {tab === 4 && (
                       <Box sx={{ width: '100%' }}>
                         <Box sx={{ mb: 2 }}>
                           <Button variant="contained" onClick={exportQuizzes}>Export Quizzes</Button>
@@ -488,7 +575,7 @@ function App() {
                           </Button>
                         </Box>
                         <QuizBuilder
-                          profiles={profiles}
+                          profiles={profiles.filter(p => p.name?.toUpperCase() !== 'SOLV')}
                           packets={packets}
                           savedQuizzes={savedQuizzes}
                           addQuiz={addQuiz}
@@ -497,6 +584,7 @@ function App() {
                           addPacketsToQuiz={addPacketsToQuiz}
                           removePacketsFromQuiz={removePacketsFromQuiz}
                           assignQuiz={assignQuiz}
+                          assignQuizToProfiles={assignQuizToProfiles}
                           removeQuizAssignment={removeQuizAssignment}
                           quizAssignments={quizAssignments}
                           onDataChange={loadData}
@@ -504,41 +592,190 @@ function App() {
                         />
                       </Box>
                     )}
-                    {tab === 4 && (
-                      <Box sx={{ width: '100%' }}>
-                        {profiles.length === 0 && <Typography>No profiles created.</Typography>}
-                        <Grid container spacing={3} sx={{ width: '100%' }}>
-                          {profiles.map(profile => (
+                    {tab === 5 && (
+                      <Box sx={{ width: '100%', mb: 4 }}>
+                        {/* Assign Quiz Card */}
+                        <Card variant="outlined" sx={{ mb: 4, p: 3, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)' }}>
+                          <CardContent sx={{ p: 0 }}>
+                            <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                              Assign Quizzes
+                            </Typography>
+                            
+                            <Grid container spacing={3} alignItems="flex-start">
+                              {/* 1. Select Quiz */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Select Quiz
+                                </Typography>
+                                <select
+                                  className="form-input"
+                                  value={formQuizId}
+                                  onChange={(e) => setFormQuizId(e.target.value)}
+                                  style={{ width: '100%', height: '42px', padding: '0 12px' }}
+                                >
+                                  <option value="">-- Select Quiz --</option>
+                                  {savedQuizzes.map((quiz) => (
+                                    <option key={quiz.id} value={quiz.id}>
+                                      {quiz.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Grid>
+
+                              {/* 2. Choose Target Type */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Assign Target Type
+                                </Typography>
+                                <select
+                                  className="form-input"
+                                  value={formTargetType}
+                                  onChange={(e) => setFormTargetType(e.target.value)}
+                                  style={{ width: '100%', height: '42px', padding: '0 12px' }}
+                                >
+                                  <option value="profile">By Profile Type</option>
+                                  <option value="user">By Specific User</option>
+                                </select>
+                              </Grid>
+
+                              {/* 3. Checkbox Checklist */}
+                              <Grid item xs={12} md={4}>
+                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                  Select Recipients
+                                </Typography>
+                                <div
+                                  style={{
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    padding: '10px',
+                                    maxHeight: '150px',
+                                    overflowY: 'auto',
+                                    background: 'var(--color-bg)'
+                                  }}
+                                >
+                                  {formTargetType === 'profile' ? (
+                                    profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').map((profile) => {
+                                      const isChecked = formSelectedProfiles.includes(profile.id);
+                                      return (
+                                        <label key={profile.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setFormSelectedProfiles([...formSelectedProfiles, profile.id]);
+                                              } else {
+                                                setFormSelectedProfiles(formSelectedProfiles.filter(id => id !== profile.id));
+                                              }
+                                            }}
+                                          />
+                                          {profile.name}
+                                        </label>
+                                      );
+                                    })
+                                  ) : (
+                                    users.filter(u => u.role !== 'admin' && u.role !== 'super_admin').map((u) => {
+                                      const isChecked = formSelectedUsers.includes(u.id);
+                                      return (
+                                        <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '6px', fontSize: '14px' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setFormSelectedUsers([...formSelectedUsers, u.id]);
+                                              } else {
+                                                setFormSelectedUsers(formSelectedUsers.filter(id => id !== u.id));
+                                              }
+                                            }}
+                                          />
+                                          {u.user_name || u.email} ({u.profile || 'No Profile'})
+                                        </label>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </Grid>
+                            </Grid>
+                            
+                            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                              <Button
+                                variant="contained"
+                                onClick={handleFormAssign}
+                                disabled={
+                                  !formQuizId ||
+                                  (formTargetType === 'profile' && formSelectedProfiles.length === 0) ||
+                                  (formTargetType === 'user' && formSelectedUsers.length === 0)
+                                }
+                                sx={{
+                                  background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
+                                  fontWeight: 700
+                                }}
+                              >
+                                Assign Quiz
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+
+                        {/* Title for profile assignments */}
+                        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+                          Assignments by Profile
+                        </Typography>
+
+                        {profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').length === 0 && <Typography color="text.secondary">No profiles created.</Typography>}
+                        <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
+                          {profiles.filter(p => p.name?.toUpperCase() !== 'SOLV').map(profile => (
                             <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                               <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                                 <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
-                                  <Typography variant="h6" sx={{ mb: 1 }}>{profile.name} <Typography component="span" color="text.secondary">({profile.type})</Typography></Typography>
+                                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 700 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
                                   <List sx={{ alignItems: 'flex-start' }}>
-                                    {quizAssignments.filter(aq => aq.profile_id === profile.id).length === 0 && (
+                                    {quizAssignments.filter(aq => aq.profile_id === profile.id && !aq.user_id).length === 0 && (
                                       <ListItem><ListItemText primary="No quizzes assigned." /></ListItem>
                                     )}
-                                    {quizAssignments.filter(aq => aq.profile_id === profile.id).map(aq => {
+                                    {quizAssignments.filter(aq => aq.profile_id === profile.id && !aq.user_id).map(aq => {
                                       const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
                                       return quiz ? (
-                                        <ListItem key={aq.quiz_id} alignItems="flex-start" secondaryAction={
-                                          <Tooltip title="Copy shareable link">
-                                            <IconButton
-                                              color="primary"
-                                              onClick={async () => {
-                                                const link = `${window.location.origin}/attempt/${quiz.id}`
-                                                const success = await copyToClipboard(link)
-                                                showClipboardFeedback(success, 'Quiz link copied to clipboard!')
-                                              }}
-                                              edge="end"
-                                              sx={{ ml: 1 }}
-                                            >
-                                              <ShareIcon />
-                                            </IconButton>
-                                          </Tooltip>
-                                        }>
+                                        <ListItem 
+                                          key={aq.id} 
+                                          alignItems="center" 
+                                          sx={{ pr: '80px' }}
+                                          secondaryAction={
+                                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                              <Tooltip title="Copy shareable link">
+                                                <IconButton
+                                                  color="primary"
+                                                  onClick={async () => {
+                                                    const link = `${window.location.origin}/attempt/${quiz.id}`
+                                                    const success = await copyToClipboard(link)
+                                                    showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                                  }}
+                                                  size="small"
+                                                >
+                                                  <ShareIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                              <Tooltip title="Remove assignment">
+                                                <IconButton
+                                                  color="error"
+                                                  onClick={async () => {
+                                                    if (window.confirm(`Are you sure you want to remove assignment of ${quiz.name} from profile ${profile.name}?`)) {
+                                                      await removeQuizAssignment(profile.id, quiz.id)
+                                                      await loadData()
+                                                    }
+                                                  }}
+                                                  size="small"
+                                                >
+                                                  <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            </Box>
+                                          }
+                                        >
                                           <ListItemText
                                             primary={
-                                              <Typography noWrap sx={{ maxWidth: 160 }}>
+                                              <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
                                                 {quiz.name}
                                               </Typography>
                                             }
@@ -552,16 +789,94 @@ function App() {
                             </Grid>
                           ))}
                         </Grid>
+
+                        {/* Direct User Assignments Section */}
+                        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+                          Assignments by User
+                        </Typography>
+                        
+                        {quizAssignments.filter(aq => aq.user_id).length === 0 ? (
+                          <Typography color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+                            No user-specific assignments created yet.
+                          </Typography>
+                        ) : (
+                          <Grid container spacing={3} sx={{ width: '100%' }}>
+                            {users.filter(u => quizAssignments.some(aq => aq.user_id === u.id)).map(userItem => (
+                              <Grid item xs={12} sm={6} md={4} key={userItem.id} sx={{ display: 'flex' }}>
+                                <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                  <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
+                                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 700 }}>{userItem.user_name || userItem.email}</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                      Email: {userItem.email} | Profile Type: {userItem.profile || 'General'}
+                                    </Typography>
+                                    <List sx={{ alignItems: 'flex-start' }}>
+                                      {quizAssignments.filter(aq => aq.user_id === userItem.id).map(aq => {
+                                        const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
+                                        return quiz ? (
+                                          <ListItem 
+                                            key={aq.id} 
+                                            alignItems="center" 
+                                            sx={{ pr: '80px' }}
+                                            secondaryAction={
+                                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                <Tooltip title="Copy shareable link">
+                                                  <IconButton
+                                                    color="primary"
+                                                    onClick={async () => {
+                                                      const link = `${window.location.origin}/attempt/${quiz.id}`
+                                                      const success = await copyToClipboard(link)
+                                                      showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                                    }}
+                                                    size="small"
+                                                  >
+                                                    <ShareIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Remove assignment">
+                                                  <IconButton
+                                                    color="error"
+                                                    onClick={async () => {
+                                                      if (window.confirm(`Are you sure you want to remove assignment of ${quiz.name} from user ${userItem.user_name || userItem.email}?`)) {
+                                                        await removeUserQuizAssignment(userItem.id, quiz.id)
+                                                        await loadData()
+                                                      }
+                                                    }}
+                                                    size="small"
+                                                  >
+                                                    <DeleteIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
+                                              </Box>
+                                            }
+                                          >
+                                            <ListItemText
+                                              primary={
+                                                <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
+                                                  {quiz.name}
+                                                </Typography>
+                                              }
+                                            />
+                                          </ListItem>
+                                        ) : null
+                                      })}
+                                    </List>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        )}
                       </Box>
                     )}
-                    {tab === 5 && <AssessmentResults />}
-                    {tab === 6 && <AssessmentReport />}
-                    {tab === 7 && <PDFTemplateConfig />}
+                    {tab === 6 && <AssessmentResults />}
+                    {tab === 7 && <AssessmentReport />}
+                    {tab === 8 && <ActiveTracking />}
+                    {tab === 9 && <PDFTemplateConfig />}
                   </>
                 ) : (
                   // User Mode
                   <>
-                    {tab === 0 && <UserDashboard user={user} userStats={userStats} />}
+                    {tab === 0 && <UserDashboard user={user} userStats={userStats} setTab={setTab} />}
                     {tab === 1 && (
                       <Box sx={{ width: '100%' }}>
                         <Typography variant="h4" sx={{ mb: 3 }}>Quiz Records</Typography>
@@ -591,18 +906,15 @@ function App() {
                                         minute: '2-digit'
                                       })}
                                     </Typography>
-                                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                                      Score: {attempt.score}% ({attempt.correct_answers}/{attempt.total_questions})
-                                    </Typography>
                                     <Button
                                       variant="contained"
                                       startIcon={<VisibilityIcon />}
                                       onClick={() => navigate(`/report/${attempt.quiz_id}/${attempt.id}`)}
                                       fullWidth
                                       sx={{ 
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
                                         '&:hover': {
-                                          background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                                          background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)'
                                         }
                                       }}
                                     >
@@ -618,8 +930,8 @@ function App() {
                     )}
                   </>
                 )}
-              </Box>
-            </Box>
+              </div>
+            </main>
             <Dialog open={howToOpen} onClose={() => setHowToOpen(false)} maxWidth="sm" fullWidth>
               <DialogTitle>How to Use</DialogTitle>
               <DialogContent dividers>
@@ -644,10 +956,10 @@ function App() {
                 )}
               </DialogContent>
               <DialogActions>
-                <Button onClick={() => setHowToOpen(false)}>Close</Button>
+                <button className="btn btn--primary" onClick={() => setHowToOpen(false)}>Close</button>
               </DialogActions>
             </Dialog>
-          </Box>
+          </div>
         } />
       </Routes>
     </ThemeProvider>

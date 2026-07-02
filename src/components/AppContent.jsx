@@ -170,7 +170,7 @@ const AppContent = ({
               <Grid item xs={12} sm={6} md={4} key={profile.id} sx={{ display: 'flex' }}>
                 <Card className="assigned-quiz-card" variant="outlined" sx={{ mb: 2, p: 2, background: 'var(--card-bg)', boxShadow: 'var(--card-shadow)', minHeight: 240, height: '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <CardContent sx={{ minHeight: 180, height: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-start' }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>{profile.name} <Typography component="span" color="text.secondary">({profile.type})</Typography></Typography>
+                    <Typography variant="h6" sx={{ mb: 1 }}>{profile.name}{profile.type && <Typography component="span" color="text.secondary"> ({profile.type})</Typography>}</Typography>
                     <List sx={{ alignItems: 'flex-start' }}>
                       {quizAssignments.filter(aq => aq.profile_id === profile.id).length === 0 && (
                         <ListItem><ListItemText primary="No quizzes assigned." /></ListItem>
@@ -178,25 +178,30 @@ const AppContent = ({
                       {quizAssignments.filter(aq => aq.profile_id === profile.id).map(aq => {
                         const quiz = savedQuizzes.find(q => q.id === aq.quiz_id)
                         return quiz ? (
-                          <ListItem key={aq.quiz_id} alignItems="flex-start" secondaryAction={
-                            <Tooltip title="Copy shareable link">
-                              <IconButton
-                                color="primary"
-                                onClick={async () => {
-                                  const link = `${window.location.origin}/attempt/${quiz.id}`
-                                  const success = await copyToClipboard(link)
-                                  showClipboardFeedback(success, 'Quiz link copied to clipboard!')
-                                }}
-                                edge="end"
-                                sx={{ ml: 1 }}
-                              >
-                                <ShareIcon />
-                              </IconButton>
-                            </Tooltip>
-                          }>
+                          <ListItem 
+                            key={aq.quiz_id} 
+                            alignItems="center" 
+                            sx={{ pr: '56px' }}
+                            secondaryAction={
+                              <Tooltip title="Copy shareable link">
+                                <IconButton
+                                  color="primary"
+                                  onClick={async () => {
+                                    const link = `${window.location.origin}/attempt/${quiz.id}`
+                                    const success = await copyToClipboard(link)
+                                    showClipboardFeedback(success, 'Quiz link copied to clipboard!')
+                                  }}
+                                  edge="end"
+                                  sx={{ ml: 1 }}
+                                >
+                                  <ShareIcon />
+                                </IconButton>
+                              </Tooltip>
+                            }
+                          >
                             <ListItemText
                               primary={
-                                <Typography noWrap sx={{ maxWidth: 160 }}>
+                                <Typography noWrap sx={{ fontSize: '14px', fontWeight: 500 }}>
                                   {quiz.name}
                                 </Typography>
                               }

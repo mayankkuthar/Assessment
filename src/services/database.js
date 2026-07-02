@@ -1,10 +1,12 @@
 // Import API services for browser use
 import { 
   profileApi, 
-  packetApi, 
-  questionApi, 
-  quizApi, 
-  quizPacketApi, 
+  organizationApi,
+  employeeApi,
+  packetApi,
+  questionApi,
+  quizApi,
+  quizPacketApi,
   userApi 
 } from './api.js';
 
@@ -14,6 +16,20 @@ export const profileService = {
   createProfile: profileApi.createProfile,
   updateProfile: profileApi.updateProfile,
   deleteProfile: profileApi.deleteProfile
+};
+
+export const organizationService = {
+  getAllOrganizations: organizationApi.getAllOrganizations,
+  createOrganization: organizationApi.createOrganization,
+  updateOrganization: organizationApi.updateOrganization,
+  deleteOrganization: organizationApi.deleteOrganization,
+  regenerateOnboardingCode: organizationApi.regenerateOnboardingCode
+};
+
+export const employeeService = {
+  getEmployeesByOrg: employeeApi.getEmployeesByOrg,
+  importEmployees: employeeApi.importEmployees,
+  deleteEmployee: employeeApi.deleteEmployee
 };
 
 export const packetService = {
@@ -37,7 +53,9 @@ export const quizService = {
   deleteQuiz: quizApi.deleteQuiz,
   getAllQuizAssignments: quizApi.getAllQuizAssignments,
   assignQuizToProfiles: quizApi.assignQuizToProfiles,
-  removeQuizAssignment: quizApi.removeQuizAssignment
+  removeQuizAssignment: quizApi.removeQuizAssignment,
+  assignQuizToUsers: quizApi.assignQuizToUsers,
+  removeUserQuizAssignment: quizApi.removeUserQuizAssignment
 };
 
 export const quizPacketService = {
@@ -47,11 +65,13 @@ export const quizPacketService = {
 };
 
 export const userService = {
+  getAllUsers: userApi.getAllUsers,
   getUserQuizAttempts: userApi.getUserQuizAttempts,
   getAllQuizAttempts: userApi.getAllQuizAttempts,
   getUserStats: userApi.getUserStats,
   getAssignedQuizzesForUser: userApi.getAssignedQuizzesForUser,
-  createQuizAttempt: userApi.createQuizAttempt
+  createQuizAttempt: userApi.createQuizAttempt,
+  updateQuizAttempt: userApi.updateQuizAttempt
 };
 
  

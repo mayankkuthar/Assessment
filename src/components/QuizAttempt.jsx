@@ -1,33 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  Button,
-  CircularProgress,
-  Alert,
-  Fade,
-  Slide,
-  Zoom,
-  Grow,
-  Paper,
-  IconButton,
-  LinearProgress,
-  Snackbar,
-  useTheme,
-  useMediaQuery,
-  alpha
-} from '@mui/material';
 import CheckCircle from '@mui/icons-material/CheckCircle';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import ArrowForward from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
+import './QuizAttempt.css';
+import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+
 
 // Helper function to get readable packet names
 const getPacketName = (packetId) => {
@@ -44,8 +25,6 @@ const getPacketName = (packetId) => {
 const QuizAttempt = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,8 +40,30 @@ const QuizAttempt = () => {
   const [selectedOption, setSelectedOption] = useState('');
   const [questionAnimationKey, setQuestionAnimationKey] = useState(0);
   const [showQuizDescription, setShowQuizDescription] = useState(true);
-    const [showNotification, setShowNotification] = useState(false);
-    const [notificationMessage, setNotificationMessage] = useState('');
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [attemptId, setAttemptId] = useState(null);
+  // Mirror of attemptId for synchronous access in saveProgress. Using state alone
+  // risks a race: if the user answers before the create request resolves, the
+  // state may still be null and the answer would silently fail to save.
+  const attemptIdRef = useRef(null);
+  const setAttempt = (id) => { attemptIdRef.current = id; setAttemptId(id); };
+
+  // Latest answers, kept in a ref so async saves always persist the current set
+  // even across rapid changes / navigation.
+  const answersRef = useRef({});
+
+  // Timestamp captured when the user actually starts the quiz
+  const startedAtRef = useRef(null);
+
+  // Pending auto-advance timers, so manual navigation can cancel them
+  const advanceTimers = useRef([]);
+  const clearAdvance = () => {
+    advanceTimers.current.forEach(clearTimeout);
+    advanceTimers.current = [];
+  };
+  // Cancel any pending timers on unmount
+  useEffect(() => () => clearAdvance(), []);
 
   useEffect(() => {
     // Get current user from localStorage
@@ -93,11 +94,12 @@ const QuizAttempt = () => {
         }
 
         // Load quiz data
-        const [quizRes, questionsRes, profilesRes, assignmentsRes] = await Promise.all([
-          fetch(`http://65.1.6.81:3001/api/quizzes/${quizId}`),
-          fetch(`http://65.1.6.81:3001/api/questions?quiz_id=${quizId}`),
-          fetch('http://65.1.6.81:3001/api/profiles'),
-          fetch('http://65.1.6.81:3001/api/quiz-assignments')
+        const [quizRes, questionsRes, profilesRes, assignmentsRes, attemptsRes] = await Promise.all([
+          fetch(`/api/quizzes/${quizId}`),
+          fetch(`/api/questions?quiz_id=${quizId}`),
+          fetch('/api/profiles'),
+          fetch('/api/quiz-assignments'),
+          fetch(`/api/users/${currentUser.id}/quiz-attempts`)
         ]);
 
         if (!quizRes.ok || !questionsRes.ok) {
@@ -105,12 +107,14 @@ const QuizAttempt = () => {
         }
 
         const quizData = await quizRes.json();
+        enrichQuizWithInstructions(quizData);
         const questionsData = await questionsRes.json();
         const profilesData = profilesRes.ok ? await profilesRes.json() : [];
         const assignmentsData = assignmentsRes.ok ? await assignmentsRes.json() : [];
+        const attemptsData = attemptsRes.ok ? await attemptsRes.json() : [];
 
         // Find user's profile and assignment - try multiple matching strategies
-        const userProfile = profilesData.find(p => 
+        const foundProfile = profilesData.find(p => 
           p.user_id === currentUser.id || 
           p.user_id === String(currentUser.id) ||
           p.user_id === Number(currentUser.id) ||
@@ -119,7 +123,7 @@ const QuizAttempt = () => {
         
         const assignment = assignmentsData.find(a => 
           a.quiz_id === quizId && (
-            a.profile_id === userProfile?.id ||
+            a.profile_id === foundProfile?.id ||
             a.user_id === currentUser.id ||
             a.user_id === String(currentUser.id) ||
             a.user_id === Number(currentUser.id)
@@ -133,11 +137,10 @@ const QuizAttempt = () => {
         console.log('Quiz assignments:', assignmentsData);
         console.log('Assignment details:', assignmentsData.map(a => ({ id: a.id, quiz_id: a.quiz_id, profile_id: a.profile_id, user_id: a.user_id })));
         console.log('Looking for user_id:', currentUser.id, 'type:', typeof currentUser.id);
-        console.log('Found user profile:', userProfile);
+        console.log('Found user profile:', foundProfile);
         console.log('Found assignment:', assignment);
 
         // More flexible access control - allow access if user exists and quiz exists
-        // Only require profile/assignment for specific access control if needed
         if (!currentUser) {
           setAccessDenied(true);
           setError('Please log in to access this quiz.');
@@ -145,9 +148,8 @@ const QuizAttempt = () => {
         }
 
         // If no profile exists, create a default one or allow access anyway
-        if (!userProfile) {
+        if (!foundProfile) {
           console.log('No user profile found, allowing access with default profile');
-          // Create a default profile for the user
           const defaultProfile = {
             id: `profile_${currentUser.id}`,
             user_id: currentUser.id,
@@ -156,17 +158,16 @@ const QuizAttempt = () => {
           };
           setUserProfile(defaultProfile);
         } else {
-          setUserProfile(userProfile);
+          setUserProfile(foundProfile);
         }
 
         // If no assignment exists, create a default one or allow access anyway
         if (!assignment) {
           console.log('No quiz assignment found, allowing access with default assignment');
-          // Create a default assignment
           const defaultAssignment = {
             id: `assignment_${currentUser.id}_${quizId}`,
             quiz_id: quizId,
-            profile_id: userProfile?.id || `profile_${currentUser.id}`,
+            profile_id: foundProfile?.id || `profile_${currentUser.id}`,
             user_id: currentUser.id,
             assigned_at: new Date().toISOString()
           };
@@ -189,7 +190,60 @@ const QuizAttempt = () => {
         
         setQuiz(quizData);
         setQuestions(questionsData);
-        
+
+        // Normalize a stored answers payload into a plain object. Depending on the
+        // backend, `answers` may arrive as an object or as a JSON string; either
+        // way we want an object keyed by question id so saved answers show up as
+        // selected when the user navigates back.
+        const parseAnswers = (raw) => {
+          if (!raw) return {};
+          if (typeof raw === 'string') {
+            try { return JSON.parse(raw) || {}; } catch { return {}; }
+          }
+          return raw;
+        };
+        const answerCount = (a) => Object.keys(parseAnswers(a.answers)).length;
+
+        // Check for active incomplete attempt(s). There can be more than one
+        // (e.g. from earlier abandoned runs), so pick the MOST-progressed one —
+        // the one with the most saved answers, then the furthest question index.
+        // Using the first match could otherwise resume a stale, empty attempt and
+        // make earlier answers appear missing.
+        const incompleteAttempt = attemptsData
+          .filter(a =>
+            String(a.quiz_id) === String(quizId) &&
+            (!a.completed_at && a.status !== 'completed')
+          )
+          .sort((a, b) => {
+            const ans = answerCount(b) - answerCount(a)
+            if (ans !== 0) return ans
+            return (b.current_question_index || 0) - (a.current_question_index || 0)
+          })[0];
+
+        if (incompleteAttempt) {
+          const resumedAnswers = parseAnswers(incompleteAttempt.answers);
+          console.log('Resuming incomplete attempt:', incompleteAttempt, 'answers:', resumedAnswers);
+          setAttempt(incompleteAttempt.id);
+          setAnswers(resumedAnswers);
+          answersRef.current = resumedAnswers;
+          // Resume from the next unanswered question. Compute it from the saved
+          // answers so it's correct even if the stored index lags; fall back to
+          // the saved index, then the start.
+          const firstUnanswered = questionsData.findIndex(q => !(q.id in resumedAnswers));
+          const resumeIndex = firstUnanswered !== -1
+            ? firstUnanswered
+            : (incompleteAttempt.current_question_index || 0);
+          setCurrentQuestionIndex(resumeIndex);
+          startedAtRef.current = incompleteAttempt.started_at;
+          setShowQuizDescription(false);
+        } else {
+          // Fallback start time: ensures started_at is recorded even if the
+          // description screen is skipped. The Start button refines this.
+          if (!startedAtRef.current) {
+            startedAtRef.current = new Date().toISOString();
+          }
+        }
+
         console.log('Quiz and questions set successfully');
       } catch (err) {
         console.error('Error loading quiz:', err);
@@ -202,31 +256,91 @@ const QuizAttempt = () => {
     loadQuiz();
   }, [quizId, accessDenied]);
 
+  const saveProgress = async (updatedAnswers, index) => {
+    const id = attemptIdRef.current;
+    if (!id) return;
+    answersRef.current = updatedAnswers;
+    try {
+      await fetch(`/api/quiz-attempts/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answers: updatedAnswers,
+          current_question_index: index,
+          status: 'in_progress'
+        })
+      });
+    } catch (err) {
+      console.error('Error auto-saving progress:', err);
+    }
+  };
+
   const handleChange = (qid, value) => {
     setSelectedOption(value);
-    setAnswers({ ...answers, [qid]: value });
-    
-    // Only auto-advance if not on the last question
-    if (currentQuestionIndex < questions.length - 1) {
-      setTimeout(() => {
+    // Whether this question already had an answer. When it did, the user is
+    // reviewing/editing a previous answer (e.g. after using Previous to go back),
+    // so we must NOT auto-advance — otherwise changing an earlier answer would
+    // immediately yank them forward and make editing impossible.
+    const isEditingExisting = Object.prototype.hasOwnProperty.call(answers, qid);
+    const updatedAnswers = { ...answers, [qid]: value };
+    setAnswers(updatedAnswers);
+    answersRef.current = updatedAnswers;
+
+    // Save progress to database
+    saveProgress(updatedAnswers, currentQuestionIndex);
+
+    // Only auto-advance when answering a question for the first time and not on
+    // the last question. Editing an existing answer keeps the user in place.
+    if (!isEditingExisting && currentQuestionIndex < questions.length - 1) {
+      clearAdvance();
+      const t1 = setTimeout(() => {
         setIsTransitioning(true);
-        
-        setTimeout(() => {
+
+        const t2 = setTimeout(() => {
           const nextIndex = currentQuestionIndex + 1;
           setCurrentQuestionIndex(nextIndex);
           setQuestionAnimationKey(prev => prev + 1);
           setIsTransitioning(false);
           setSelectedOption('');
-          
+
+          // Also save progress with the new index
+          saveProgress(updatedAnswers, nextIndex);
+
           // Show motivational notification after every 10 questions
           showMotivationalNotification(nextIndex);
         }, 400);
+        advanceTimers.current.push(t2);
       }, 500);
+      advanceTimers.current.push(t1);
     } else {
-      // On last question, just clear the selected option without transition
       setSelectedOption('');
     }
   };
+
+  // Navigate between questions so users can go back to review/change earlier
+  // answers and move forward again. The index changes immediately (the question
+  // card re-mounts via questionAnimationKey to play a fade-in), so rapid clicks
+  // are never swallowed — earlier this waited behind a 300ms transition that
+  // disabled the buttons, making Previous feel like it "wasn't working".
+  // Cancels any pending auto-advance so manual navigation always wins.
+  const goToQuestion = (index) => {
+    if (index < 0 || index > questions.length - 1) return;
+    clearAdvance();
+    setIsTransitioning(false);
+    setCurrentQuestionIndex(index);
+    setQuestionAnimationKey(prev => prev + 1);
+    setSelectedOption('');
+
+    // Save progress to database with the new index
+    saveProgress(answers, index);
+
+    showMotivationalNotification(index);
+  };
+
+  const handlePrevious = () => goToQuestion(currentQuestionIndex - 1);
+  const handleNext = () => goToQuestion(currentQuestionIndex + 1);
 
   const handleSubmit = async () => {
     try {
@@ -257,7 +371,7 @@ const QuizAttempt = () => {
             packetMarks[packetId] = {
               marks: 0,
               questions: 0,
-              name: packetName // Store packet name for reference
+              name: packetName
             };
           }
           
@@ -266,31 +380,21 @@ const QuizAttempt = () => {
           let marksAwarded = 0;
           
           if (question.options && Array.isArray(question.options)) {
-            // Handle new format with individual option marks
             if (typeof question.options[0] === 'object' && question.options[0].hasOwnProperty('marks')) {
-              // New format: options have individual marks
-              // Handle case sensitivity for True/False questions
-              let selectedOption = null;
-              // First try exact match
-              selectedOption = question.options.find(opt => opt.text === answer);
-              // If not found, try case-insensitive match
-              if (!selectedOption) {
-                selectedOption = question.options.find(opt => 
+              let selectedOpt = null;
+              selectedOpt = question.options.find(opt => opt.text === answer);
+              if (!selectedOpt) {
+                selectedOpt = question.options.find(opt => 
                   opt.text && answer && opt.text.toLowerCase() === answer.toLowerCase()
                 );
               }
-              
-              if (selectedOption) {
-                marksAwarded = selectedOption.marks || 0;
+              if (selectedOpt) {
+                marksAwarded = selectedOpt.marks || 0;
               }
             } else {
-              // Old format: question has single marks value
-              // Award full marks if answer exists
               marksAwarded = question.marks || 1;
             }
           } else {
-            // Fallback for questions without options
-            // Award full marks if answer exists
             marksAwarded = question.marks || 1;
           }
           
@@ -311,17 +415,13 @@ const QuizAttempt = () => {
       let maxPossibleMarks = 0;
       questions.forEach(question => {
         if (question.options && Array.isArray(question.options)) {
-          // Handle new format with individual option marks
           if (typeof question.options[0] === 'object' && question.options[0].hasOwnProperty('marks')) {
-            // New format: use maximum option mark
             const optionMarks = question.options.map(opt => opt.marks || 0);
             maxPossibleMarks += Math.max(...optionMarks, 0);
           } else {
-            // Old format: use question marks
             maxPossibleMarks += question.marks || 1;
           }
         } else {
-          // Fallback: use question marks
           maxPossibleMarks += question.marks || 1;
         }
       });
@@ -353,28 +453,22 @@ const QuizAttempt = () => {
       Object.entries(packetMarks).forEach(([packetId, data]) => {
         const packet = packetGroups[packetId];
         if (packet) {
-          // Calculate maximum marks for this packet
           let packetMaxMarks = 0;
           if (packet.questions) {
             packet.questions.forEach(q => {
               if (q.options && Array.isArray(q.options)) {
-                // Handle new format with individual option marks
                 if (typeof q.options[0] === 'object' && q.options[0].hasOwnProperty('marks')) {
-                  // New format: use maximum option mark
                   const optionMarks = q.options.map(opt => opt.marks || 0);
                   packetMaxMarks += Math.max(...optionMarks, 0);
                 } else {
-                  // Old format: use question marks
                   packetMaxMarks += q.marks || 1;
                 }
               } else {
-                // Fallback: use question marks
                 packetMaxMarks += q.marks || 1;
               }
             });
           }
           
-          // Use packet name as the key to match the expected format
           formattedPacketMarks[packet.name] = {
             marks: data.marks,
             questions: data.questions,
@@ -386,10 +480,13 @@ const QuizAttempt = () => {
       console.log('Formatted Packet Marks:', formattedPacketMarks);
       
       const attemptData = {
-        id: Date.now().toString(),
         quiz_id: quizId,
-        profile_id: quizAssignment?.profile_id || `profile_${user?.id}`,
+        profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
         user_id: user?.id,
+        // Persist the taker's identity on the attempt so reports/dashboards show
+        // the correct name and email even if the user lookup later fails.
+        user_name: user?.user_name || user?.email || null,
+        user_email: user?.email || null,
         score: score,
         total_questions: totalQuestions,
         correct_answers: totalMarks,
@@ -397,9 +494,11 @@ const QuizAttempt = () => {
         packet_marks: formattedPacketMarks,
         answers: answers,
         status: 'completed',
-        started_at: currentTime,
+        started_at: startedAtRef.current || currentTime,
         completed_at: currentTime,
-        created_at: currentTime,
+        time_taken: startedAtRef.current
+          ? Math.max(0, Math.round((new Date(currentTime) - new Date(startedAtRef.current)) / 1000))
+          : null,
         updated_at: currentTime
       };
 
@@ -413,14 +512,31 @@ const QuizAttempt = () => {
       
       console.log('Final Attempt Data:', attemptData);
 
-      // Save quiz attempt to mock data
-      const attemptResponse = await fetch('http://65.1.6.81:3001/api/quiz-attempts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(attemptData)
-      });
+      let attemptResponse;
+      const submitId = attemptIdRef.current || attemptId;
+      if (submitId) {
+        // Update existing attempt to completed
+        attemptResponse = await fetch(`/api/quiz-attempts/${submitId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attemptData)
+        });
+      } else {
+        // Fallback POST if attemptId is missing
+        attemptResponse = await fetch('/api/quiz-attempts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...attemptData,
+            id: Date.now().toString(),
+            created_at: currentTime
+          })
+        });
+      }
 
       if (!attemptResponse.ok) {
         throw new Error('Failed to save quiz attempt');
@@ -442,85 +558,41 @@ const QuizAttempt = () => {
     }
   };
 
+  // ── Loading state ──────────────────────────────────────────
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '100vh',
-        gap: 3,
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <CircularProgress size={60} thickness={4} sx={{ color: 'white' }} />
-        <Typography variant="h5" color="white" sx={{ fontWeight: 500 }}>
-          Loading your quiz...
-        </Typography>
-      </Box>
+      <div className="quiz-attempt__loading">
+        <div className="quiz-attempt__spinner" />
+        <span className="quiz-attempt__loading-text">Loading your quiz...</span>
+      </div>
     );
   }
 
+  // ── Error state ────────────────────────────────────────────
   if (error) {
     return (
-      <Box sx={{ 
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        p: 3
-      }}>
-        <Fade in timeout={800}>
-          <Alert 
-            severity="error"
-            sx={{ 
-              borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-              backdropFilter: 'blur(10px)',
-              '& .MuiAlert-message': { fontSize: '1.1rem' }
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 1 }}>Error Loading Quiz</Typography>
-            <Typography>{error}</Typography>
-            <Button 
-              variant="outlined" 
-              startIcon={<ArrowBack />} 
-              onClick={() => navigate('/')}
-              sx={{ mt: 2 }}
-            >
-              Back to Dashboard
-            </Button>
-          </Alert>
-        </Fade>
-      </Box>
+      <div className="quiz-attempt__error">
+        <div className="quiz-attempt__error-card">
+          <h3>Error Loading Quiz</h3>
+          <p>{error}</p>
+          <button className="btn--outline" onClick={() => navigate('/')}>
+            <ArrowBack style={{ width: 18, height: 18 }} />
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
     );
   }
 
+  // ── Quiz not found ─────────────────────────────────────────
   if (!quiz) {
     return (
-      <Box sx={{ 
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        p: 3
-      }}>
-        <Fade in timeout={800}>
-          <Alert 
-            severity="warning"
-            sx={{ 
-              borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <Typography variant="h6">Quiz Not Found</Typography>
-            <Typography>The requested quiz could not be found.</Typography>
-          </Alert>
-        </Fade>
-      </Box>
+      <div className="quiz-attempt__error">
+        <div className="quiz-attempt__error-card">
+          <h3>Quiz Not Found</h3>
+          <p>The requested quiz could not be found.</p>
+        </div>
+      </div>
     );
   }
 
@@ -537,7 +609,7 @@ const QuizAttempt = () => {
   const progress = calculateProgress();
   
   // Motivational messages
-  const getMotivationalMessage = (questionNumber) => {
+  const getMotivationalMessage = () => {
     const messages = [
       "You're doing great! Keep going!",
       "Excellent progress! You're on the right track!",
@@ -555,48 +627,70 @@ const QuizAttempt = () => {
       "Incredible! Your focus is really showing!",
       "Remarkable! You're making steady progress!"
     ];
-    
-    // Return a random message
     return messages[Math.floor(Math.random() * messages.length)];
   };
   
   // Show notification after every 10 questions
-  const showMotivationalNotification = (currentQuestionIndex) => {
-    // Only show notification after every 10 questions (10, 20, 30, etc.)
-    // And only if we're not on the last question
-    if ((currentQuestionIndex + 1) % 10 === 0 && 
-        currentQuestionIndex < questions.length - 1 &&
+  const showMotivationalNotification = (currentIdx) => {
+    if ((currentIdx + 1) % 10 === 0 && 
+        currentIdx < questions.length - 1 &&
         !showQuizDescription) {
-      const message = getMotivationalMessage(currentQuestionIndex + 1);
+      const message = getMotivationalMessage();
       setNotificationMessage(message);
       setShowNotification(true);
-      
-      // Auto-hide notification after 3 seconds
       setTimeout(() => {
         setShowNotification(false);
       }, 3000);
     }
   };
+
+  // Render options for any question type
+  const renderOptions = () => {
+    if (!currentQuestion) return null;
+
+    let options = [];
+    const qType = currentQuestion.question_type;
+
+    if (qType === 'true_false' && !currentQuestion.options) {
+      options = [
+        { text: 'True', value: 'true' },
+        { text: 'False', value: 'false' }
+      ];
+    } else if (currentQuestion.options && Array.isArray(currentQuestion.options)) {
+      options = currentQuestion.options.map(opt => {
+        const text = typeof opt === 'object' ? opt.text : opt;
+        const value = qType === 'true_false' ? text.toLowerCase() : text;
+        return { text, value };
+      });
+    }
+
+    return (
+      <div className="quiz-attempt__options">
+        {options.map((opt, i) => {
+          // Compare as strings so a previously-saved answer reliably shows as
+          // selected when navigating back, regardless of stored value type.
+          const saved = answers[currentQuestion.id];
+          const isSelected = saved !== undefined && saved !== null && String(saved) === String(opt.value);
+          return (
+            <div
+              key={i}
+              className={`quiz-attempt__option${isSelected ? ' quiz-attempt__option--selected' : ''}`}
+              onClick={() => handleChange(currentQuestion.id, opt.value)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleChange(currentQuestion.id, opt.value); }}
+            >
+              <span className="quiz-attempt__option-radio" />
+              <span className="quiz-attempt__option-label">{opt.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
   
   return (
-    <Box sx={{ 
-      height: '100vh',
-      width: '100%',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      margin: 0,
-      padding: 0,
-      '& *': {
-        boxSizing: 'border-box'
-      }
-    }}>
+    <div className="quiz-attempt">
       {/* Global CSS override for this component */}
       <style>
         {`
@@ -615,823 +709,200 @@ const QuizAttempt = () => {
         `}
       </style>
       
-      {/* Motivational Notification */}
-      <Snackbar
-        open={showNotification}
-        autoHideDuration={3000}
-        onClose={() => setShowNotification(false)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        sx={{
-          top: 80,
-          zIndex: 9999
-        }}
-      >
-        <Alert 
-          onClose={() => setShowNotification(false)} 
-          severity="success"
-          sx={{ 
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            borderRadius: 2
-          }}
-        >
-          {notificationMessage}
-        </Alert>
-      </Snackbar>
+      {/* Motivational Notification Toast */}
+      <div className={`quiz-attempt__toast${showNotification ? ' quiz-attempt__toast--visible' : ''}`}>
+        {notificationMessage}
+      </div>
       
-      {/* Minimalist Header - Back Button, Quiz Name, and User Details */}
-      <Box sx={{ 
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexDirection: { xs: 'row', sm: 'row' },
-        gap: { xs: 0.5, sm: 0 },
-        p: { xs: 0.8, md: 1 },
-        backgroundColor: 'rgba(102, 126, 234, 0.95)',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        zIndex: 1000
-      }}>
-        <IconButton 
-          onClick={() => navigate('/')}
-          sx={{ 
-            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-            color: 'white',
-            minWidth: { xs: 32, md: 36 },
-            minHeight: { xs: 32, md: 36 },
-            width: { xs: 32, md: 36 },
-            height: { xs: 32, md: 36 },
-            '&:hover': { 
-              backgroundColor: 'rgba(255, 255, 255, 0.3)',
-              transform: 'scale(1.1)'
-            },
-            transition: 'all 0.3s ease',
-            flexShrink: 0
-          }}
-        >
-          <ArrowBack sx={{ fontSize: { xs: 18, md: 20 } }} />
-        </IconButton>
+      {/* Header */}
+      <div className="quiz-attempt__header">
+        <button className="quiz-attempt__back-btn" onClick={() => navigate('/')} title="Back to Dashboard">
+          <ArrowBack style={{ width: 20, height: 20 }} />
+        </button>
 
-        {/* Quiz Name and User Details */}
-        <Box sx={{ 
-          display: 'flex',
-          alignItems: 'center',
-          gap: { xs: 1, md: 2 },
-          backgroundColor: { xs: 'rgba(255, 255, 255, 0.1)', md: 'rgba(255, 255, 255, 0.15)' },
-          backdropFilter: 'blur(10px)',
-          borderRadius: 2,
-          px: { xs: 1, md: 1.5 },
-          py: { xs: 0.5, md: 0.8 },
-          flexDirection: { xs: 'row', sm: 'row' },
-          flex: 1,
-          ml: { xs: 0.5, md: 0 },
-          minWidth: 0
-        }}>
-          <Box sx={{ textAlign: 'center', minWidth: 0, flex: { xs: 1, sm: 'auto' } }}>
-            <Typography variant="h6" sx={{ 
-              color: 'white', 
-              fontWeight: 700,
-              fontSize: { xs: '0.75rem', md: '0.95rem' },
-              whiteSpace: { xs: 'nowrap', sm: 'normal' },
-              overflow: { xs: 'hidden', sm: 'visible' },
-              textOverflow: { xs: 'ellipsis', sm: 'clip' }
-            }}>
-              {quiz?.name || 'Quiz'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ 
-            width: { xs: '100%', sm: 1 }, 
-            height: { xs: 1, sm: 30 }, 
-            backgroundColor: 'rgba(255, 255, 255, 0.3)',
-            borderRadius: 1,
-            display: { xs: 'block', sm: 'block' }
-          }} />
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <PersonIcon sx={{ color: 'white', fontSize: { xs: 16, md: 18 } }} />
-            <Typography variant="body1" sx={{ 
-              color: 'white', 
-              fontWeight: 600,
-              fontSize: { xs: '0.75rem', md: '0.85rem' }
-            }}>
+        <div className="quiz-attempt__header-info">
+          <span className="quiz-attempt__quiz-name">{quiz?.name || 'Quiz'}</span>
+          <span className="quiz-attempt__header-divider" />
+          <span className="quiz-attempt__user-badge">
+            <PersonIcon style={{ fontSize: 18 }} />
+            <span className="quiz-attempt__user-name">
               {userProfile?.name || user?.user_name || user?.email || 'User'}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+            </span>
+          </span>
+        </div>
+      </div>
       
-      {/* Progress Bar - Show when quiz description is hidden (i.e., during questions) */}
-      {!showQuizDescription && (
-        <Box sx={{ 
-          width: '100%',
-          position: 'relative',
-          height: 20,
-          backgroundColor: 'rgba(255, 255, 255, 0.3)'
-        }}>
-          <LinearProgress 
-            variant="determinate" 
-            value={progress} 
-            sx={{ 
-              height: '100%',
-              borderRadius: 0,
-              backgroundColor: 'transparent',
-              '& .MuiLinearProgress-bar': {
-                backgroundColor: '#4CAF50'
-              }
-            }} 
-          />
-          <Box sx={{ 
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Typography variant="body2" sx={{ 
-              fontWeight: 700,
-              color: 'white',
-              fontSize: '0.8rem',
-              textShadow: '0 0 2px rgba(0,0,0,0.5)'
-            }}>
-              {progress}%
-            </Typography>
-          </Box>
-        </Box>
-      )}
+      {/* Progress Bar */}
+      {/* Progress Bar hidden per requirements */}
 
-      {/* Main Content - Full Screen */}
-      <Box sx={{ 
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: { xs: 1, md: 1.5 },
-        pb: { xs: isLastQuestion && !showQuizDescription ? 8 : 1, md: 1.5 },
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
+      {/* Main Content */}
+      <div className="quiz-attempt__body">
         {showQuizDescription ? (
-          <Zoom in timeout={500}>
-            <Box sx={{ 
-              width: '100%',
-              maxWidth: { xs: '100%', md: '1000px' },
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
-              <Card sx={{ 
-                borderRadius: 4,
-                boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-                backdropFilter: 'blur(20px)',
-                background: 'rgba(255,255,255,0.95)',
-                border: '1px solid rgba(255,255,255,0.3)',
-                maxHeight: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden'
-              }}>
-                <CardContent sx={{ 
-                  p: { xs: 1.5, md: 2 }, 
-                  height: '100%',
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  justifyContent: 'flex-start',
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  overflow: 'auto'
-                }}>
-                  <Box sx={{ mb: 1, width: { xs: '80px', md: '100px' }, height: 'auto', mx: 'auto' }}>
-                    <img 
-                      src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
-                      alt="HappiMynd Logo"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain'
-                      }}
-                    />
-                  </Box>
-                  {quiz?.start_instructions ? (
-                    <Box sx={{ 
-                      width: '100%',
-                      maxWidth: '850px',
-                      textAlign: 'left',
-                      mb: 1.5,
-                      px: { xs: 0.5, md: 1 },
-                      '& p': { fontSize: { xs: '0.7rem', md: '0.8rem' }, lineHeight: 1.5, mb: 0.5 },
-                      '& ul, & ol': { pl: 2.5, mb: 0.5 },
-                      '& li': { fontSize: { xs: '0.7rem', md: '0.8rem' }, lineHeight: 1.5, mb: 0.3 },
-                      '& h1, & h2, & h3, & h4, & h5, & h6': { color: 'primary.main', fontWeight: 700, mb: 0.5, mt: 1 },
-                      '& strong': { fontWeight: 700 }
-                    }}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
-                    </Box>
-                  ) : (
-                    <>
-                  <Typography variant="h5" sx={{ 
-                    fontWeight: 700,
-                    mb: 0.8,
-                    color: 'primary.main',
-                    fontSize: { xs: '0.85rem', md: '1rem' }
-                  }}>
-                    Why should I take this assessment?
-                  </Typography>
-                  
-                  <Box sx={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.4,
-                    mb: 1,
-                    maxWidth: '850px',
-                    width: '100%',
-                    textAlign: 'justify',
-                    px: { xs: 0.5, md: 1 }
-                  }}>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.3 }}>
-                      This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4, textDecoration: 'underline' }}>
-                      The better you understand your emotions, the better you live, connect and grow!!
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '0.65rem', md: '0.7rem' }, lineHeight: 1.4, }}>
-                      Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
-                    </Typography>
-                  </Box>
-
-                  <Typography variant="h6" sx={{ 
-                    fontWeight: 700,
-                    mb: 0.6,
-                    color: 'primary.main',
-                    fontSize: { xs: '0.8rem', md: '0.9rem' }
-                  }}>
-                    Instructions:
-                  </Typography>
-                  
-                  <Box sx={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.3,
-                    mb: 1.5,
-                    maxWidth: '850px',
-                    width: '100%',
-                    px: { xs: 0.5, md: 1 }
-                  }}>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • Read each statement carefully
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • There is no right and wrong answer, so no judgement
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • 1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • Please avoid marking the neutral response and share real time experiences
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • Please answer all the questions with your natural instinct
-                    </Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'left', fontSize: { xs: '0.6rem', md: '0.65rem' } }}>
-                      • Your responses will be kept 100% confidential
-                    </Typography>
-                  </Box>
-                    </>
-                  )}
-
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={() => setShowQuizDescription(false)}
-                    sx={{
-                      px: 3,
-                      py: 1,
-                      borderRadius: 2,
-                      fontSize: { xs: '0.85rem', md: '0.95rem' },
-                      fontWeight: 600,
-                      background: 'linear-gradient(45deg, #4CAF50 30%, #45a049 90%)',
-                      boxShadow: '0 8px 16px rgba(76, 175, 80, 0.3)',
-                      '&:hover': {
-                        background: 'linear-gradient(45deg, #45a049 30%, #4CAF50 90%)',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 12px 20px rgba(76, 175, 80, 0.4)'
-                      }
-                    }}
-                  >
-                    Start
-                  </Button>
-                </CardContent>
-              </Card>
-            </Box>
-          </Zoom>
-        ) : (
-          <Zoom in={!isTransitioning} timeout={500} key={questionAnimationKey}>
-          <Box sx={{ 
-            width: '100%',
-            maxWidth: { xs: '100%', md: '800px' },
-            height: { xs: 'auto', md: '100%' },
-            maxHeight: { xs: '90%', md: '100%' },
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center'
-          }}>
-            {/* Question Card - Single Page View */}
-            <Card sx={{ 
-              borderRadius: 4,
-              boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-              backdropFilter: 'blur(20px)',
-              background: 'rgba(255,255,255,0.95)',
-              border: '1px solid rgba(255,255,255,0.3)',
-              height: { xs: 'auto', md: '100%' },
-              maxHeight: { xs: '85vh', md: '100%' },
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden'
-            }}>
-              <CardContent sx={{ 
-                p: { xs: 1.5, md: 2 },
-                height: '100%',
-                display: 'flex', 
-                flexDirection: 'column',
-                justifyContent: 'center',
-                overflow: 'auto'
-              }}>
-                {currentQuestion && (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    height: '100%'
-                  }}>
-                    {/* Question Text */}
-                    <Grow in timeout={600}>
-                      <Box sx={{ 
-                        mb: { xs: 2, md: 2 },
-                        textAlign: 'center'
-                      }}>
-                        <Typography 
-                          variant="h4" 
-                          sx={{ 
-                            fontWeight: 600,
-                            lineHeight: 1.3,
-                            color: 'text.primary',
-                            fontSize: { xs: '0.85rem', sm: '0.95rem', md: '1.1rem' },
-                            mb: 0.5
-                          }}
-                        >
-                          {currentQuestion.question_text}
-                        </Typography>
-                      </Box>
-                    </Grow>
-
-                    {/* Options Container */}
-                    <Box sx={{ 
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center'
-                    }}>
-                      {/* MCQ Options */}
-                      {currentQuestion.question_type === 'mcq' && currentQuestion.options && (
-                        <RadioGroup
-                          value={answers[currentQuestion.id] || ''}
-                          onChange={e => handleChange(currentQuestion.id, e.target.value)}
-                          sx={{ gap: { xs: 1, md: 1.2 } }}
-                        >
-                          {currentQuestion.options.map((opt, i) => {
-                            const optionText = typeof opt === 'object' ? opt.text : opt;
-                            const isSelected = answers[currentQuestion.id] === optionText;
-                            
-                            return (
-                              <Grow key={i} in timeout={700 + i * 100}>
-                                <Paper
-                                  elevation={isSelected ? 6 : 1}
-                                  sx={{
-                                    p: { xs: 2, md: 2 },
-                                    borderRadius: 3,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    border: '2px solid',
-                                    borderColor: isSelected ? 'primary.main' : 'transparent',
-                                    backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.08) : 'white',
-                                    transform: isSelected ? 'scale(1.01)' : 'scale(1)',
-                                    '&:hover': {
-                                      transform: 'scale(1.02)',
-                                      boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                                      borderColor: 'primary.main'
-                                    },
-                                    '&:active': {
-                                      transform: 'scale(0.98)'
-                                    },
-                                    minHeight: { xs: 56, md: 64 },
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                  onClick={() => handleChange(currentQuestion.id, optionText)}
-                                >
-                                  <FormControlLabel 
-                                    value={optionText} 
-                                    control={
-                                      <Radio 
-                                        sx={{ 
-                                          '&.Mui-checked': { 
-                                            color: 'primary.main',
-                                            transform: 'scale(1.15)'
-                                          },
-                                          transform: 'scale(1.2)',
-                                          p: { xs: 1.5, md: 1 }
-                                        }} 
-                                      />
-                                    } 
-                                    label={
-                                      <Typography variant="h6" sx={{ 
-                                        fontSize: { xs: '1.05rem', md: '1.25rem' },
-                                        fontWeight: isSelected ? 700 : 500,
-                                        color: isSelected ? 'primary.main' : 'text.primary',
-                                        ml: { xs: 0.5, md: 2 },
-                                        lineHeight: 1.4
-                                      }}>
-                                        {optionText}
-                                      </Typography>
-                                    }
-                                    sx={{ width: '100%', m: 0, ml: 0 }}
-                                  />
-                                </Paper>
-                              </Grow>
-                            );
-                          })}
-                        </RadioGroup>
-                      )}
-
-                      {/* True/False Options */}
-                      {currentQuestion.question_type === 'true_false' && (
-                        <RadioGroup
-                          value={answers[currentQuestion.id] || ''}
-                          onChange={e => handleChange(currentQuestion.id, e.target.value)}
-                          sx={{ gap: { xs: 1, md: 1.2 } }}
-                        >
-                          {currentQuestion.options ? (
-                            currentQuestion.options.map((opt, i) => {
-                              const optionText = typeof opt === 'object' ? opt.text : opt;
-                              const isSelected = answers[currentQuestion.id] === optionText.toLowerCase();
-                              
-                              return (
-                                <Grow key={i} in timeout={700 + i * 100}>
-                                  <Paper
-                                    elevation={isSelected ? 6 : 1}
-                                    sx={{
-                                      p: { xs: 1, md: 1.2 },
-                                      borderRadius: 2,
-                                      cursor: 'pointer',
-                                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                      border: '2px solid',
-                                      borderColor: isSelected ? 'primary.main' : 'transparent',
-                                      backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.08) : 'white',
-                                      transform: isSelected ? 'scale(1.01)' : 'scale(1)',
-                                      '&:hover': {
-                                        transform: 'scale(1.02)',
-                                        boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                                        borderColor: 'primary.main'
-                                      },
-                                      '&:active': {
-                                        transform: 'scale(0.98)'
-                                      },
-                                      minHeight: { xs: 40, md: 48 },
-                                      display: 'flex',
-                                      alignItems: 'center'
-                                    }}
-                                    onClick={() => handleChange(currentQuestion.id, optionText.toLowerCase())}
-                                  >
-                                    <FormControlLabel 
-                                      value={optionText.toLowerCase()} 
-                                      control={
-                                        <Radio 
-                                          sx={{ 
-                                            '&.Mui-checked': { 
-                                              color: 'primary.main',
-                                              transform: 'scale(1.1)'
-                                            },
-                                            transform: 'scale(1)',
-                                            p: { xs: 0.5, md: 0.8 }
-                                          }} 
-                                        />
-                                      } 
-                                      label={
-                                        <Typography variant="h6" sx={{ 
-                                          fontSize: { xs: '0.85rem', md: '1rem' },
-                                          fontWeight: isSelected ? 700 : 500,
-                                          color: isSelected ? 'primary.main' : 'text.primary',
-                                          ml: { xs: 0.3, md: 0.5 },
-                                          lineHeight: 1.3
-                                        }}>
-                                          {optionText}
-                                        </Typography>
-                                      }
-                                      sx={{ width: '100%', m: 0, ml: 0 }}
-                                    />
-                                  </Paper>
-                                </Grow>
-                              );
-                            })
-                          ) : (
-                            <>
-                              <Grow in timeout={700}>
-                                <Paper
-                                  elevation={answers[currentQuestion.id] === 'true' ? 6 : 1}
-                                  sx={{
-                                    p: { xs: 1, md: 1.2 },
-                                    borderRadius: 2,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    border: '2px solid',
-                                    borderColor: answers[currentQuestion.id] === 'true' ? 'primary.main' : 'transparent',
-                                    backgroundColor: answers[currentQuestion.id] === 'true' ? alpha(theme.palette.primary.main, 0.08) : 'white',
-                                    transform: answers[currentQuestion.id] === 'true' ? 'scale(1.01)' : 'scale(1)',
-                                    '&:hover': {
-                                      transform: 'scale(1.02)',
-                                      boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                                      borderColor: 'primary.main'
-                                    },
-                                    '&:active': {
-                                      transform: 'scale(0.98)'
-                                    },
-                                    minHeight: { xs: 40, md: 48 },
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                  onClick={() => handleChange(currentQuestion.id, 'true')}
-                                >
-                                  <FormControlLabel 
-                                    value="true" 
-                                    control={
-                                      <Radio 
-                                        sx={{ 
-                                          '&.Mui-checked': { 
-                                            color: 'primary.main',
-                                            transform: 'scale(1.1)'
-                                          },
-                                          transform: 'scale(1)',
-                                          p: { xs: 0.5, md: 0.8 }
-                                        }} 
-                                      />
-                                    } 
-                                    label={
-                                      <Typography variant="h6" sx={{ 
-                                        fontSize: { xs: '0.85rem', md: '1rem' },
-                                        fontWeight: answers[currentQuestion.id] === 'true' ? 700 : 500,
-                                        color: answers[currentQuestion.id] === 'true' ? 'primary.main' : 'text.primary',
-                                        ml: { xs: 0.3, md: 0.5 },
-                                        lineHeight: 1.3
-                                      }}>
-                                        True
-                                      </Typography>
-                                    }
-                                    sx={{ width: '100%', m: 0, ml: 0 }}
-                                  />
-                                </Paper>
-                              </Grow>
-                              <Grow in timeout={800}>
-                                <Paper
-                                  elevation={answers[currentQuestion.id] === 'false' ? 6 : 1}
-                                  sx={{
-                                    p: { xs: 1, md: 1.2 },
-                                    borderRadius: 2,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    border: '2px solid',
-                                    borderColor: answers[currentQuestion.id] === 'false' ? 'primary.main' : 'transparent',
-                                    backgroundColor: answers[currentQuestion.id] === 'false' ? alpha(theme.palette.primary.main, 0.08) : 'white',
-                                    transform: answers[currentQuestion.id] === 'false' ? 'scale(1.01)' : 'scale(1)',
-                                    '&:hover': {
-                                      transform: 'scale(1.02)',
-                                      boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                                      borderColor: 'primary.main'
-                                    },
-                                    '&:active': {
-                                      transform: 'scale(0.98)'
-                                    },
-                                    minHeight: { xs: 40, md: 48 },
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                  onClick={() => handleChange(currentQuestion.id, 'false')}
-                                >
-                                  <FormControlLabel 
-                                    value="false" 
-                                    control={
-                                      <Radio 
-                                        sx={{ 
-                                          '&.Mui-checked': { 
-                                            color: 'primary.main',
-                                            transform: 'scale(1.1)'
-                                          },
-                                          transform: 'scale(1)',
-                                          p: { xs: 0.5, md: 0.8 }
-                                        }} 
-                                      />
-                                    } 
-                                    label={
-                                      <Typography variant="h6" sx={{ 
-                                        fontSize: { xs: '0.85rem', md: '1rem' },
-                                        fontWeight: answers[currentQuestion.id] === 'false' ? 700 : 500,
-                                        color: answers[currentQuestion.id] === 'false' ? 'primary.main' : 'text.primary',
-                                        ml: { xs: 0.3, md: 0.5 },
-                                        lineHeight: 1.3
-                                      }}>
-                                        False
-                                      </Typography>
-                                    }
-                                    sx={{ width: '100%', m: 0, ml: 0 }}
-                                  />
-                                </Paper>
-                              </Grow>
-                            </>
-                          )}
-                        </RadioGroup>
-                      )}
-
-                      {/* Likert Scale Options */}
-                      {currentQuestion.question_type === 'likert' && currentQuestion.options && (
-                        <RadioGroup
-                          value={answers[currentQuestion.id] || ''}
-                          onChange={e => handleChange(currentQuestion.id, e.target.value)}
-                          sx={{ gap: { xs: 1, md: 1.2 } }}
-                        >
-                          {currentQuestion.options.map((opt, i) => {
-                            const optionText = typeof opt === 'object' ? opt.text : opt;
-                            const isSelected = answers[currentQuestion.id] === optionText;
-                            
-                            return (
-                              <Grow key={i} in timeout={700 + i * 100}>
-                                <Paper
-                                  elevation={isSelected ? 6 : 1}
-                                  sx={{
-                                    p: { xs: 1, md: 1.2 },
-                                    borderRadius: 2,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    border: '2px solid',
-                                    borderColor: isSelected ? 'primary.main' : 'transparent',
-                                    backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.08) : 'white',
-                                    transform: isSelected ? 'scale(1.01)' : 'scale(1)',
-                                    '&:hover': {
-                                      transform: 'scale(1.02)',
-                                      boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                                      borderColor: 'primary.main'
-                                    },
-                                    '&:active': {
-                                      transform: 'scale(0.98)'
-                                    },
-                                    minHeight: { xs: 40, md: 48 },
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                  onClick={() => handleChange(currentQuestion.id, optionText)}
-                                >
-                                  <FormControlLabel 
-                                    value={optionText} 
-                                    control={
-                                      <Radio 
-                                        sx={{ 
-                                          '&.Mui-checked': { 
-                                            color: 'primary.main',
-                                            transform: 'scale(1.1)'
-                                          },
-                                          transform: 'scale(1)',
-                                          p: { xs: 0.5, md: 0.8 }
-                                        }} 
-                                      />
-                                    } 
-                                    label={
-                                      <Typography variant="h6" sx={{ 
-                                        fontSize: { xs: '0.85rem', md: '1rem' },
-                                        fontWeight: isSelected ? 700 : 500,
-                                        color: isSelected ? 'primary.main' : 'text.primary',
-                                        ml: { xs: 0.3, md: 0.5 },
-                                        lineHeight: 1.3
-                                      }}>
-                                        {optionText}
-                                      </Typography>
-                                    }
-                                    sx={{ width: '100%', m: 0, ml: 0 }}
-                                  />
-                                </Paper>
-                              </Grow>
-                            );
-                          })}
-                        </RadioGroup>
-                      )}
-                    </Box>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Box>
-          </Zoom>
-        )}
-
-        {/* Submit Button - Only show on last question */}
-        {!showQuizDescription && isLastQuestion && (
-          <Box sx={{ 
-            position: 'absolute',
-            bottom: { xs: 78, md: 20 },
-            right: { xs: 16, md: 20 },
-            left: { xs: 16, md: 'auto' },
-            zIndex: 10
-          }}>
-            <Slide direction="up" in timeout={1000}>
-              <Button
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={Object.keys(answers).length < questions.length}
-                endIcon={<CheckCircle />}
-                fullWidth={{ xs: true, md: false }}
-                sx={{
-                  borderRadius: 2,
-                  px: 3,
-                  py: { xs: 1.2, md: 1.2 },
-                  fontWeight: 700,
-                  fontSize: { xs: '0.85rem', md: '0.95rem' },
-                  minHeight: { xs: 42, md: 'auto' },
-                  background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-                  boxShadow: '0 8px 16px rgba(76, 175, 80, 0.3)',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #45a049, #4CAF50)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 12px 20px rgba(76, 175, 80, 0.4)'
-                  },
-                  '&:active': {
-                    transform: 'translateY(0)'
-                  },
-                  '&:disabled': {
-                    background: 'rgba(255,255,255,0.2)',
-                    color: 'rgba(255,255,255,0.5)'
-                  }
-                }}
-              >
-                Submit Quiz
-              </Button>
-            </Slide>
-          </Box>
-        )}
-        
-        {/* Powered by HappiMynd Footer - Show when quiz description is hidden (i.e., during questions) */}
-        {!showQuizDescription && (
-          <Box sx={{ 
-            position: 'absolute',
-            bottom: { xs: 80, md: 20 },
-            right: { xs: 16, md: 20 },
-            left: 'auto',
-            zIndex: 5
-          }}>
-            <Box sx={{ 
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              borderRadius: 2,
-              px: 1,
-              py: 0.5,
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <Box sx={{ width: { xs: 16, md: 20 }, height: { xs: 16, md: 20 } }}>
+          /* ── Description Card ── */
+          <div className="quiz-attempt__desc-wrap">
+            <div className="quiz-attempt__desc-card">
+              <div className="quiz-attempt__desc-inner">
                 <img 
                   src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
                   alt="HappiMynd Logo"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain'
-                  }}
+                  className="quiz-attempt__desc-logo"
                 />
-              </Box>
-              <Typography variant="caption" sx={{ 
-                fontWeight: 600,
-                color: '#667eea',
-                fontSize: { xs: '0.6rem', md: '0.65rem' }
-              }}>
-                Powered by HappiMynd
-              </Typography>
-            </Box>
-          </Box>
+                <h2 className="quiz-attempt__desc-title">
+                  Why should I take this assessment?
+                </h2>
+                {quiz?.start_instructions ? (
+                  <div className="quiz-attempt__desc-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <>
+                    <div className="quiz-attempt__desc-body">
+                      <p>
+                        Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
+                      </p>
+                      <p>
+                        From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
+                      </p>
+                      <p>
+                        That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
+                      </p>
+                      <p>
+                        This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
+                      </p>
+                      <p className="underline">
+                        The better you understand your emotions, the better you live, connect and grow!!
+                      </p>
+                      <p>
+                        Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
+                      </p>
+                    </div>
+
+                    <h3 className="quiz-attempt__instructions-title">Instructions:</h3>
+                    
+                    <ul className="quiz-attempt__instructions-list">
+                      <li>Read each statement carefully</li>
+                      <li>There is no right and wrong answer, so no judgement</li>
+                      <li>1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree</li>
+                      <li>Please avoid marking the neutral response and share real time experiences</li>
+                      <li>Please answer all the questions with your natural instinct</li>
+                      <li>Your responses will be kept 100% confidential</li>
+                    </ul>
+                  </>
+                )}
+
+                <button
+                  className="quiz-attempt__start-btn"
+                  onClick={async () => {
+                    const startTime = new Date().toISOString();
+                    startedAtRef.current = startTime;
+                    
+                    // Create an incomplete attempt immediately in database
+                    try {
+                      const newAttemptResponse = await fetch('/api/quiz-attempts', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          quiz_id: quizId,
+                          profile_id: quizAssignment?.profile_id || userProfile?.id || `profile_${user?.id}`,
+                          user_id: user?.id,
+                          user_name: user?.user_name || user?.email || null,
+                          user_email: user?.email || null,
+                          score: 0,
+                          total_questions: questions.length,
+                          correct_answers: 0,
+                          started_at: startTime,
+                          status: 'in_progress',
+                          answers: {},
+                          current_question_index: 0
+                        })
+                      });
+                      
+                      if (newAttemptResponse.ok) {
+                        const newAttempt = await newAttemptResponse.json();
+                        setAttempt(newAttempt.id);
+                      }
+                    } catch (e) {
+                      console.error('Error creating quiz attempt:', e);
+                    }
+                    
+                    setShowQuizDescription(false);
+                  }}
+                >
+                  Start Assessment
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ── Question Card ── */
+          <div
+            key={questionAnimationKey}
+            className={`quiz-attempt__question-wrap${isTransitioning ? ' quiz-attempt__question-wrap--transitioning' : ''}`}
+          >
+            <div className="quiz-attempt__question-card">
+              <div className="quiz-attempt__question-inner">
+                {currentQuestion && (
+                  <>
+                    <h2 className="quiz-attempt__question-text">
+                      {currentQuestion.question_text}
+                    </h2>
+                    {renderOptions()}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         )}
-      </Box>
-    </Box>
+
+        {/* Question navigation: go back to change answers, move forward, or submit */}
+        {!showQuizDescription && (
+          <div className="quiz-attempt__nav">
+            <button
+              className="quiz-attempt__nav-btn"
+              onClick={handlePrevious}
+              disabled={currentQuestionIndex === 0}
+            >
+              <ArrowBack style={{ width: 18, height: 18 }} />
+              Previous
+            </button>
+
+            {/* Question counter metrics hidden per requirements */}
+
+            {isLastQuestion ? (
+              <button
+                className="quiz-attempt__submit-btn"
+                onClick={handleSubmit}
+                disabled={Object.keys(answers).length < questions.length}
+              >
+                Submit Quiz
+                <CheckCircle style={{ width: 20, height: 20 }} />
+              </button>
+            ) : (
+              <button
+                className="quiz-attempt__nav-btn quiz-attempt__nav-btn--next"
+                onClick={handleNext}
+              >
+                Next
+                <ArrowForward style={{ width: 18, height: 18 }} />
+              </button>
+            )}
+          </div>
+        )}
+        
+        {/* Powered by HappiMynd Footer */}
+        {!showQuizDescription && (
+          <div className="quiz-attempt__powered">
+            <img 
+              src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+              alt="HappiMynd Logo"
+            />
+            <span>Powered by HappiMynd</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

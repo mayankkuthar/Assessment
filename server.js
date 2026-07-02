@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { 
   profileService,
+  organizationService,
+  employeeService,
   packetService,
   questionService,
   quizService,
@@ -11,6 +13,7 @@ import {
   userService
 } from './src/services/sqlite-database.js';
 import { authService } from './src/services/auth.js';
+import { db, generateId } from './src/database/sqlite.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,9 +32,42 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // Auth Routes
+app.get('/api/auth/verify-code', asyncHandler(async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  const org = await userService.findOrganizationByCode(code.trim().toUpperCase());
+  if (!org) {
+    return res.status(404).json({ error: 'Invalid user code' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+  res.json({ id: org.id, name: org.name, email: org.email, userName: org.employeeName });
+}));
+
 app.post('/api/auth/signup', asyncHandler(async (req, res) => {
-  const { email, password, role = 'user' } = req.body;
-  const result = await authService.signUp(email, password, role);
+  const { email, password, role = 'user', userName, userCode } = req.body;
+  
+  if (!userCode) {
+    return res.status(400).json({ error: 'User code is required for signup' });
+  }
+  
+  const org = await userService.findOrganizationByCode(userCode.trim().toUpperCase());
+  if (!org) {
+    return res.status(400).json({ error: 'Invalid user code' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'This organization is currently inactive' });
+  }
+  if (org.email.toLowerCase() !== email.trim().toLowerCase()) {
+    return res.status(400).json({ error: 'This user code does not belong to the entered email address.' });
+  }
+
+  // Create User
+  const result = await authService.signUp(email, password, role, org.id);
+
   res.json(result);
 }));
 
@@ -69,6 +105,48 @@ app.put('/api/profiles/:id', asyncHandler(async (req, res) => {
 
 app.delete('/api/profiles/:id', asyncHandler(async (req, res) => {
   await profileService.deleteProfile(req.params.id);
+  res.json({ success: true });
+}));
+
+// Organization Routes
+app.get('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.getAllOrganizations();
+  res.json(data);
+}));
+
+app.post('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.createOrganization(req.body);
+  res.json(data);
+}));
+
+app.put('/api/organizations/:id', asyncHandler(async (req, res) => {
+  const data = await organizationService.updateOrganization(req.params.id, req.body);
+  res.json(data);
+}));
+
+app.delete('/api/organizations/:id', asyncHandler(async (req, res) => {
+  await organizationService.deleteOrganization(req.params.id);
+  res.json({ success: true });
+}));
+
+app.post('/api/organizations/:id/regenerate-code', asyncHandler(async (req, res) => {
+  const data = await organizationService.regenerateOnboardingCode(req.params.id);
+  res.json(data);
+}));
+
+// Employee Routes
+app.get('/api/organizations/:orgId/employees', asyncHandler(async (req, res) => {
+  const data = await employeeService.getEmployeesByOrg(req.params.orgId);
+  res.json(data);
+}));
+
+app.post('/api/organizations/:orgId/employees/import', asyncHandler(async (req, res) => {
+  const data = await employeeService.importEmployees(req.params.orgId, req.body.employees);
+  res.json(data);
+}));
+
+app.delete('/api/employees/:id', asyncHandler(async (req, res) => {
+  await employeeService.deleteEmployee(req.params.id);
   res.json({ success: true });
 }));
 
@@ -172,6 +250,27 @@ app.delete('/api/quiz-packets/:quizId', asyncHandler(async (req, res) => {
 }));
 
 // User Routes
+app.get('/api/users', asyncHandler(async (req, res) => {
+  const data = await userService.getAllUsers();
+  res.json(data);
+}));
+
+app.get('/api/users/:id', asyncHandler(async (req, res) => {
+  const data = await userService.getUserById(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  res.json(data);
+}));
+
+app.get('/api/local-users/:id', asyncHandler(async (req, res) => {
+  const data = await userService.getUserById(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  res.json(data);
+}));
+
 app.get('/api/users/:id/quiz-attempts', asyncHandler(async (req, res) => {
   const data = await userService.getUserQuizAttempts(req.params.id);
   res.json(data);
@@ -194,6 +293,11 @@ app.get('/api/quiz-attempts', asyncHandler(async (req, res) => {
 
 app.post('/api/quiz-attempts', asyncHandler(async (req, res) => {
   const data = await userService.createQuizAttempt(req.body);
+  res.json(data);
+}));
+
+app.put('/api/quiz-attempts/:id', asyncHandler(async (req, res) => {
+  const data = await userService.updateQuizAttempt(req.params.id, req.body);
   res.json(data);
 }));
 

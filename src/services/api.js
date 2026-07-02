@@ -1,5 +1,5 @@
 // API service to replace direct SQLite calls in the browser
-const API_BASE = 'http://65.1.6.81:3001/api';
+const API_BASE = '/api';
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -9,11 +9,29 @@ class ApiError extends Error {
   }
 }
 
+// Identify the current actor to the backend so it can enforce role-based
+// access (Super Admin / Admin / user). The server reads the x-user-id header.
+function authHeaders() {
+  try {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const user = JSON.parse(stored);
+      if (user && user.id) {
+        return { 'x-user-id': String(user.id), 'x-user-role': user.role || '' };
+      }
+    }
+  } catch {
+    /* ignore malformed currentUser */
+  }
+  return {};
+}
+
 async function apiCall(endpoint, options = {}) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders(),
         ...options.headers,
       },
       ...options,
@@ -36,11 +54,15 @@ async function apiCall(endpoint, options = {}) {
 
 // Auth API
 export const authApi = {
-  async signUp(email, password, role = 'user', user_name, profile) {
+  async signUp(email, password, role = 'user', user_name, profile, onboardingCode) {
     return await apiCall('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role, user_name, profile }),
+      body: JSON.stringify({ email, password, role, user_name, profile, onboardingCode }),
     });
+  },
+
+  async verifyOnboardingCode(code) {
+    return await apiCall(`/auth/verify-code?code=${encodeURIComponent(code)}`);
   },
 
   async signIn(email, password) {
@@ -81,6 +103,53 @@ export const profileApi = {
 
   async deleteProfile(id) {
     return await apiCall(`/profiles/${id}`, { method: 'DELETE' });
+  }
+};
+
+// Organization API
+export const organizationApi = {
+  async getAllOrganizations() {
+    return await apiCall('/organizations');
+  },
+
+  async createOrganization(org) {
+    return await apiCall('/organizations', {
+      method: 'POST',
+      body: JSON.stringify(org),
+    });
+  },
+
+  async updateOrganization(id, updates) {
+    return await apiCall(`/organizations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deleteOrganization(id) {
+    return await apiCall(`/organizations/${id}`, { method: 'DELETE' });
+  },
+
+  async regenerateOnboardingCode(id) {
+    return await apiCall(`/organizations/${id}/regenerate-code`, { method: 'POST' });
+  }
+};
+
+// Employee API
+export const employeeApi = {
+  async getEmployeesByOrg(orgId) {
+    return await apiCall(`/organizations/${orgId}/employees`);
+  },
+
+  async importEmployees(orgId, employees) {
+    return await apiCall(`/organizations/${orgId}/employees/import`, {
+      method: 'POST',
+      body: JSON.stringify({ employees })
+    });
+  },
+
+  async deleteEmployee(id) {
+    return await apiCall(`/employees/${id}`, { method: 'DELETE' });
   }
 };
 
@@ -173,6 +242,19 @@ export const quizApi = {
     return await apiCall(`/quiz-assignments/profile/${profileId}/quiz/${quizId}`, {
       method: 'DELETE',
     });
+  },
+
+  async assignQuizToUsers(quizId, userIds) {
+    return await apiCall('/quiz-assignments', {
+      method: 'POST',
+      body: JSON.stringify({ quizId, userIds }),
+    });
+  },
+
+  async removeUserQuizAssignment(userId, quizId) {
+    return await apiCall(`/quiz-assignments/user/${userId}/quiz/${quizId}`, {
+      method: 'DELETE',
+    });
   }
 };
 
@@ -199,6 +281,10 @@ export const quizPacketApi = {
 
 // User API
 export const userApi = {
+  async getAllUsers() {
+    return await apiCall('/users');
+  },
+
   async getUserQuizAttempts(userId) {
     return await apiCall(`/users/${userId}/quiz-attempts`);
   },
@@ -220,5 +306,48 @@ export const userApi = {
       method: 'POST',
       body: JSON.stringify(attemptData),
     });
+  },
+
+  async updateQuizAttempt(id, attemptData) {
+    return await apiCall(`/quiz-attempts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(attemptData),
+    });
+  },
+
+  // --- Access-control: user management (role-gated on the server) ---
+
+  // Admin/Super Admin: add a user with initial password + dashboard views.
+  async createUser({ email, password, user_name, profile, role = 'user', permissions = [], organization_id = null }) {
+    return await apiCall('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, user_name, profile, role, permissions, organization_id }),
+    });
+  },
+
+  // Update a user's dashboard view permissions (locked changes need Super Admin).
+  async updateUserPermissions(userId, permissions) {
+    return await apiCall(`/users/${userId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions }),
+    });
+  },
+
+  // Set onboarding password (Admin, once) or reset it (Super Admin).
+  async setUserPassword(userId, password) {
+    return await apiCall(`/users/${userId}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  // Remove a user (Super Admin only).
+  async deleteUser(userId) {
+    return await apiCall(`/users/${userId}`, { method: 'DELETE' });
+  },
+
+  // Read the permission-action audit log (Super Admin only).
+  async getAuditLog() {
+    return await apiCall('/audit-log');
   }
 };

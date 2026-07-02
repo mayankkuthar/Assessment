@@ -6,14 +6,35 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
-    strictPort: true,
+    port: 5175,
+    strictPort: false,
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
-      '/api': {
-        target: 'https://gnome-clarity-reality-calculate.trycloudflare.com',
+      '/api/organizations': {
+        target: 'https://assessment-api-two.vercel.app',
         changeOrigin: true,
-        secure: true
+        secure: false
+      },
+      '/api/auth': {
+        target: 'https://assessment-api-two.vercel.app',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/employees': {
+        target: 'https://assessment-api-two.vercel.app',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/local-users': {
+        target: 'https://assessment-api-two.vercel.app',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api': {
+        // Targeted at the live Vercel backend backed by Google Sheets
+        target: 'https://assessment-api-two.vercel.app',
+        changeOrigin: true,
+        secure: false
       }
     }
   }

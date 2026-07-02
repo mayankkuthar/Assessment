@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { 
   profileService,
+  organizationService,
+  employeeService,
   packetService,
   questionService,
   quizService,
@@ -50,6 +52,43 @@ app.put('/api/profiles/:id', asyncHandler(async (req, res) => {
 
 app.delete('/api/profiles/:id', asyncHandler(async (req, res) => {
   await profileService.deleteProfile(req.params.id);
+  res.json({ success: true });
+}));
+
+// Organization Routes
+app.get('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.getAllOrganizations();
+  res.json(data);
+}));
+
+app.post('/api/organizations', asyncHandler(async (req, res) => {
+  const data = await organizationService.createOrganization(req.body);
+  res.json(data);
+}));
+
+app.put('/api/organizations/:id', asyncHandler(async (req, res) => {
+  const data = await organizationService.updateOrganization(req.params.id, req.body);
+  res.json(data);
+}));
+
+app.delete('/api/organizations/:id', asyncHandler(async (req, res) => {
+  await organizationService.deleteOrganization(req.params.id);
+  res.json({ success: true });
+}));
+
+// Employee Routes
+app.get('/api/organizations/:orgId/employees', asyncHandler(async (req, res) => {
+  const data = await employeeService.getEmployeesByOrg(req.params.orgId);
+  res.json(data);
+}));
+
+app.post('/api/organizations/:orgId/employees/import', asyncHandler(async (req, res) => {
+  const data = await employeeService.importEmployees(req.params.orgId, req.body.employees);
+  res.json(data);
+}));
+
+app.delete('/api/employees/:id', asyncHandler(async (req, res) => {
+  await employeeService.deleteEmployee(req.params.id);
   res.json({ success: true });
 }));
 

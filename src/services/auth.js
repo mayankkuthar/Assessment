@@ -38,9 +38,9 @@ export const authService = {
   },
 
   // Sign up new user
-  async signUp(email, password, role = 'user') {
+  async signUp(email, password, role = 'user', organizationId = null) {
     try {
-      const user = await userService.createUser(email, password, role);
+      const user = await userService.createUser(email, password, role, organizationId);
       
       // Auto login after signup
       const session = await userService.createSession(user.id);
@@ -120,9 +120,14 @@ export const authService = {
     return this.currentUser !== null;
   },
 
-  // Check if user has admin role
+  // Check if user has admin-level access (Admin or Super Admin)
   isAdmin() {
-    return this.currentUser?.role === 'admin';
+    return this.currentUser?.role === 'admin' || this.currentUser?.role === 'super_admin';
+  },
+
+  // Check if user is a HappiMynd Super Admin (full override rights)
+  isSuperAdmin() {
+    return this.currentUser?.role === 'super_admin';
   },
 
   // Create default admin user if none exists
@@ -169,10 +174,10 @@ export function useAuth() {
     initializeAuth();
   }, []);
 
-  const signUp = async (email, password, role) => {
+  const signUp = async (email, password, role, organizationId = null) => {
     setLoading(true);
     try {
-      const result = await authService.signUp(email, password, role);
+      const result = await authService.signUp(email, password, role, organizationId);
       if (result.user) {
         setUser(result.user);
       }

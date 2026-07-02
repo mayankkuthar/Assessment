@@ -3,13 +3,14 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 // ES6 module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Data file path
 const DATA_FILE = path.join(process.cwd(), 'mock-data.json');
@@ -33,11 +34,14 @@ function loadData() {
       return {
         users: data.users || [],
         profiles: data.profiles || [],
+        organizations: data.organizations || [],
+        employees: data.employees || [],
         packets: data.packets || [],
         questions: data.questions || [],
         quizzes: data.quizzes,
         quizAssignments: data.quizAssignments || [],
-        quizAttempts: data.quizAttempts || []
+        quizAttempts: data.quizAttempts || [],
+        auditLog: data.auditLog || []
       };
     }
   } catch (error) {
@@ -73,6 +77,7 @@ function loadData() {
         created_at: new Date().toISOString()
       }
     ],
+    organizations: [],
     packets: [
       { 
         id: '1755719317656', 
@@ -346,7 +351,9 @@ function loadData() {
          updated_at: new Date().toISOString()
        }
      ],
-                   quizAttempts: []
+                    quizAttempts: [],
+                    employees: [],
+                    auditLog: []
   };
 }
 
@@ -359,8 +366,252 @@ function saveData(data) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Role-Based Access Control (HappiMynd)
+//   super_admin : Internal HappiMynd team — full system access & override rights.
+//   admin       : Client admins (HR / Dept managers), scoped to their organization:
+//                   * may add users + assign dashboard views, but cannot delete users
+//                   * may set a password ONCE at onboarding, not reset it later
+//                   * may set view permissions during setup, but not modify once locked
+//   user        : End users — access only the modules assigned during onboarding.
+// ---------------------------------------------------------------------------
+const ROLES = { SUPER_ADMIN: 'super_admin', ADMIN: 'admin', USER: 'user' };
+
+// Dashboard "views" an admin can grant to a member during setup.
+const DASHBOARD_VIEWS = [
+  'admin_dashboard', 'organizations', 'profiles', 'packets', 'quiz_builder',
+  'assigned_quizzes', 'results', 'reports', 'active_tracking', 'pdf_templates'
+];
+
+function isSuperAdmin(u) { return !!u && u.role === ROLES.SUPER_ADMIN; }
+function isAdmin(u) { return !!u && (u.role === ROLES.ADMIN || u.role === ROLES.SUPER_ADMIN); }
+
+// Identify the user making the request via the x-user-id header set by the client.
+function getActor(req) {
+  const id = req.header('x-user-id');
+  if (!id) return null;
+  return mockData.users.find(u => String(u.id) === String(id)) || null;
+}
+
+// Resolve the display name, email and organization for a quiz attempt. Prefers
+// the identity snapshot stored on the attempt itself, then falls back to the
+// users/employees records (matched type-safely, since ids may be number/string).
+function resolveAttemptUser(attempt) {
+  const user = mockData.users.find(u => String(u.id) === String(attempt.user_id)) || null;
+  const email = attempt.user_email || user?.email || null;
+  const employee = email
+    ? mockData.employees.find(e => String(e.email).toLowerCase() === String(email).toLowerCase())
+    : null;
+  const org = user?.organization_id
+    ? mockData.organizations.find(o => String(o.id) === String(user.organization_id))
+    : null;
+  const name =
+    attempt.user_name ||
+    employee?.name ||
+    user?.user_name ||
+    (email ? String(email).split('@')[0] : null) ||
+    `User ${attempt.user_id || 'Unknown'}`;
+  return {
+    user_name: name,
+    name,
+    email,
+    organization: org?.name || 'Individual'
+  };
+}
+
+// Organization scope check. Super Admin bypasses entirely. An admin with no
+// organization is treated as an unscoped/global admin (legacy default), while
+// an admin assigned to an organization is confined to that organization.
+function sameOrg(actor, targetOrgId) {
+  if (isSuperAdmin(actor)) return true;
+  if (!actor || !actor.organization_id) return true; // unscoped/global admin
+  return String(actor.organization_id) === String(targetOrgId || '');
+}
+
+// Append a permission-related action to the audit log.
+function logAction(actor, action, target, details = {}) {
+  if (!mockData.auditLog) mockData.auditLog = [];
+  const entry = {
+    id: String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
+    actor_id: actor ? actor.id : null,
+    actor_email: actor ? actor.email : null,
+    actor_role: actor ? actor.role : null,
+    action,
+    target_user_id: target ? (target.id || target) : null,
+    target_email: target && target.email ? target.email : null,
+    details,
+    created_at: new Date().toISOString()
+  };
+  mockData.auditLog.push(entry);
+  saveData(mockData);
+  console.log(`📝 audit: ${entry.actor_email || 'anon'} → ${action} (${entry.target_email || entry.target_user_id || '-'})`);
+  return entry;
+}
+
+// Middleware: require an authenticated Super Admin.
+function requireSuperAdmin(req, res, next) {
+  const actor = getActor(req);
+  if (!isSuperAdmin(actor)) {
+    return res.status(403).json({ error: 'Only Super Admin (HappiMynd) can perform this action.' });
+  }
+  req.actor = actor;
+  next();
+}
+
+// Middleware: require an authenticated Admin or Super Admin.
+function requireAdmin(req, res, next) {
+  const actor = getActor(req);
+  if (!isAdmin(actor)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  req.actor = actor;
+  next();
+}
+
+function generateOnboardingCode(organizations = []) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const exists = organizations.some(o => o.onboarding_code === code);
+    if (!exists) {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
+function generateUniqueEmployeeCode(employees = []) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let isUnique = false;
+  let code = '';
+  while (!isUnique) {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const exists = employees.some(e => e.code === code);
+    if (!exists) {
+      isUnique = true;
+    }
+  }
+  return code;
+}
+
 // Load initial data
 let mockData = loadData();
+
+// Migrate mockData organizations to add onboarding_code and onboarded_at
+if (mockData.organizations) {
+  let migrated = false;
+  mockData.organizations.forEach(o => {
+    if (!o.onboarding_code) {
+      o.onboarding_code = generateOnboardingCode(mockData.organizations);
+      migrated = true;
+    }
+    if (!o.onboarded_at) {
+      o.onboarded_at = o.created_at || new Date().toISOString();
+      migrated = true;
+    }
+  });
+  if (migrated) {
+    console.log('⚠️ Migrating mockData: Assigned onboarding codes and dates to existing organizations');
+    saveData(mockData);
+  }
+}
+
+// Migrate mockData employees to add code
+if (mockData.employees) {
+  let migrated = false;
+  mockData.employees.forEach(e => {
+    if (!e.code) {
+      e.code = generateUniqueEmployeeCode(mockData.employees);
+      migrated = true;
+    }
+  });
+  if (migrated) {
+    console.log('⚠️ Migrating mockData: Assigned unique codes to existing employees');
+    saveData(mockData);
+  }
+}
+
+// Migrate users to the RBAC model: seed a generic Super Admin and backfill fields.
+// Credentials are configurable via env and documented in MIGRATION_SUMMARY.md.
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'superadmin@happimynd.com';
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@123';
+(function migrateAccessControl() {
+  let changed = false;
+
+  // Seed a single generic Super Admin if none exists.
+  if (!mockData.users.some(u => u.role === ROLES.SUPER_ADMIN)) {
+    mockData.users.push({
+      id: 'super-admin',
+      email: SUPER_ADMIN_EMAIL,
+      password: SUPER_ADMIN_PASSWORD,
+      role: ROLES.SUPER_ADMIN,
+      user_name: 'Super Admin',
+      organization_id: null,
+      permissions: DASHBOARD_VIEWS.slice(),
+      permissions_locked: true,
+      password_set_by_admin: false,
+      created_by: 'system',
+      created_at: new Date().toISOString()
+    });
+    changed = true;
+  }
+
+  // Backfill RBAC fields on any pre-existing users.
+  mockData.users.forEach(u => {
+    if (u.permissions === undefined) {
+      u.permissions = isAdmin(u) ? DASHBOARD_VIEWS.slice() : [];
+      changed = true;
+    }
+    if (u.permissions_locked === undefined) {
+      u.permissions_locked = isAdmin(u); // existing admins are considered configured
+      changed = true;
+    }
+    if (u.password_set_by_admin === undefined) {
+      u.password_set_by_admin = false;
+      changed = true;
+    }
+    if (u.organization_id === undefined) {
+      u.organization_id = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    console.log(`⚠️ Migrated users to RBAC model (Super Admin: ${SUPER_ADMIN_EMAIL}, fields backfilled)`);
+    saveData(mockData);
+  }
+})();
+
+// Ensure all user passwords are hashed with bcrypt
+(function hashPlainPasswords() {
+  if (mockData.users) {
+    let migrated = false;
+    mockData.users.forEach(u => {
+      if (u.password && typeof u.password === 'string') {
+        const isHashed = u.password.startsWith('$2a$') || u.password.startsWith('$2b$') || u.password.startsWith('$2y$');
+        if (!isHashed) {
+          console.log(`🔐 Hashing password for user: ${u.email}`);
+          u.password = bcrypt.hashSync(u.password, 10);
+          migrated = true;
+        }
+      }
+    });
+    if (migrated) {
+      console.log('✅ Migrating mockData: Hashed all plain text user passwords');
+      saveData(mockData);
+    }
+  }
+})();
+
+
 console.log('📂 Loaded persistent data:', {
   users: mockData.users.length,
   profiles: mockData.profiles.length,
@@ -375,13 +626,23 @@ app.get('/api/test', (req, res) => {
 });
 
 // Auth routes
-app.post('/api/auth/signin', (req, res) => {
+app.post('/api/auth/signin', async (req, res) => {
   const { email, password } = req.body;
   console.log(`🔐 Sign in attempt: ${email}`);
   
-  const user = mockData.users.find(u => u.email === email && u.password === password);
+  const user = mockData.users.find(u => u.email && u.email.toLowerCase() === (email || '').trim().toLowerCase());
   
-  if (user) {
+  let isValid = false;
+  if (user && password && user.password) {
+    const isHashed = user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$');
+    if (isHashed) {
+      isValid = await bcrypt.compare(password, user.password);
+    } else {
+      isValid = user.password === password;
+    }
+  }
+  
+  if (isValid) {
     const { password: _, ...userWithoutPassword } = user;
     console.log(`✅ Login successful for: ${email}`);
     res.json({
@@ -399,12 +660,45 @@ app.post('/api/auth/signin', (req, res) => {
   }
 });
 
-app.post('/api/auth/signup', (req, res) => {
-  const { email, password, role = 'user', user_name, profile, organization } = req.body;
-  console.log(`📝 Sign up attempt: ${email} as ${role}`);
-  
+
+app.get('/api/auth/verify-code', (req, res) => {
+  const { code } = req.query;
+  console.log(`🔑 Verify employee user code: ${code}`);
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const emp = mockData.employees.find(e => e.code === code.trim().toUpperCase());
+  if (!emp) {
+    return res.status(404).json({ error: 'Invalid user code' });
+  }
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  const org = mockData.organizations.find(o => o.id === emp.organization_id);
+  if (!org) {
+    return res.status(404).json({ error: 'Associated organization not found' });
+  }
+  if (org.status !== 'active') {
+    return res.status(400).json({ error: 'Your organization is currently inactive' });
+  }
+  res.json({ id: org.id, name: org.name, email: emp.email, userName: emp.name });
+});
+
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, role = 'user', userName, user_name, profile, userCode } = req.body;
+  const targetUserName = userName || user_name;
+  const code = (userCode || '').trim();
+  console.log(`📝 Sign up attempt: ${email}${code ? ` with company code ${code}` : ' (individual)'}`);
+
+  if (!email || !email.trim() || !password) {
+    return res.status(400).json({ error: 'Email and password are required for signup' });
+  }
+
   // Check if user already exists
-  const existingUser = mockData.users.find(u => u.email === email);
+  const existingUser = mockData.users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
   if (existingUser) {
     return res.status(400).json({
       user: null,
@@ -412,27 +706,79 @@ app.post('/api/auth/signup', (req, res) => {
       error: 'User already exists'
     });
   }
-  
-  // Check if the selected profile exists
-  const existingProfile = mockData.profiles.find(p => p.name === profile);
-  if (!existingProfile) {
-    return res.status(400).json({
-      user: null,
-      session: null,
-      error: `Profile "${profile}" does not exist. Please select from available profiles.`
-    });
+
+  // Resolve the selected profile. Individuals (and any new profile coming from
+  // the signup form) are accepted rather than rejected — the profile record is
+  // created on the fly if it doesn't exist yet, so signup never fails over it.
+  const profileName = (profile && profile.trim()) ? profile.trim() : 'Individual';
+  if (!mockData.profiles) {
+    mockData.profiles = [];
   }
-  
+  let existingProfile = mockData.profiles.find(
+    p => p.name.toLowerCase() === profileName.toLowerCase()
+  );
+  if (!existingProfile) {
+    existingProfile = {
+      id: String(Date.now()),
+      name: profileName,
+      email: 'new@example.com',
+      role: 'student',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    mockData.profiles.push(existingProfile);
+  }
+
+  // The company code is optional. When provided it must resolve to a valid,
+  // active organization and match the pre-registered employee email. When
+  // omitted, the user signs up as an individual (no organization).
+  let organizationId = null;
+  let organizationName = 'Individual';
+
+  if (code) {
+    if (!mockData.employees) {
+      mockData.employees = [];
+    }
+    const emp = mockData.employees.find(e => e.code === code.toUpperCase());
+    if (!emp) {
+      return res.status(400).json({ error: 'Invalid company code' });
+    }
+    if (emp.email.toLowerCase() !== email.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'This company code does not belong to the entered email address.' });
+    }
+    if (!mockData.organizations) {
+      mockData.organizations = [];
+    }
+    const org = mockData.organizations.find(o => o.id === emp.organization_id);
+    if (!org) {
+      return res.status(400).json({ error: 'Associated organization not found' });
+    }
+    if (org.status !== 'active') {
+      return res.status(400).json({ error: 'This organization is currently inactive' });
+    }
+    organizationId = org.id;
+    organizationName = org.name;
+  }
+
+  // Hash password before saving
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   // Create new user
   const userId = String(Date.now());
   const newUser = {
     id: userId,
     email,
-    password,
-    role,
-    user_name: user_name || email.split('@')[0],
-    profile: profile, // Store the profile name for reference
-    organization: organization // Store the organization for reference
+    password: hashedPassword,
+    role: ROLES.USER,
+    user_name: targetUserName || email.split('@')[0],
+    profile: existingProfile.name,
+    organization_id: organizationId,
+    organization: organizationName,
+    permissions: [],
+    permissions_locked: false,
+    password_set_by_admin: false,
+    created_by: 'self',
+    created_at: new Date().toISOString()
   };
   mockData.users.push(newUser);
   
@@ -446,6 +792,7 @@ app.post('/api/auth/signup', (req, res) => {
     error: null
   });
 });
+
 
 app.post('/api/auth/signout', (req, res) => {
   console.log('👋 Sign out');
@@ -462,18 +809,202 @@ app.get('/api/auth/user', (req, res) => {
 });
 
 // Mock data endpoints to prevent errors
+app.get('/api/users', (req, res) => {
+  console.log('👥 Get all users');
+  const safeUsers = mockData.users.map(u => {
+    const { password, ...withoutPassword } = u;
+    return withoutPassword;
+  });
+  res.json(safeUsers);
+});
+
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   console.log(`👤 Get user ${userId}`);
-  
-  const user = mockData.users.find(u => u.id === userId);
+
+  const user = mockData.users.find(u => String(u.id) === String(userId));
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
-  
+
+  // Return user data without password, enriched with the employee name (if any)
+  // so callers get a usable display name rather than just an email.
+  const { password, ...userWithoutPassword } = user;
+  const employee = user.email
+    ? mockData.employees.find(e => String(e.email).toLowerCase() === String(user.email).toLowerCase())
+    : null;
+  res.json({
+    ...userWithoutPassword,
+    user_name: user.user_name || employee?.name || (user.email ? user.email.split('@')[0] : `User ${user.id}`)
+  });
+});
+
+app.get('/api/local-users/:id', (req, res) => {
+  const userId = req.params.id;
+  console.log(`👤 Get local user ${userId}`);
+
+  const user = mockData.users.find(u => String(u.id) === String(userId));
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
   // Return user data without password
   const { password, ...userWithoutPassword } = user;
   res.json(userWithoutPassword);
+});
+
+// ---------------------------------------------------------------------------
+// RBAC: user management (Super Admin / Admin rules) + audit log
+// ---------------------------------------------------------------------------
+
+// Admin (or Super Admin) adds a new user with an initial password and the set
+// of dashboard views they may see. Permissions are locked immediately after
+// this initial setup; only a Super Admin can change them afterwards. Admins are
+// scoped to their own organization and may only create regular users.
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+  const { email, password, user_name, profile, role = ROLES.USER, permissions = [], organization_id = null } = req.body;
+  console.log(`➕ ${req.actor.role} (${req.actor.email}) creating user: ${email}`);
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  if (mockData.users.find(u => u.email === email)) {
+    return res.status(400).json({ error: 'User already exists.' });
+  }
+  // Only a Super Admin may create admins or other super admins.
+  if ((role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN) && !isSuperAdmin(req.actor)) {
+    return res.status(403).json({ error: 'Only Super Admin can assign Admin or Super Admin roles.' });
+  }
+  const finalRole = [ROLES.USER, ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(role) ? role : ROLES.USER;
+  // Admins can only place users inside their own organization; Super Admin may target any.
+  const finalOrgId = isSuperAdmin(req.actor) ? organization_id : (req.actor.organization_id || null);
+  const sanitizedPerms = (Array.isArray(permissions) ? permissions : []).filter(p => DASHBOARD_VIEWS.includes(p));
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const newUser = {
+    id: String(Date.now()),
+    email,
+    password: hashedPassword,
+    role: finalRole,
+    user_name: user_name || email.split('@')[0],
+    profile: profile || null,
+    organization_id: finalOrgId,
+    permissions: sanitizedPerms,
+    permissions_locked: true,      // locked after initial setup
+    password_set_by_admin: true,   // onboarding password has been set
+    created_by: req.actor.id,
+    created_at: new Date().toISOString()
+  };
+  mockData.users.push(newUser);
+  saveData(mockData);
+  logAction(req.actor, 'user.create', newUser, { role: finalRole, permissions: sanitizedPerms, organization_id: finalOrgId });
+
+  const { password: _pw, ...safe } = newUser;
+  res.status(201).json(safe);
+});
+
+
+// Update a user's dashboard view permissions.
+//   Super Admin : always allowed.
+//   Admin       : allowed only while permissions are still unlocked (i.e. the
+//                 one-time initial setup) AND the target is in their org;
+//                 locked changes require Super Admin.
+app.put('/api/users/:id/permissions', requireAdmin, (req, res) => {
+  const actor = req.actor;
+  const user = mockData.users.find(u => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (!sameOrg(actor, user.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  const sanitized = (Array.isArray(req.body.permissions) ? req.body.permissions : []).filter(p => DASHBOARD_VIEWS.includes(p));
+
+  if (!isSuperAdmin(actor) && user.permissions_locked) {
+    return res.status(403).json({
+      error: 'View permissions are locked after initial setup. Any changes require Super Admin approval.'
+    });
+  }
+
+  const before = user.permissions;
+  user.permissions = sanitized;
+  user.permissions_locked = true;
+  saveData(mockData);
+  logAction(actor, 'permissions.update', user, { before, after: sanitized });
+  res.json({ success: true, permissions: user.permissions, permissions_locked: user.permissions_locked });
+});
+
+// Set or reset a user's password.
+//   Super Admin : may reset at any time.
+//   Admin       : may set the password ONCE during onboarding (own org only);
+//                 any subsequent reset must be routed to Super Admin.
+app.post('/api/users/:id/password', requireAdmin, async (req, res) => {
+  const actor = req.actor;
+  const user = mockData.users.find(u => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (!sameOrg(actor, user.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: 'New password is required.' });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  if (isSuperAdmin(actor)) {
+    user.password = hashedPassword;
+    user.password_set_by_admin = false; // super admin reset clears the admin lock
+    saveData(mockData);
+    logAction(actor, 'password.reset', user, {});
+    return res.json({ success: true, message: 'Password reset successfully.' });
+  }
+
+  // Admin path: one-time onboarding set only.
+  if (user.password_set_by_admin) {
+    return res.status(403).json({
+      error: 'Password was already set during onboarding. For any further password changes or resets, please connect with Super Admin (HappiMynd).'
+    });
+  }
+  user.password = hashedPassword;
+  user.password_set_by_admin = true;
+  saveData(mockData);
+  logAction(actor, 'password.set', user, { onboarding: true });
+  res.json({ success: true, message: 'Onboarding password set successfully.' });
+});
+
+
+// Delete a user. Admins cannot remove users — only a Super Admin can.
+app.delete('/api/users/:id', (req, res) => {
+  const actor = getActor(req);
+  if (!isAdmin(actor)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  if (!isSuperAdmin(actor)) {
+    return res.status(403).json({
+      error: 'Admin cannot remove users. User removal requests must be routed to Super Admin (HappiMynd).'
+    });
+  }
+  const idx = mockData.users.findIndex(u => u.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  if (mockData.users[idx].role === ROLES.SUPER_ADMIN) {
+    return res.status(403).json({ error: 'Super Admin accounts cannot be deleted.' });
+  }
+  const [removed] = mockData.users.splice(idx, 1);
+  saveData(mockData);
+  logAction(actor, 'user.delete', removed, { role: removed.role });
+  res.json({ success: true, message: `User ${removed.email} removed successfully.`, deleted_id: removed.id });
+});
+
+// Audit log — Super Admin only.
+app.get('/api/audit-log', requireSuperAdmin, (req, res) => {
+  const log = (mockData.auditLog || []).slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  res.json(log);
 });
 
 app.get('/api/profiles', (req, res) => {
@@ -543,6 +1074,244 @@ app.delete('/api/profiles/:id', (req, res) => {
     message: `Profile ${profileId} deleted successfully`,
     deleted_id: profileId
   });
+});
+
+// Organization CRUD operations.
+// This list is fetched during app bootstrap (before login too), so it never
+// 403s — it returns data scoped to the caller instead:
+//   Super Admin / legacy org-less admin -> all orgs
+//   Org-scoped admin                     -> their own org
+//   Non-admin / anonymous                -> empty list
+app.get('/api/organizations', (req, res) => {
+  console.log('🏢 Get organizations');
+  const actor = getActor(req);
+  const all = mockData.organizations || [];
+  if (!isAdmin(actor)) {
+    return res.json([]);
+  }
+  if (isSuperAdmin(actor) || !actor.organization_id) {
+    return res.json(all);
+  }
+  res.json(all.filter(o => String(o.id) === String(actor.organization_id)));
+});
+
+// Organization management (create/update/delete/regenerate code) is reserved
+// for Super Admin per the access-control policy.
+app.post('/api/organizations', requireSuperAdmin, (req, res) => {
+  const org = req.body;
+  console.log('🏢 Create organization', org);
+  
+  if (!org.name) {
+    return res.status(400).json({ error: 'Organization name is required' });
+  }
+
+  const exists = (mockData.organizations || []).some(o => o.name.toLowerCase() === org.name.toLowerCase());
+  if (exists) {
+    return res.status(400).json({ error: 'Organization name already exists' });
+  }
+
+  const newOrg = {
+    id: String(Date.now()),
+    name: org.name,
+    description: org.description || '',
+    status: org.status || 'active',
+    onboarding_code: generateOnboardingCode(mockData.organizations || []),
+    onboarded_at: org.onboarded_at || new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  
+  mockData.organizations.push(newOrg);
+  saveData(mockData);
+
+  res.status(201).json(newOrg);
+});
+
+app.put('/api/organizations/:id', requireSuperAdmin, (req, res) => {
+  const orgId = req.params.id;
+  const updates = req.body;
+  console.log(`🏢 Update organization ${orgId}`, updates);
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+
+  const orgIndex = mockData.organizations.findIndex(o => o.id === orgId);
+  if (orgIndex === -1) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+
+  if (updates.name && updates.name.toLowerCase() !== mockData.organizations[orgIndex].name.toLowerCase()) {
+    const exists = mockData.organizations.some(o => o.name.toLowerCase() === updates.name.toLowerCase());
+    if (exists) {
+      return res.status(400).json({ error: 'Organization name already exists' });
+    }
+  }
+
+  const updatedOrg = {
+    ...mockData.organizations[orgIndex],
+    ...updates,
+    updated_at: new Date().toISOString()
+  };
+
+  mockData.organizations[orgIndex] = updatedOrg;
+  saveData(mockData);
+
+  res.json(updatedOrg);
+});
+
+app.delete('/api/organizations/:id', requireSuperAdmin, (req, res) => {
+  const orgId = req.params.id;
+  console.log(`🏢 Delete organization ${orgId}`);
+
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+
+  const orgIndex = mockData.organizations.findIndex(o => o.id === orgId);
+  if (orgIndex === -1) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+
+  mockData.organizations.splice(orgIndex, 1);
+  saveData(mockData);
+
+  res.json({
+    success: true,
+    message: `Organization ${orgId} deleted successfully`,
+    deleted_id: orgId
+  });
+});
+
+app.post('/api/organizations/:id/regenerate-code', requireSuperAdmin, (req, res) => {
+  const orgId = req.params.id;
+  console.log(`🏢 Regenerate onboarding code for organization ${orgId}`);
+  if (!mockData.organizations) {
+    mockData.organizations = [];
+  }
+  const org = mockData.organizations.find(o => o.id === orgId);
+  if (!org) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const code = generateOnboardingCode(mockData.organizations);
+  org.onboarding_code = code;
+  org.updated_at = new Date().toISOString();
+  saveData(mockData);
+  res.json({ onboarding_code: code });
+});
+
+// Employees CRUD and Bulk Import operations.
+// Managing the org directory is "managing users within allowed scope": Admins
+// may do it for their own organization, Super Admin for any.
+app.get('/api/organizations/:orgId/employees', requireAdmin, (req, res) => {
+  const orgId = req.params.orgId;
+  if (!sameOrg(req.actor, orgId)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  console.log(`👥 Get employees for organization ${orgId}`);
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const orgEmployees = mockData.employees.filter(e => e.organization_id === orgId);
+  const enriched = orgEmployees.map(emp => {
+    const isRegistered = mockData.users && mockData.users.some(u => 
+      u.email.toLowerCase() === emp.email.toLowerCase() && 
+      String(u.organization_id) === String(emp.organization_id)
+    );
+    return {
+      ...emp,
+      registered: isRegistered ? 1 : 0
+    };
+  });
+  res.json(enriched);
+});
+
+app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) => {
+  const orgId = req.params.orgId;
+  if (!sameOrg(req.actor, orgId)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  console.log(`👥 Import employees for organization ${orgId}`);
+  const { employees } = req.body;
+
+  if (!employees || !Array.isArray(employees)) {
+    return res.status(400).json({ error: 'Invalid payload: employees array is required' });
+  }
+
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+
+  const existingEmails = mockData.employees
+    .filter(e => e.organization_id === orgId)
+    .map(e => e.email.toLowerCase());
+
+  const imported = [];
+  const allCurrentEmployees = [...(mockData.employees || [])];
+  for (const emp of employees) {
+    if (!emp.name || !emp.email) {
+      return res.status(400).json({ error: 'Name and Email are mandatory fields' });
+    }
+    if (existingEmails.includes(emp.email.toLowerCase())) {
+      return res.status(400).json({ error: `Email ${emp.email} already exists in this organization` });
+    }
+    
+    const code = generateUniqueEmployeeCode(allCurrentEmployees);
+    const newEmp = {
+      id: String(Date.now() + Math.random()),
+      organization_id: orgId,
+      name: emp.name.trim(),
+      email: emp.email.trim(),
+      code,
+      metadata: emp.metadata || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    imported.push(newEmp);
+    allCurrentEmployees.push(newEmp);
+    existingEmails.push(newEmp.email.toLowerCase());
+  }
+
+  mockData.employees.push(...imported);
+  saveData(mockData);
+
+  res.json(imported);
+});
+
+app.delete('/api/employees/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  console.log(`👥 Delete employee ${id}`);
+  if (!mockData.employees) {
+    mockData.employees = [];
+  }
+  const index = mockData.employees.findIndex(e => e.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+  const emp = mockData.employees[index];
+  if (!sameOrg(req.actor, emp.organization_id)) {
+    return res.status(403).json({ error: 'You can only manage users within your organization.' });
+  }
+  // If the directory entry has already become a registered user account, its
+  // removal is a user removal — reserved for Super Admin.
+  const isRegisteredUser = (mockData.users || []).some(u =>
+    u.email.toLowerCase() === emp.email.toLowerCase() &&
+    String(u.organization_id) === String(emp.organization_id)
+  );
+  if (isRegisteredUser && !isSuperAdmin(req.actor)) {
+    return res.status(403).json({
+      error: 'This member is a registered user. User removal requests must be routed to Super Admin (HappiMynd).'
+    });
+  }
+  mockData.employees.splice(index, 1);
+  saveData(mockData);
+  logAction(req.actor, 'employee.delete', { id: emp.id, email: emp.email }, { organization_id: emp.organization_id });
+  res.json({ success: true, message: `Employee ${id} deleted successfully` });
 });
 
 // Packets CRUD operations
@@ -1102,25 +1871,78 @@ app.get('/api/quiz-assignments', (req, res) => {
 });
 
 app.post('/api/quiz-assignments', (req, res) => {
-  const newAssignment = req.body;
-  const newId = String(Date.now());
-  console.log(`➕ Create new quiz assignment:`, newAssignment);
+  const { quizId, quiz_id, profileIds, profileId, userIds, userId, due_date, dueDate, status } = req.body;
+  const qId = quizId || quiz_id || '1';
+  const resolvedDueDate = due_date || dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const resolvedStatus = status || 'assigned';
   
-  const assignment = {
-    id: newId,
-    quiz_id: newAssignment.quiz_id || newAssignment.quizId || '1',
-    profile_id: newAssignment.profile_id || newAssignment.profileIds?.[0] || '1',
-    assigned_at: new Date().toISOString(),
-    due_date: newAssignment.due_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: newAssignment.status || 'assigned',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+  console.log(`➕ Create new quiz assignments for quiz ${qId}:`, { profileIds, profileId, userIds, userId });
   
-  mockData.quizAssignments.push(assignment);
+  const createdAssignments = [];
+  let baseTime = Date.now();
+  
+  // 1. Process profile assignments
+  const profilesToAssign = [];
+  if (Array.isArray(profileIds)) {
+    profilesToAssign.push(...profileIds);
+  } else if (profileId) {
+    profilesToAssign.push(profileId);
+  }
+  
+  profilesToAssign.forEach((pId, index) => {
+    // Check if duplicate assignment exists (matching both profile_id and quiz_id, and with NO user_id)
+    const exists = mockData.quizAssignments.some(a => a.quiz_id === qId && a.profile_id === pId && !a.user_id);
+    if (!exists) {
+      const assignment = {
+        id: String(baseTime + index),
+        quiz_id: qId,
+        profile_id: pId,
+        user_id: null,
+        assigned_at: new Date().toISOString(),
+        due_date: resolvedDueDate,
+        status: resolvedStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      mockData.quizAssignments.push(assignment);
+      createdAssignments.push(assignment);
+    }
+  });
+  
+  // 2. Process user assignments
+  const usersToAssign = [];
+  if (Array.isArray(userIds)) {
+    usersToAssign.push(...userIds);
+  } else if (userId) {
+    usersToAssign.push(userId);
+  }
+  
+  usersToAssign.forEach((uId, index) => {
+    // Check if duplicate assignment exists
+    const exists = mockData.quizAssignments.some(a => a.quiz_id === qId && a.user_id === uId);
+    if (!exists) {
+      const userObj = mockData.users.find(u => u.id === uId);
+      const userProfile = userObj ? mockData.profiles.find(p => p.name === userObj.profile) : null;
+      
+      const assignment = {
+        id: String(baseTime + profilesToAssign.length + index),
+        quiz_id: qId,
+        profile_id: userProfile ? userProfile.id : null,
+        user_id: uId,
+        assigned_at: new Date().toISOString(),
+        due_date: resolvedDueDate,
+        status: resolvedStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      mockData.quizAssignments.push(assignment);
+      createdAssignments.push(assignment);
+    }
+  });
+  
   saveData(mockData);
   
-  res.status(201).json(assignment);
+  res.status(201).json(createdAssignments.length > 0 ? createdAssignments[0] : { success: true });
 });
 
 app.put('/api/quiz-assignments/:id', (req, res) => {
@@ -1170,7 +1992,31 @@ app.delete('/api/quiz-assignments/profile/:profileId/quiz/:quizId', (req, res) =
   console.log(`🗑️ Delete quiz assignment for profile ${profileId} and quiz ${quizId}`);
   
   const assignmentIndex = mockData.quizAssignments.findIndex(
-    a => a.profile_id === profileId && a.quiz_id === quizId
+    a => a.profile_id === profileId && a.quiz_id === quizId && !a.user_id
+  );
+  
+  if (assignmentIndex === -1) {
+    return res.status(404).json({ error: 'Assignment not found' });
+  }
+  
+  const deletedAssignment = mockData.quizAssignments[assignmentIndex];
+  mockData.quizAssignments.splice(assignmentIndex, 1);
+  saveData(mockData);
+  
+  res.json({
+    success: true,
+    message: `Quiz assignment removed successfully`,
+    deleted_assignment: deletedAssignment
+  });
+});
+
+// Remove assignment by user and quiz ID
+app.delete('/api/quiz-assignments/user/:userId/quiz/:quizId', (req, res) => {
+  const { userId, quizId } = req.params;
+  console.log(`🗑️ Delete quiz assignment for user ${userId} and quiz ${quizId}`);
+  
+  const assignmentIndex = mockData.quizAssignments.findIndex(
+    a => a.user_id === userId && a.quiz_id === quizId
   );
   
   if (assignmentIndex === -1) {
@@ -1193,14 +2039,19 @@ app.get('/api/quiz-attempts', (req, res) => {
   console.log('📝 Get quiz attempts');
   
   const { quiz_id } = req.query;
-  
+
+  // Attach a resolved user (name + email) to every attempt so dashboards and
+  // reports render the real identity instead of a "User {id}" placeholder.
+  const withUser = (attempts) =>
+    attempts.map(a => ({ ...a, user: resolveAttemptUser(a) }));
+
   if (quiz_id) {
     // Filter attempts by quiz_id
     const filteredAttempts = mockData.quizAttempts.filter(a => a.quiz_id === quiz_id);
-    res.json(filteredAttempts);
+    res.json(withUser(filteredAttempts));
   } else {
     // Return all attempts
-    res.json(mockData.quizAttempts);
+    res.json(withUser(mockData.quizAttempts));
   }
 });
 
@@ -1214,12 +2065,20 @@ app.post('/api/quiz-attempts', (req, res) => {
     quiz_id: newAttempt.quiz_id || '1',
     profile_id: newAttempt.profile_id || newAttempt.user_id || '1',
     user_id: newAttempt.user_id || newAttempt.profile_id || '1', // Add user_id for dashboard
+    // Snapshot the taker's identity so the dashboard/report can show the correct
+    // name and email even when the user record can't be resolved later.
+    user_name: newAttempt.user_name || null,
+    user_email: newAttempt.user_email || null,
     score: newAttempt.score || 0,
     total_questions: newAttempt.total_questions || 10,
     correct_answers: newAttempt.correct_answers || 0,
     // New fields for marks-based scoring
     total_marks: newAttempt.total_marks || 0,
     packet_marks: newAttempt.packet_marks || {},
+    // Persist progress fields so a resumed attempt restores the saved answers and
+    // the position to continue from / navigate back through.
+    answers: newAttempt.answers || {},
+    current_question_index: newAttempt.current_question_index || 0,
     started_at: new Date().toISOString(),
     completed_at: newAttempt.completed_at || null,
     status: newAttempt.status || 'in_progress',
@@ -1252,19 +2111,23 @@ app.put('/api/quiz-attempts/:id', (req, res) => {
     quiz_id: updateData.quiz_id || mockData.quizAttempts[attemptIndex].quiz_id,
     profile_id: updateData.profile_id || updateData.user_id || mockData.quizAttempts[attemptIndex].profile_id,
     user_id: updateData.user_id || updateData.profile_id || mockData.quizAttempts[attemptIndex].user_id,
-    score: updateData.score || mockData.quizAttempts[attemptIndex].score,
-    total_questions: updateData.total_questions || mockData.quizAttempts[attemptIndex].total_questions,
-    correct_answers: updateData.correct_answers || mockData.quizAttempts[attemptIndex].correct_answers,
+    user_name: updateData.user_name || mockData.quizAttempts[attemptIndex].user_name || null,
+    user_email: updateData.user_email || mockData.quizAttempts[attemptIndex].user_email || null,
+    score: updateData.score !== undefined ? updateData.score : mockData.quizAttempts[attemptIndex].score,
+    total_questions: updateData.total_questions !== undefined ? updateData.total_questions : mockData.quizAttempts[attemptIndex].total_questions,
+    correct_answers: updateData.correct_answers !== undefined ? updateData.correct_answers : mockData.quizAttempts[attemptIndex].correct_answers,
     // New fields for marks-based scoring
-    total_marks: updateData.total_marks || mockData.quizAttempts[attemptIndex].total_marks || 0,
-    packet_marks: updateData.packet_marks || mockData.quizAttempts[attemptIndex].packet_marks || {},
-    completed_at: updateData.completed_at || mockData.quizAttempts[attemptIndex].completed_at,
+    total_marks: updateData.total_marks !== undefined ? updateData.total_marks : mockData.quizAttempts[attemptIndex].total_marks,
+    packet_marks: updateData.packet_marks !== undefined ? updateData.packet_marks : mockData.quizAttempts[attemptIndex].packet_marks,
+    completed_at: updateData.completed_at !== undefined ? updateData.completed_at : mockData.quizAttempts[attemptIndex].completed_at,
     status: updateData.status || mockData.quizAttempts[attemptIndex].status,
+    answers: updateData.answers !== undefined ? updateData.answers : mockData.quizAttempts[attemptIndex].answers,
+    current_question_index: updateData.current_question_index !== undefined ? updateData.current_question_index : mockData.quizAttempts[attemptIndex].current_question_index,
     updated_at: new Date().toISOString()
   };
   
   saveData(mockData);
-  res.json(mockData.quizAttempts[attemptId]);
+  res.json(mockData.quizAttempts[attemptIndex]);
 });
 
 app.delete('/api/quiz-attempts/:id', (req, res) => {
@@ -1365,8 +2228,16 @@ app.get('/api/users/:userId/assigned-quizzes', (req, res) => {
   const userId = req.params.userId;
   console.log(`📋 Get assigned quizzes for user ${userId}`);
   
-  // Get assignments for this user and enrich with quiz and profile data
-  const userAssignments = mockData.quizAssignments.filter(a => a.user_id === userId);
+  // Find the user to get their profile name
+  const user = mockData.users.find(u => u.id === userId);
+  const userProfileName = user ? user.profile : null;
+  const userProfile = userProfileName ? mockData.profiles.find(p => p.name === userProfileName) : null;
+  
+  // Get assignments: matching the user's ID OR the user's profile ID
+  const userAssignments = mockData.quizAssignments.filter(a => 
+    (a.user_id && String(a.user_id) === String(userId)) ||
+    (!a.user_id && userProfile && String(a.profile_id) === String(userProfile.id))
+  );
   
   const enrichedAssignments = userAssignments.map(assignment => {
     const quiz = mockData.quizzes.find(q => q.id === assignment.quiz_id);
@@ -1436,7 +2307,7 @@ function getDefaultPDFTemplate() {
   return {
     header: { 
       enabled: true, 
-      backgroundColor: '#2563eb', 
+      backgroundColor: '#895BF5', 
       textColor: '#ffffff',
       title: 'Assessment Performance Report',
       subtitle: 'Comprehensive Analysis Report',
@@ -1530,7 +2401,7 @@ function getDefaultPDFTemplate() {
       fontSizes: { h1: 28, h2: 24, h3: 20, h4: 18, h5: 16, body: 12, small: 10 }
     },
     colors: {
-      primary: '#2563eb',
+      primary: '#895BF5',
       secondary: '#6b7280',
       success: '#10b981',
       warning: '#f59e0b',

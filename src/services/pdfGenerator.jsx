@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica'
   },
   header: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#895BF5',
     padding: 20,
     marginBottom: 20,
     borderRadius: 8
@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     marginBottom: 5
   },
   headerSubtitle: {
-    color: '#e0e7ff',
+    color: '#F2F0FF',
     fontSize: 14,
     textAlign: 'center'
   },
@@ -360,7 +360,7 @@ const getPerformanceLevel = (marks, packet = null) => {
     { min: 0,  max: 2,  label: 'Needs Improvement', color: '#dc2626', emoji: '📚', largeText: "Keep practicing! You're making progress." },
     { min: 3,  max: 5,  label: 'Average',            color: '#d97706', emoji: '📊', largeText: "Good effort! You're on the right track." },
     { min: 6,  max: 8,  label: 'Good',               color: '#059669', emoji: '🎯', largeText: "Well done! You're showing strong understanding." },
-    { min: 9,  max: 15, label: 'Excellent',           color: '#2563eb', emoji: '🏆', largeText: "Outstanding! You've mastered this material!" }
+    { min: 9,  max: 15, label: 'Excellent',           color: '#895BF5', emoji: '🏆', largeText: "Outstanding! You've mastered this material!" }
   ];
 
   return defaultScale.find(r => marks >= r.min && marks <= r.max) || defaultScale[0];
@@ -380,7 +380,7 @@ const BarChart = ({ data, labels, title }) => (
               styles.bar,
               {
                 height: Math.max(10, (value / Math.max(...data, 1)) * 80),
-                backgroundColor: index % 2 === 0 ? '#3b82f6' : '#10b981'
+                backgroundColor: index % 2 === 0 ? '#895BF5' : '#A655F7'
               }
             ]}
           />
@@ -400,7 +400,7 @@ const GaugeChart = ({ value, maxValue, title }) => {
         {/* react-pdf doesn't support half-circle via border tricks reliably;
             use a simple percentage bar instead */}
         <View style={{ width: 200, height: 16, backgroundColor: '#e5e7eb', borderRadius: 8, marginBottom: 8 }}>
-          <View style={{ width: `${percentage}%`, height: 16, backgroundColor: '#3b82f6', borderRadius: 8 }} />
+          <View style={{ width: `${percentage}%`, height: 16, backgroundColor: '#895BF5', borderRadius: 8 }} />
         </View>
         <Text style={styles.gaugeText}>{percentage}%</Text>
         <Text style={[styles.gaugeText, { fontSize: 12 }]}>{value} / {maxValue}</Text>
@@ -410,7 +410,7 @@ const GaugeChart = ({ value, maxValue, title }) => {
 };
 
 const PieChart = ({ data, labels, title }) => {
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const colors = ['#895BF5', '#A655F7', '#BF83FC', '#7D89F7', '#C084FC'];
   return (
     <View style={styles.chartContainer}>
       <Text style={styles.chartTitle}>{title}</Text>
@@ -440,7 +440,7 @@ const SpiderChart = ({ data, labels, title }) => (
                 styles.bar,
                 {
                   height: Math.max(10, (value / 100) * 60),
-                  backgroundColor: index % 2 === 0 ? '#ef4444' : '#8b5cf6'
+                  backgroundColor: index % 2 === 0 ? '#895BF5' : '#BF83FC'
                 }
               ]}
             />
