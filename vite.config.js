@@ -11,28 +11,28 @@ export default defineConfig({
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
       '/api/organizations': {
-        target: 'https://assessment-api-two.vercel.app',
+        target: 'http://65.0.236.150:8090',
         changeOrigin: true,
         secure: false
       },
       '/api/auth': {
-        target: 'https://assessment-api-two.vercel.app',
+        target: 'http://65.0.236.150:8090',
         changeOrigin: true,
         secure: false
       },
       '/api/employees': {
-        target: 'https://assessment-api-two.vercel.app',
+        target: 'http://65.0.236.150:8090',
         changeOrigin: true,
         secure: false
       },
       '/api/local-users': {
-        target: 'https://assessment-api-two.vercel.app',
+        target: 'http://65.0.236.150:8090',
         changeOrigin: true,
         secure: false
       },
       '/api': {
         // Targeted at the live Vercel backend backed by Google Sheets
-        target: 'https://assessment-api-two.vercel.app',
+        target: 'http://65.0.236.150:8090',
         changeOrigin: true,
         secure: false
       }

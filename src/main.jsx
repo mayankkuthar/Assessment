@@ -10,9 +10,9 @@ if (import.meta.env.PROD) {
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
     let url = typeof input === 'string' ? input : (input && input.url);
-    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('assessment-api-two.vercel.app/api'))) {
+    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('65.0.236.150:8090/api'))) {
       const targetUrl = url.startsWith('/api')
-        ? `https://assessment-api-two.vercel.app${url}`
+        ? `http://65.0.236.150:8090${url}`
         : url;
         
       if (typeof input === 'string') {

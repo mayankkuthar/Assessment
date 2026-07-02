@@ -1,7 +1,7 @@
 // API service to replace direct SQLite calls in the browser
 const API_BASE = import.meta.env.DEV
   ? '/api'
-  : 'https://assessment-api-two.vercel.app/api';
+  : 'http://65.0.236.150:8090/api';
 
 class ApiError extends Error {
   constructor(message, status) {
