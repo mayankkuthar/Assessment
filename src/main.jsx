@@ -9,11 +9,24 @@ import { DatabaseProvider } from './hooks/useDatabase'
 if (import.meta.env.PROD) {
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
-    if (typeof input === 'string' && input.startsWith('/api')) {
-      return originalFetch(`https://assessment-api-two.vercel.app${input}`, {
-        ...init,
-        credentials: 'omit'
-      });
+    let url = typeof input === 'string' ? input : (input && input.url);
+    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('assessment-api-two.vercel.app/api'))) {
+      const targetUrl = url.startsWith('/api')
+        ? `https://assessment-api-two.vercel.app${url}`
+        : url;
+        
+      if (typeof input === 'string') {
+        return originalFetch(targetUrl, {
+          ...init,
+          credentials: 'omit'
+        });
+      } else {
+        const newRequest = new Request(targetUrl, {
+          ...init,
+          credentials: 'omit'
+        });
+        return originalFetch(newRequest);
+      }
     }
     return originalFetch(input, init);
   };

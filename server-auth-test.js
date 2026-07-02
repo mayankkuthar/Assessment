@@ -1085,7 +1085,26 @@ app.delete('/api/profiles/:id', (req, res) => {
 app.get('/api/organizations', (req, res) => {
   console.log('🏢 Get organizations');
   const actor = getActor(req);
-  const all = mockData.organizations || [];
+  
+  // Start with a copy of defined organizations
+  const all = [...(mockData.organizations || [])];
+  
+  // Dynamically scan user profiles to find and include legacy/previous organizations (e.g. Nuvoco, PCL)
+  const userOrgs = [...new Set(mockData.users.map(u => u.organization).filter(Boolean))];
+  userOrgs.forEach(orgName => {
+    if (orgName !== 'Individual' && !all.some(o => o.name.toLowerCase() === orgName.toLowerCase())) {
+      all.push({
+        id: 'legacy-' + orgName.toLowerCase().replace(/\s+/g, '-'),
+        name: orgName,
+        description: 'Auto-recovered legacy organization',
+        status: 'active',
+        onboarding_code: 'LEGACY-' + orgName.toUpperCase().replace(/\s+/g, ''),
+        onboarded_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      });
+    }
+  });
+
   if (!isAdmin(actor)) {
     return res.json([]);
   }

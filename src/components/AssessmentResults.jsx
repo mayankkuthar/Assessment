@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Assessment as AssessmentIcon,
   Quiz as QuizIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { useDatabase } from '../hooks/useDatabase';
 import './AssessmentResults.css';
@@ -14,6 +15,7 @@ const AssessmentResults = () => {
   const [error, setError] = useState(null);
   const [quizPackets, setQuizPackets] = useState([]);
   const [questionCounts, setQuestionCounts] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { quizzes, packets, profiles, users, loading: dataLoading, error: dataError } = useDatabase();
 
@@ -100,22 +102,26 @@ const AssessmentResults = () => {
           if (userData) {
             user = {
               name: userData.user_name || userData.email || 'Unknown User',
-              email: userData.email || 'No email'
+              email: userData.email || 'No email',
+              organization: userData.organization || 'Individual'
             };
           } else if (attempt.user) {
             user = {
               name: attempt.user.name || attempt.user.user_name || 'Unknown User',
-              email: attempt.user.email || 'No email'
+              email: attempt.user.email || 'No email',
+              organization: attempt.user.organization || 'Individual'
             };
           } else if (profile) {
             user = {
               name: profile.name || 'Unknown User',
-              email: profile.email || 'No email'
+              email: profile.email || 'No email',
+              organization: 'Individual'
             };
           } else {
             user = { 
               name: `User ${attempt.user_id || attempt.profile_id || 'Unknown'}`, 
-              email: 'No email' 
+              email: 'No email',
+              organization: 'Individual'
             };
           }
           
@@ -144,6 +150,7 @@ const AssessmentResults = () => {
 
   const handleQuizClick = (quiz) => {
     setSelectedQuiz(quiz);
+    setSearchTerm('');
     fetchQuizAttempts(quiz.id);
   };
 
@@ -152,6 +159,7 @@ const AssessmentResults = () => {
     setQuizAttempts([]);
     setError(null);
     setQuizPackets([]);
+    setSearchTerm('');
   };
 
   // Estimate the time needed to complete a quiz based on its question count.
@@ -260,123 +268,152 @@ const AssessmentResults = () => {
 
   // ── Detail view (quiz selected) ────────────────────────────
   if (selectedQuiz) {
-    return (
-      <div className="assessment-results">
-        {/* Header */}
-        <div className="results-header" style={{ flexWrap: 'wrap' }}>
-          <button className="results-back-btn" onClick={handleBackToQuizzes} style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}>
-            <ArrowBackIcon style={{ color: '#fff' }} />
-          </button>
-          <div className="results-header__text">
-            <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AssessmentIcon style={{ width: 28, height: 28 }} />
-              Assessment Results: {selectedQuiz.name}
-            </h1>
-            <p>View all attempt records for this quiz with performance levels and packet-by-packet analysis</p>
-          </div>
-        </div>
+    const filteredAndSearchedAttempts = quizAttempts.filter(attempt => {
+      const term = searchTerm.toLowerCase();
+      const userName = String(attempt.user?.name || '').toLowerCase();
+      const userEmail = String(attempt.user?.email || '').toLowerCase();
+      const org = String(attempt.user?.organization || '').toLowerCase();
+      const profileName = String(attempt.profile?.name || '').toLowerCase();
+      
+      return userName.includes(term) ||
+             userEmail.includes(term) ||
+             org.includes(term) ||
+             profileName.includes(term);
+    });
 
-        {/* Quiz Info Banner */}
-        <div className="results-info-banner">
-          <div>
-            <h3>Quiz Details</h3>
-            <p><strong>Description:</strong> {selectedQuiz.description || 'No description'}</p>
-            <p><strong>Time Limit:</strong> {estimateTimeLimit(quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0))}</p>
-            <p><strong>No. of Questions:</strong> {quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0)}</p>
-          </div>
-          <div>
-            <h3>Statistics</h3>
-            <p><strong>Total Attempts:</strong> {quizAttempts.length}</p>
-            <p><strong>Packets:</strong> {quizPackets.length}</p>
-            <p><strong>Completion Rate:</strong> {
-              quizAttempts.length > 0
-                ? `${quizAttempts.filter(a => a.status === 'completed').length}/${quizAttempts.length}`
-                : 'No attempts'
-            }</p>
-          </div>
-        </div>
+        return (
+          <div className="assessment-results">
+            {/* Header */}
+            <div className="results-header" style={{ flexWrap: 'wrap' }}>
+              <button className="results-back-btn" onClick={handleBackToQuizzes} style={{ background: 'rgba(255,255,255,0.2)', border: 'none' }}>
+                <ArrowBackIcon style={{ color: '#fff' }} />
+              </button>
+              <div className="results-header__text">
+                <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AssessmentIcon style={{ width: 28, height: 28 }} />
+                  Assessment Results: {selectedQuiz.name}
+                </h1>
+                <p>View all attempt records for this quiz with performance levels and packet-by-packet analysis</p>
+              </div>
+            </div>
 
-        {/* Attempts Table */}
-        {loading ? (
-          <div className="results-spinner-wrap">
-            <div className="results-spinner" />
-          </div>
-        ) : error ? (
-          <div className="report-alert">{error}</div>
-        ) : quizAttempts.length === 0 ? (
-          <div className="results-empty">
-            <AssessmentIcon />
-            <h3>No attempts found</h3>
-            <p>This quiz hasn't been attempted by any users yet.</p>
-          </div>
-        ) : (
-          <div className="results-table-container">
-            <table className="results-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Profile</th>
-                  <th>Organization</th>
-                  <th>Status</th>
-                  <th>Completed</th>
-                  {quizPackets.map(packet => (
-                    <th key={packet.id} style={{ minWidth: 120 }}>{packet.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {quizAttempts.map((attempt) => {
-                  const packetScores = calculatePacketScores(attempt);
-                  
-                  return (
-                    <tr key={attempt.id}>
-                      <td>
-                        <p className="results-table__user-name">{attempt.user?.name || 'Unknown User'}</p>
-                        <p className="results-table__user-email">{attempt.user?.email || 'No email'}</p>
-                      </td>
-                      <td>
-                        <p className="results-table__user-name">{attempt.profile?.name || 'Unknown Profile'}</p>
-                        <p className="results-table__user-email">{attempt.profile?.role || 'No role'}</p>
-                      </td>
-                      <td>
-                        <span className="results-badge results-badge--outline">
-                          {attempt.user?.organization || 'Not specified'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`results-badge ${attempt.status === 'completed' ? 'results-badge--completed' : 'results-badge--warning'}`}>
-                          {attempt.status || 'Unknown'}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--color-secondary)' }}>
-                        {formatDate(attempt.completed_at)}
-                      </td>
-                      {quizPackets.map(packet => {
-                        const packetScore = packetScores[packet.id];
-                        return (
-                          <td key={packet.id} className="results-performance-cell">
-                            <span
-                              className="results-performance-badge"
-                              style={{ backgroundColor: packetScore.performanceLevel.color }}
-                            >
-                              {packetScore.performanceLevel.label}
-                            </span>
-                            <br />
-                            <span className="results-performance-sub">
-                              {packetScore.questions} questions
+            {/* Quiz Info Banner */}
+            <div className="results-info-banner">
+              <div>
+                <h3>Quiz Details</h3>
+                <p><strong>Description:</strong> {selectedQuiz.description || 'No description'}</p>
+                <p><strong>Time Limit:</strong> {estimateTimeLimit(quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0))}</p>
+                <p><strong>No. of Questions:</strong> {quizPackets.reduce((sum, packet) => sum + (packet.questions ? packet.questions.length : 0), 0)}</p>
+              </div>
+              <div>
+                <h3>Statistics</h3>
+                <p><strong>Total Attempts:</strong> {quizAttempts.length}</p>
+                <p><strong>Packets:</strong> {quizPackets.length}</p>
+                <p><strong>Completion Rate:</strong> {
+                  quizAttempts.length > 0
+                    ? `${quizAttempts.filter(a => a.status === 'completed').length}/${quizAttempts.length}`
+                    : 'No attempts'
+                }</p>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="results-search">
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder="Search attempts by user name, email, organization, or profile..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Attempts Table */}
+            {loading ? (
+              <div className="results-spinner-wrap">
+                <div className="results-spinner" />
+              </div>
+            ) : error ? (
+              <div className="report-alert">{error}</div>
+            ) : quizAttempts.length === 0 ? (
+              <div className="results-empty">
+                <AssessmentIcon />
+                <h3>No attempts found</h3>
+                <p>This quiz hasn't been attempted by any users yet.</p>
+              </div>
+            ) : filteredAndSearchedAttempts.length === 0 ? (
+              <div className="results-empty">
+                <SearchIcon style={{ width: 48, height: 48 }} />
+                <h3>No results found</h3>
+                <p>No attempts matched your search term "{searchTerm}".</p>
+              </div>
+            ) : (
+              <div className="results-table-container">
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Profile</th>
+                      <th>Organization</th>
+                      <th>Status</th>
+                      <th>Completed</th>
+                      {quizPackets.map(packet => (
+                        <th key={packet.id} style={{ minWidth: 120 }}>{packet.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSearchedAttempts.map((attempt) => {
+                      const packetScores = calculatePacketScores(attempt);
+                      
+                      return (
+                        <tr key={attempt.id}>
+                          <td>
+                            <p className="results-table__user-name">{attempt.user?.name || 'Unknown User'}</p>
+                            <p className="results-table__user-email">{attempt.user?.email || 'No email'}</p>
+                          </td>
+                          <td>
+                            <p className="results-table__user-name">{attempt.profile?.name || 'Unknown Profile'}</p>
+                          </td>
+                          <td>
+                            <span className="results-badge results-badge--outline">
+                              {attempt.user?.organization || 'Not specified'}
                             </span>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <td>
+                            <span className={`results-badge ${attempt.status === 'completed' ? 'results-badge--completed' : 'results-badge--warning'}`}>
+                              {attempt.status || 'Unknown'}
+                            </span>
+                          </td>
+                          <td style={{ color: 'var(--color-secondary)' }}>
+                            {formatDate(attempt.completed_at)}
+                          </td>
+                          {quizPackets.map(packet => {
+                            const packetScore = packetScores[packet.id];
+                            return (
+                              <td key={packet.id} className="results-performance-cell">
+                                <span
+                                  className="results-performance-badge"
+                                  style={{ backgroundColor: packetScore.performanceLevel.color }}
+                                >
+                                  {packetScore.performanceLevel.label}
+                                </span>
+                                <br />
+                                <span className="results-performance-sub">
+                                  {packetScore.questions} questions
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    );
+        );
   }
 
   // ── Quiz selection grid ────────────────────────────────────

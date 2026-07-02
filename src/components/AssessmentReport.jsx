@@ -252,17 +252,6 @@ const AssessmentReport = () => {
     quiz.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredAttempts = quizAttempts.filter(attempt => {
-    const matchesSearch = searchTerm === '' || 
-      (profiles.find(p => p.id === attempt.profile_id || p.id === attempt.user_id)?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'completed') return matchesSearch && attempt.status === 'completed';
-    if (filterStatus === 'in-progress') return matchesSearch && attempt.status === 'in-progress';
-    
-    return matchesSearch;
-  });
-
   const getProfileInfo = (attempt) => {
     // If we have user data from the enriched attempt, use it
     if (attempt.user) {
@@ -270,7 +259,7 @@ const AssessmentReport = () => {
         name: attempt.user.user_name || attempt.user.email || 'Unknown User',
         email: attempt.user.email || 'No email',
         role: attempt.user.profile || 'No role',
-        organization: attempt.user.organization || 'Not specified'
+        organization: attempt.user.organization || 'Individual'
       };
     }
     
@@ -282,7 +271,7 @@ const AssessmentReport = () => {
           name: profile.name || 'Unknown User',
           email: profile.email || 'No email',
           role: profile.role || 'No role',
-          organization: attempt.userData.organization || 'Not specified'
+          organization: attempt.userData.organization || 'Individual'
         };
       }
     }
@@ -294,13 +283,28 @@ const AssessmentReport = () => {
         name: profile.name || 'Unknown User',
         email: profile.email || 'No email',
         role: profile.role || 'No role',
-        organization: 'Not specified'
+        organization: 'Individual'
       };
     }
     
     // Final fallback
-    return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Not specified' };
+    return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Individual' };
   };
+
+  const filteredAttempts = quizAttempts.filter(attempt => {
+    const profileInfo = getProfileInfo(attempt);
+    const matchesSearch = searchTerm === '' || 
+      String(profileInfo.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(profileInfo.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(profileInfo.role || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(profileInfo.organization || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (filterStatus === 'all') return matchesSearch;
+    if (filterStatus === 'completed') return matchesSearch && attempt.status === 'completed';
+    if (filterStatus === 'in-progress') return matchesSearch && attempt.status === 'in-progress';
+    
+    return matchesSearch;
+  });
 
   if ((loading || dbLoading) && !selectedQuiz) {
     return (
@@ -477,7 +481,7 @@ const AssessmentReport = () => {
                             ? 'report-badge--primary' 
                             : 'report-badge--outline'
                         }`}>
-                          {attempt.user?.organization || profile.organization || 'Not specified'}
+                          {attempt.user?.organization || profile.organization || 'Individual'}
                         </span>
                       </td>
                       <td>
