@@ -10,7 +10,10 @@ if (import.meta.env.PROD) {
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
     if (typeof input === 'string' && input.startsWith('/api')) {
-      return originalFetch(`https://assessment-api-two.vercel.app${input}`, init);
+      return originalFetch(`https://assessment-api-two.vercel.app${input}`, {
+        ...init,
+        credentials: 'omit'
+      });
     }
     return originalFetch(input, init);
   };
