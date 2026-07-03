@@ -33,6 +33,7 @@ async function apiCall(endpoint, options = {}) {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...authHeaders(),
         ...options.headers,
       },

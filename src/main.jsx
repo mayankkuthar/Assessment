@@ -18,6 +18,10 @@ if (import.meta.env.PROD) {
       if (typeof input === 'string') {
         return originalFetch(targetUrl, {
           ...init,
+          headers: {
+            'ngrok-skip-browser-warning': 'true',
+            ...(init && init.headers),
+          },
           credentials: 'omit'
         });
       } else {
