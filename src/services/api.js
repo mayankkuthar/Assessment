@@ -42,7 +42,17 @@ async function apiCall(endpoint, options = {}) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new ApiError(errorData.error || `HTTP ${response.status}`, response.status);
+      let errMsg = `HTTP ${response.status}`;
+      if (errorData.error) {
+        errMsg = errorData.error;
+      } else if (errorData.message) {
+        errMsg = errorData.message;
+      } else if (errorData.detail) {
+        errMsg = typeof errorData.detail === 'string'
+          ? errorData.detail
+          : JSON.stringify(errorData.detail);
+      }
+      throw new ApiError(errMsg, response.status);
     }
 
     return await response.json();
@@ -237,7 +247,7 @@ export const quizApi = {
   async assignQuizToProfiles(quizId, profileIds) {
     return await apiCall('/quiz-assignments', {
       method: 'POST',
-      body: JSON.stringify({ quizId, profileIds }),
+      body: JSON.stringify({ quizId, quiz_id: quizId, profileIds }),
     });
   },
 
@@ -250,7 +260,7 @@ export const quizApi = {
   async assignQuizToUsers(quizId, userIds) {
     return await apiCall('/quiz-assignments', {
       method: 'POST',
-      body: JSON.stringify({ quizId, userIds }),
+      body: JSON.stringify({ quizId, quiz_id: quizId, userIds }),
     });
   },
 
