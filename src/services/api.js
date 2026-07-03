@@ -1,7 +1,7 @@
 // API service to replace direct SQLite calls in the browser
 const API_BASE = import.meta.env.DEV
   ? '/api'
-  : 'http://65.0.236.150:8090/api';
+  : 'https://constrain-magnifier-circling.ngrok-free.dev/api';
 
 class ApiError extends Error {
   constructor(message, status) {

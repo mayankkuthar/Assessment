@@ -10,9 +10,9 @@ if (import.meta.env.PROD) {
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
     let url = typeof input === 'string' ? input : (input && input.url);
-    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('65.0.236.150:8090/api'))) {
+    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('constrain-magnifier-circling.ngrok-free.dev/api'))) {
       const targetUrl = url.startsWith('/api')
-        ? `http://65.0.236.150:8090${url}`
+        ? `https://constrain-magnifier-circling.ngrok-free.dev${url}`
         : url;
         
       if (typeof input === 'string') {

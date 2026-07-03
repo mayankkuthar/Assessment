@@ -11,28 +11,28 @@ export default defineConfig({
     allowedHosts: ['proxy-yamaha-tricks-summaries.trycloudflare.com'],
     proxy: {
       '/api/organizations': {
-        target: 'http://65.0.236.150:8090',
+        target: 'https://constrain-magnifier-circling.ngrok-free.dev',
         changeOrigin: true,
         secure: false
       },
       '/api/auth': {
-        target: 'http://65.0.236.150:8090',
+        target: 'https://constrain-magnifier-circling.ngrok-free.dev',
         changeOrigin: true,
         secure: false
       },
       '/api/employees': {
-        target: 'http://65.0.236.150:8090',
+        target: 'https://constrain-magnifier-circling.ngrok-free.dev',
         changeOrigin: true,
         secure: false
       },
       '/api/local-users': {
-        target: 'http://65.0.236.150:8090',
+        target: 'https://constrain-magnifier-circling.ngrok-free.dev',
         changeOrigin: true,
         secure: false
       },
       '/api': {
         // Targeted at the live Vercel backend backed by Google Sheets
-        target: 'http://65.0.236.150:8090',
+        target: 'https://constrain-magnifier-circling.ngrok-free.dev',
         changeOrigin: true,
         secure: false
       }
