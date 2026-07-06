@@ -155,6 +155,61 @@
   white-space: nowrap;
 }
 
+/* ── Language selector ───────────────────────────────────── */
+.quiz-attempt__lang {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: var(--space-3);
+  flex-shrink: 0;
+}
+.quiz-attempt__lang-label {
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.quiz-attempt__lang-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,0.95);
+  color: #2b2b2b;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 6px 30px 6px 12px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 220px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: box-shadow var(--duration-fast) var(--ease-out);
+}
+.quiz-attempt__lang-select:hover {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.5);
+}
+.quiz-attempt__lang-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.quiz-attempt__lang-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: quiz-attempt-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes quiz-attempt-spin {
+  to { transform: rotate(360deg); }
+}
+@media (max-width: 640px) {
+  .quiz-attempt__lang-label { display: none; }
+  .quiz-attempt__lang-select { max-width: 150px; }
+}
+
 /* ── Progress bar ────────────────────────────────────────── */
 .quiz-attempt__progress {
   width: 100%;
@@ -304,6 +359,95 @@
 .quiz-attempt__start-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 20px rgba(137, 91, 245, 0.4);
+}
+
+/* Row holding Start + "Choose your own Language" side by side */
+.quiz-attempt__start-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.quiz-attempt__start-actions .quiz-attempt__start-btn {
+  margin-top: var(--space-4);
+}
+.quiz-attempt__choose-lang-btn {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border: 2px solid #895BF5;
+  border-radius: var(--radius-base);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: #895BF5;
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.quiz-attempt__choose-lang-btn:hover {
+  background: #895BF5;
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(137, 91, 245, 0.25);
+}
+.quiz-attempt__choose-lang-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+/* Grid of language cards revealed by "Choose your own Language" */
+.quiz-attempt__lang-grid {
+  margin-top: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+}
+.quiz-attempt__lang-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid #E5DBFB;
+  border-radius: var(--radius-base);
+  background: #fff;
+  color: #2b2b2b;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.quiz-attempt__lang-card:hover:not(:disabled) {
+  border-color: #895BF5;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(137, 91, 245, 0.18);
+}
+.quiz-attempt__lang-card--active {
+  border-color: #895BF5;
+  background: #895BF5;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(137, 91, 245, 0.3);
+}
+.quiz-attempt__lang-card:disabled {
+  cursor: wait;
+}
+.quiz-attempt__lang-card:disabled:not(.quiz-attempt__lang-card--active) {
+  opacity: 0.55;
+}
+.quiz-attempt__lang-card-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quiz-attempt__lang-card--active .quiz-attempt__lang-spinner {
+  border-color: rgba(255,255,255,0.5);
+  border-top-color: #fff;
+}
+@media (max-width: 480px) {
+  .quiz-attempt__lang-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
 }
 
 /* ── Question card ───────────────────────────────────────── */

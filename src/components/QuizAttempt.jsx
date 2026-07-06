@@ -8,7 +8,54 @@ import ArrowForward from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import './QuizAttempt.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+import { LANGUAGES, DEFAULT_LANGUAGE } from '../constants/languages';
+import { translateBatch } from '../services/translation';
 
+// All page-level static text that should be translated along with the quiz
+// content. Keys are referenced via the `t()` helper inside the component so
+// selecting a language swaps every visible string, not just questions/options.
+const UI_STRINGS = {
+  languageLabel: 'Language:',
+  descTitle: 'Why should I take this assessment?',
+  descP1: 'Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.',
+  descP2: "From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.",
+  descP3: "That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.",
+  descP4: 'This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.',
+  descP5: 'The better you understand your emotions, the better you live, connect and grow!!',
+  descP6: "Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.",
+  instructionsTitle: 'Instructions:',
+  instr1: 'Read each statement carefully',
+  instr2: 'There is no right and wrong answer, so no judgement',
+  instr3: '1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree',
+  instr4: 'Please avoid marking the neutral response and share real time experiences',
+  instr5: 'Please answer all the questions with your natural instinct',
+  instr6: 'Your responses will be kept 100% confidential',
+  startBtn: 'Start Assessment',
+  previous: 'Previous',
+  next: 'Next',
+  submit: 'Submit Quiz',
+  poweredBy: 'Powered by HappiMynd',
+};
+
+// Kept at module scope so it can be translated in one batch with everything
+// else; the translated copy is picked when a non-English language is active.
+const MOTIVATIONAL_MESSAGES = [
+  "You're doing great! Keep going!",
+  "Excellent progress! You're on the right track!",
+  "Fantastic work so far! Almost there!",
+  "You're crushing it! Keep up the good work!",
+  "Amazing effort! You're nearly finished!",
+  "Well done! Your dedication is paying off!",
+  "Impressive progress! You're doing brilliantly!",
+  "You're on fire! Keep pushing forward!",
+  "Outstanding! You're making great strides!",
+  "Superb! You're almost at the finish line!",
+  "Brilliant! Your persistence is admirable!",
+  "Wonderful! You're making excellent progress!",
+  "Terrific! You're doing better than expected!",
+  "Incredible! Your focus is really showing!",
+  "Remarkable! You're making steady progress!"
+];
 
 // Helper function to get readable packet names
 const getPacketName = (packetId) => {
@@ -43,6 +90,18 @@ const QuizAttempt = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [attemptId, setAttemptId] = useState(null);
+
+  // ── Language / translation state ───────────────────────────
+  // `language` is the selected target code ('en' = original backend content).
+  // `translations` caches per-language translated copies so re-selecting a
+  // language is instant and never re-hits the API. `translating` drives the
+  // in-header loading indicator while a translation request is in flight.
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
+  const [translating, setTranslating] = useState(false);
+  const [translations, setTranslations] = useState({});
+  // Toggles the language picker shown from the "Choose your own Language"
+  // button on the start screen.
+  const [showLangPicker, setShowLangPicker] = useState(false);
   // Mirror of attemptId for synchronous access in saveProgress. Using state alone
   // risks a race: if the user answers before the create request resolves, the
   // state may still be null and the answer would silently fail to save.
@@ -558,6 +617,81 @@ const QuizAttempt = () => {
     }
   };
 
+  // Active translation bundle for the selected language (null while English).
+  const tr = language !== DEFAULT_LANGUAGE ? translations[language] : null;
+
+  // Translate a static UI string: use the translated copy when available,
+  // otherwise fall back to the original English text.
+  const t = (key) => tr?.ui?.[key] ?? UI_STRINGS[key];
+
+  // Handle language selection. English restores the original backend content
+  // (we never translate translated text back). For any other language we
+  // translate everything once, cache it, and re-render immediately — no page
+  // refresh. Answers are unaffected because option *values* stay in English
+  // (only the displayed *text* is translated); see renderOptions below.
+  const handleLanguageChange = async (lang) => {
+    setLanguage(lang);
+    if (lang === DEFAULT_LANGUAGE || translations[lang]) return;
+
+    try {
+      setTranslating(true);
+
+      // Build one ordered list of every string to translate, remembering where
+      // each result belongs so we can reassemble the structured bundle.
+      const texts = [];
+      const push = (s) => { const i = texts.length; texts.push(s ?? ''); return i; };
+
+      const uiKeys = Object.keys(UI_STRINGS);
+      const uiIdx = uiKeys.map((k) => push(UI_STRINGS[k]));
+      const motivIdx = MOTIVATIONAL_MESSAGES.map((m) => push(m));
+      const quizNameIdx = push(quiz?.name);
+      const quizInstrIdx = push(quiz?.start_instructions);
+
+      const questionPlan = questions.map((q) => {
+        const qtIdx = push(q.question_text);
+        let optIdx = [];
+        if (q.question_type === 'true_false' && !q.options) {
+          optIdx = [push('True'), push('False')];
+        } else if (Array.isArray(q.options)) {
+          optIdx = q.options.map((opt) => push(typeof opt === 'object' ? opt.text : opt));
+        }
+        return { id: q.id, qtIdx, optIdx };
+      });
+
+      const out = await translateBatch(texts, lang);
+
+      const ui = {};
+      uiKeys.forEach((k, i) => { ui[k] = out[uiIdx[i]]; });
+
+      const questionMap = {};
+      questionPlan.forEach((p) => {
+        questionMap[p.id] = {
+          question_text: out[p.qtIdx],
+          options: p.optIdx.map((i) => out[i]),
+        };
+      });
+
+      setTranslations((prev) => ({
+        ...prev,
+        [lang]: {
+          ui,
+          motivational: motivIdx.map((i) => out[i]),
+          quiz: {
+            name: out[quizNameIdx],
+            start_instructions: out[quizInstrIdx],
+          },
+          questions: questionMap,
+        },
+      }));
+    } catch (err) {
+      console.error('Translation failed:', err);
+      alert('Could not translate the assessment. Please check the Google Translate API key in your .env file, then try again.');
+      setLanguage(DEFAULT_LANGUAGE);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   // ── Loading state ──────────────────────────────────────────
   if (loading) {
     return (
@@ -608,25 +742,9 @@ const QuizAttempt = () => {
 
   const progress = calculateProgress();
   
-  // Motivational messages
+  // Motivational messages (uses the translated copy when a language is active)
   const getMotivationalMessage = () => {
-    const messages = [
-      "You're doing great! Keep going!",
-      "Excellent progress! You're on the right track!",
-      "Fantastic work so far! Almost there!",
-      "You're crushing it! Keep up the good work!",
-      "Amazing effort! You're nearly finished!",
-      "Well done! Your dedication is paying off!",
-      "Impressive progress! You're doing brilliantly!",
-      "You're on fire! Keep pushing forward!",
-      "Outstanding! You're making great strides!",
-      "Superb! You're almost at the finish line!",
-      "Brilliant! Your persistence is admirable!",
-      "Wonderful! You're making excellent progress!",
-      "Terrific! You're doing better than expected!",
-      "Incredible! Your focus is really showing!",
-      "Remarkable! You're making steady progress!"
-    ];
+    const messages = tr?.motivational?.length ? tr.motivational : MOTIVATIONAL_MESSAGES;
     return messages[Math.floor(Math.random() * messages.length)];
   };
   
@@ -662,6 +780,18 @@ const QuizAttempt = () => {
         const value = qType === 'true_false' ? text.toLowerCase() : text;
         return { text, value };
       });
+    }
+
+    // Overlay translated option TEXT for display, but keep each option's
+    // original English `value`. This is what makes translation safe: answers
+    // are stored/scored against the original values, so switching language
+    // never changes what gets saved or how marks are calculated.
+    const translatedOpts = tr?.questions?.[currentQuestion.id]?.options;
+    if (translatedOpts) {
+      options = options.map((opt, i) => ({
+        text: translatedOpts[i] ?? opt.text,
+        value: opt.value,
+      }));
     }
 
     return (
@@ -721,7 +851,7 @@ const QuizAttempt = () => {
         </button>
 
         <div className="quiz-attempt__header-info">
-          <span className="quiz-attempt__quiz-name">{quiz?.name || 'Quiz'}</span>
+          <span className="quiz-attempt__quiz-name">{tr?.quiz?.name || quiz?.name || 'Quiz'}</span>
           <span className="quiz-attempt__header-divider" />
           <span className="quiz-attempt__user-badge">
             <PersonIcon style={{ fontSize: 18 }} />
@@ -729,6 +859,25 @@ const QuizAttempt = () => {
               {userProfile?.name || user?.user_name || user?.email || 'User'}
             </span>
           </span>
+        </div>
+
+        {/* Language selector — translates the whole assessment on the fly */}
+        <div className="quiz-attempt__lang">
+          <label htmlFor="quiz-attempt-lang" className="quiz-attempt__lang-label">
+            {t('languageLabel')}
+          </label>
+          <select
+            id="quiz-attempt-lang"
+            className="quiz-attempt__lang-select"
+            value={language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            disabled={translating}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+          {translating && <span className="quiz-attempt__lang-spinner" aria-label="Translating" />}
         </div>
       </div>
       
@@ -748,48 +897,39 @@ const QuizAttempt = () => {
                   className="quiz-attempt__desc-logo"
                 />
                 <h2 className="quiz-attempt__desc-title">
-                  Why should I take this assessment?
+                  {t('descTitle')}
                 </h2>
                 {quiz?.start_instructions ? (
                   <div className="quiz-attempt__desc-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.start_instructions}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {tr?.quiz?.start_instructions || quiz.start_instructions}
+                    </ReactMarkdown>
                   </div>
                 ) : (
                   <>
                     <div className="quiz-attempt__desc-body">
-                      <p>
-                        Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.
-                      </p>
-                      <p>
-                        From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.
-                      </p>
-                      <p>
-                        That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.
-                      </p>
-                      <p>
-                        This assessment will help you discover your strengths, identify areas to improve to help yourself handle overall life and manage relationships with more ease. Just a few minutes can create lasting change in both your personal happiness and professional success.
-                      </p>
-                      <p className="underline">
-                        The better you understand your emotions, the better you live, connect and grow!!
-                      </p>
-                      <p>
-                        Don't forget to turn your assessment insights into action by booking a report reading session on receiving the report. You have access to our experts to gain deeper clarity and create your roadmap forward.
-                      </p>
+                      <p>{t('descP1')}</p>
+                      <p>{t('descP2')}</p>
+                      <p>{t('descP3')}</p>
+                      <p>{t('descP4')}</p>
+                      <p className="underline">{t('descP5')}</p>
+                      <p>{t('descP6')}</p>
                     </div>
 
-                    <h3 className="quiz-attempt__instructions-title">Instructions:</h3>
-                    
+                    <h3 className="quiz-attempt__instructions-title">{t('instructionsTitle')}</h3>
+
                     <ul className="quiz-attempt__instructions-list">
-                      <li>Read each statement carefully</li>
-                      <li>There is no right and wrong answer, so no judgement</li>
-                      <li>1 in the likert scale represent Strongly Disagree and 5 represents Strongly Agree</li>
-                      <li>Please avoid marking the neutral response and share real time experiences</li>
-                      <li>Please answer all the questions with your natural instinct</li>
-                      <li>Your responses will be kept 100% confidential</li>
+                      <li>{t('instr1')}</li>
+                      <li>{t('instr2')}</li>
+                      <li>{t('instr3')}</li>
+                      <li>{t('instr4')}</li>
+                      <li>{t('instr5')}</li>
+                      <li>{t('instr6')}</li>
                     </ul>
                   </>
                 )}
 
+                <div className="quiz-attempt__start-actions">
                 <button
                   className="quiz-attempt__start-btn"
                   onClick={async () => {
@@ -830,8 +970,39 @@ const QuizAttempt = () => {
                     setShowQuizDescription(false);
                   }}
                 >
-                  Start Assessment
+                  {t('startBtn')}
                 </button>
+
+                  <button
+                    type="button"
+                    className="quiz-attempt__choose-lang-btn"
+                    onClick={() => setShowLangPicker((v) => !v)}
+                    disabled={translating}
+                  >
+                     Choose your own Language
+                  </button>
+                </div>
+
+                {showLangPicker && (
+                  <div className="quiz-attempt__lang-grid">
+                    {LANGUAGES.map((l) => {
+                      const isActive = language === l.code;
+                      const isBusy = translating && isActive;
+                      return (
+                        <button
+                          key={l.code}
+                          type="button"
+                          className={`quiz-attempt__lang-card${isActive ? ' quiz-attempt__lang-card--active' : ''}`}
+                          onClick={() => handleLanguageChange(l.code)}
+                          disabled={translating}
+                        >
+                          <span className="quiz-attempt__lang-card-label">{l.label}</span>
+                          {isBusy && <span className="quiz-attempt__lang-spinner" aria-label="Translating" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -846,7 +1017,7 @@ const QuizAttempt = () => {
                 {currentQuestion && (
                   <>
                     <h2 className="quiz-attempt__question-text">
-                      {currentQuestion.question_text}
+                      {tr?.questions?.[currentQuestion.id]?.question_text || currentQuestion.question_text}
                     </h2>
                     {renderOptions()}
                   </>
@@ -865,7 +1036,7 @@ const QuizAttempt = () => {
               disabled={currentQuestionIndex === 0}
             >
               <ArrowBack style={{ width: 18, height: 18 }} />
-              Previous
+              {t('previous')}
             </button>
 
             {/* Question counter metrics hidden per requirements */}
@@ -876,7 +1047,7 @@ const QuizAttempt = () => {
                 onClick={handleSubmit}
                 disabled={Object.keys(answers).length < questions.length}
               >
-                Submit Quiz
+                {t('submit')}
                 <CheckCircle style={{ width: 20, height: 20 }} />
               </button>
             ) : (
@@ -884,7 +1055,7 @@ const QuizAttempt = () => {
                 className="quiz-attempt__nav-btn quiz-attempt__nav-btn--next"
                 onClick={handleNext}
               >
-                Next
+                {t('next')}
                 <ArrowForward style={{ width: 18, height: 18 }} />
               </button>
             )}
@@ -898,7 +1069,7 @@ const QuizAttempt = () => {
               src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
               alt="HappiMynd Logo"
             />
-            <span>Powered by HappiMynd</span>
+            <span>{t('poweredBy')}</span>
           </div>
         )}
       </div>
