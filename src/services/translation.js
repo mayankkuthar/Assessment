@@ -6,15 +6,12 @@
 // the server-only env var GOOGLE_TRANSLATE_API_KEY and is never shipped to the
 // browser or visible in the Network tab.
 
-// Where to reach our translate proxy.
-//
-// In dev, use a RELATIVE path so Vite's dev-server proxy (see vite.config.js:
-// '/api' -> http://127.0.0.1:3001) forwards it to the local Express server that
-// holds the key. In production, hit the deployed backend that serves the API.
-// The key never appears here either way — the server attaches it.
-const ENDPOINT = import.meta.env.DEV
-  ? '/api/translate'
-  : 'https://constrain-magnifier-circling.ngrok-free.dev/api/translate';
+// Where to reach the translate proxy. Always a RELATIVE, same-origin path with
+// NO key in it. In dev, Vite's proxy (see vite.config.js: '/api/translate')
+// forwards this to Google's v2 endpoint and injects the key server-side, so the
+// key never appears in any request the browser can see (header, payload, or
+// query param).
+const ENDPOINT = '/api/translate';
 
 // Google's v2 endpoint accepts many strings per request; we chunk to keep each
 // request comfortably within size limits.
@@ -96,9 +93,10 @@ export async function translateBatch(texts, target) {
     }
 
     const data = await res.json();
-    const translations = data?.translations || [];
+    // Google Cloud Translation v2 native shape: { data: { translations: [{ translatedText }] } }
+    const translations = data?.data?.translations || [];
     batch.forEach((b, j) => {
-      const translated = decodeEntities(translations[j] ?? b.text);
+      const translated = decodeEntities(translations[j]?.translatedText ?? b.text);
       cache.set(`${target}::${b.text}`, translated);
       results[b.index] = translated;
     });
