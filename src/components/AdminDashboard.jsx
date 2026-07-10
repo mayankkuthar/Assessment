@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Quiz as QuizIcon,
   CheckCircle as CheckCircleIcon,
@@ -10,10 +10,34 @@ import {
   FilterList as FilterListIcon,
   Download as DownloadIcon,
   BarChart as BarChartIcon,
-  Analytics as AnalyticsIcon
+  Analytics as AnalyticsIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material'
 import { useDatabase } from '../hooks/useDatabase'
+import { organizationApi, userApi, quizPacketApi, questionApi } from '../services/api'
+import { profileRank, PROFILE_ORDER } from '../utils/profileOrder'
 import './AdminDashboard.css'
+
+// Maximum score a single question can award. Mirrors the scoring used when a
+// quiz is taken: if the options carry per-option marks, the max is the highest
+// option; otherwise fall back to the question's own marks (default 1).
+const questionMaxMarks = (question) => {
+  let options = question?.options
+  if (typeof options === 'string') {
+    try { options = JSON.parse(options) } catch { options = null }
+  }
+  if (
+    Array.isArray(options) && options.length &&
+    typeof options[0] === 'object' && options[0] !== null && 'marks' in options[0]
+  ) {
+    return Math.max(...options.map(o => Number(o?.marks) || 0), 0)
+  }
+  return Number(question?.marks) || 1
+}
+
+// Sum the maximum possible marks across a list of questions.
+const questionsMaxMarks = (questions) =>
+  (questions || []).reduce((sum, q) => sum + questionMaxMarks(q), 0)
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState(0)
@@ -24,6 +48,9 @@ const AdminDashboard = () => {
   const [userMap, setUserMap] = useState({})
   const [showProfileBreakdown, setShowProfileBreakdown] = useState(false)
   const [showOthersBreakdown, setShowOthersBreakdown] = useState(false)
+  const [showOrganizationBreakdown, setShowOrganizationBreakdown] = useState(false)
+  const [organizations, setOrganizations] = useState([])
+  const [allUsersList, setAllUsersList] = useState([])
   const [userSearch, setUserSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [quizSearch, setQuizSearch] = useState('')
@@ -34,7 +61,8 @@ const AdminDashboard = () => {
     allQuizAttempts,
     loadAllQuizAttempts,
     quizzes,
-    profiles
+    profiles,
+    packets
   } = useDatabase()
 
   useEffect(() => {
@@ -44,21 +72,28 @@ const AdminDashboard = () => {
         setError(null)
         const attempts = await loadAllQuizAttempts()
 
-        // The global /api/quiz-attempts endpoint returns flat records (no nested
-        // quiz/user/profile), so fetch each referenced user once to enrich locally.
-        const userIds = [...new Set((attempts || []).map(a => a.user_id).filter(Boolean))]
-        const entries = await Promise.all(
-          userIds.map(async (id) => {
-            try {
-              const res = await fetch(`/api/users/${id}`)
-              if (res.ok) return [id, await res.json()]
-            } catch (e) {
-              /* ignore individual user fetch failures */
-            }
-            return [id, null]
+        // Load organizations and users in parallel
+        const [orgs, users] = await Promise.all([
+          organizationApi.getAllOrganizations().catch(err => {
+            console.error('Error loading organizations:', err)
+            return []
+          }),
+          userApi.getAllUsers().catch(err => {
+            console.error('Error loading users:', err)
+            return []
           })
-        )
-        setUserMap(Object.fromEntries(entries))
+        ])
+        setOrganizations(orgs)
+        setAllUsersList(users)
+
+        // Map preloaded users directly to userMap to avoid network overhead and proxy socket drops
+        const localUserMap = {}
+        if (users && users.length) {
+          users.forEach(u => {
+            localUserMap[String(u.id)] = u
+          })
+        }
+        setUserMap(localUserMap)
       } catch (err) {
         console.error('Error loading admin data:', err)
         setError(err.message)
@@ -123,20 +158,23 @@ const AdminDashboard = () => {
     // Define profiles to show individually
     const displayedProfiles = [
       'Salaried',
-      'Self Employed',
-      'Home Maker',
-      'Senior Citizen',
-      'Student(School)',
-      'Student(school)', // lowercase variant
+      'Frontline Warrior',
       'Student(College/University)',
       'Student(college/university)', // lowercase variant
+      'Student(School)',
+      'Student(school)', // lowercase variant
+      'Senior Citizen',
       'Entrepreneur',
+      'Working Woman',
       'Jobseeker',
-      'Frontline Warrior',
-      'Working Woman'
+      'Self Employed',
+      'Home Maker'
     ]
     
     const profileToUsers = {}
+    // Seed every canonical profile so each always appears — 0 when no one has
+    // logged in under that profile (e.g. Frontline Warrior), otherwise the count.
+    PROFILE_ORDER.forEach(name => { profileToUsers[name] = 0 })
     const othersBreakdown = {}
     const seen = new Set()
 
@@ -148,8 +186,11 @@ const AdminDashboard = () => {
       const userData = userMap[userId]
       let profileName = (userData && userData.profile) || 'Unassigned'
       
-      // Group profiles not in the displayed list into "Others"
-      if (!displayedProfiles.includes(profileName)) {
+      // Group profiles not in the displayed list into "Others" (case-insensitive check)
+      const matched = displayedProfiles.find(dp => dp.toLowerCase() === profileName.toLowerCase())
+      if (matched) {
+        profileName = matched
+      } else {
         othersBreakdown[profileName] = (othersBreakdown[profileName] || 0) + 1
         profileName = 'Others'
       }
@@ -157,9 +198,12 @@ const AdminDashboard = () => {
       profileToUsers[profileName] = (profileToUsers[profileName] || 0) + 1
     })
 
+    // Order by the canonical profile sequence; non-canonical profiles follow,
+    // and the "Others" bucket is always pinned last.
+    const rankFor = (name) => name === 'Others' ? Number.MAX_SAFE_INTEGER : profileRank(name)
     const profiles = Object.entries(profileToUsers)
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => rankFor(a.name) - rankFor(b.name) || b.count - a.count)
     
     // Attach others breakdown for later use
     profiles.othersBreakdown = Object.entries(othersBreakdown)
@@ -168,6 +212,127 @@ const AdminDashboard = () => {
 
     return profiles
   }, [allQuizAttempts, userMap])
+
+  // Dynamically compute list of all organizations (merging backend orgs with legacy ones scanned from users)
+  const allOrganizations = useMemo(() => {
+    const list = [...organizations];
+    const userOrgNames = [...new Set(allUsersList.map(u => u.organization).filter(Boolean))];
+    userOrgNames.forEach(orgName => {
+      const nameLower = orgName.toLowerCase();
+      if (nameLower !== 'individual' && !list.some(o => o.name.toLowerCase() === nameLower)) {
+        list.push({
+          id: 'legacy-' + nameLower.replace(/\s+/g, '-'),
+          name: orgName,
+          onboarding_code: 'LEGACY-' + orgName.toUpperCase().replace(/\s+/g, ''),
+          isLegacy: true
+        });
+      }
+    });
+    // Filter out test/dummy organizations
+    return list.filter(org => {
+      const nameLower = org.name.toLowerCase();
+      return (
+        !nameLower.includes('automation test org') &&
+        nameLower !== 'test 2' &&
+        nameLower !== 'test org'
+      );
+    });
+  }, [organizations, allUsersList]);
+
+  // Group users by their organization and count members
+  const orgMembers = useMemo(() => {
+    return allOrganizations.map(org => {
+      const memberCount = allUsersList.filter(u => 
+        (u.organization_id && String(u.organization_id) === String(org.id)) ||
+        (u.organization && u.organization.toLowerCase() === org.name.toLowerCase())
+      ).length;
+      return {
+        id: org.id,
+        name: org.name,
+        memberCount
+      };
+    }).sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name));
+  }, [allOrganizations, allUsersList]);
+
+  // Sum the per-packet maximums recorded on an attempt (this is the max score
+  // the app computed for that attempt). Returns 0 when packet_marks is absent.
+  const attemptMaxFromPacketMarks = (attempt) =>
+    Object.values(attempt?.packet_marks || {})
+      .reduce((sum, p) => sum + (Number(p?.total) || 0), 0)
+
+  // A quiz's maximum score is fixed, so derive one canonical value per quiz from
+  // whichever attempts actually recorded packet_marks. This keeps every row of
+  // the same assessment showing the same denominator (e.g. HappiEQ → 250)
+  // instead of a per-row estimate.
+  const quizMaxMarks = useMemo(() => {
+    const map = {}
+    ;(allQuizAttempts || []).forEach(a => {
+      const max = attemptMaxFromPacketMarks(a)
+      if (max > 0) {
+        const key = String(a.quiz_id)
+        // Fixed per quiz; guard against stale/partial rows by keeping the largest.
+        if (!map[key] || max > map[key]) map[key] = max
+      }
+    })
+    return map
+  }, [allQuizAttempts])
+
+  // Authoritative maximum per assessment, computed from the quiz's current
+  // questions. This covers quizzes whose attempts never recorded packet_marks
+  // (e.g. HappiLife, Emotional Intelligence) so every row of the same quiz
+  // shows one correct denominator instead of a per-row estimate.
+  const [quizQuestionMax, setQuizQuestionMax] = useState({})
+  useEffect(() => {
+    if (!quizzes?.length) return
+    let cancelled = false
+    // Only compute for quizzes that actually have attempts on this dashboard.
+    const quizIdsWithAttempts = new Set((allQuizAttempts || []).map(a => String(a.quiz_id)))
+    const targetQuizzes = quizzes.filter(q => quizIdsWithAttempts.has(String(q.id)))
+
+    const quizTotal = async (quiz) => {
+      const quizPackets = await quizPacketApi.getQuizPackets(quiz.id)
+      const perPacket = await Promise.all((quizPackets || []).map(async (packet) => {
+        // Use already-loaded questions when present, else fetch them —
+        // the /packets response may not embed questions.
+        let questions = (packets || [])
+          .find(p => String(p.id) === String(packet.id))?.questions
+        if (!questions || !questions.length) {
+          questions = await questionApi.getQuestions(packet.id)
+        }
+        return questionsMaxMarks(questions)
+      }))
+      return perPacket.reduce((sum, m) => sum + m, 0)
+    }
+
+    const compute = async () => {
+      const entries = await Promise.all(targetQuizzes.map(async (quiz) => {
+        try {
+          const total = await quizTotal(quiz)
+          return total > 0 ? [String(quiz.id), total] : null
+        } catch {
+          return null // Skip quizzes whose packets/questions can't be resolved.
+        }
+      }))
+      if (!cancelled) setQuizQuestionMax(Object.fromEntries(entries.filter(Boolean)))
+    }
+    compute()
+    return () => { cancelled = true }
+  }, [quizzes, packets, allQuizAttempts])
+
+  // Maximum possible score for a single attempt, resolved in priority order:
+  //  1. total recorded in attempts' packet_marks (validated, e.g. HappiEQ → 250)
+  //  2. the quiz's current questions (for quizzes without packet_marks)
+  //  3. this attempt's own packet_marks
+  //  4. a last-resort estimate from the stored percentage
+  const getAttemptMaxMarks = useCallback((attempt) => {
+    const key = String(attempt.quiz_id)
+    if (quizMaxMarks[key] > 0) return quizMaxMarks[key]
+    if (quizQuestionMax[key] > 0) return quizQuestionMax[key]
+    const own = attemptMaxFromPacketMarks(attempt)
+    if (own > 0) return own
+    const obtained = Number(attempt.total_marks) || 0
+    return attempt.score > 0 ? Math.round((obtained / attempt.score) * 100) : 0
+  }, [quizMaxMarks, quizQuestionMax])
 
   // One row per user, aggregating their attempts into headline metrics plus the
   // raw rows (used by the drill-down modal). Averages/best use completed attempts only.
@@ -186,6 +351,8 @@ const AdminDashboard = () => {
           scoreSum: 0,
           scoreCount: 0,
           best: 0,
+          obtainedMarks: 0,
+          totalMarks: 0,
           lastActivity: 0,
           rows: []
         }
@@ -199,6 +366,11 @@ const AdminDashboard = () => {
         u.scoreSum += s
         u.scoreCount += 1
         if (s > u.best) u.best = s
+        // Actual marks obtained vs. the assessment's fixed maximum. `total_marks`
+        // holds the raw obtained marks; the max comes from the quiz's canonical
+        // total so every attempt of the same assessment agrees.
+        u.obtainedMarks += Number(a.total_marks) || 0
+        u.totalMarks += getAttemptMaxMarks(a)
       }
       const t = new Date(a.completed_at || a.started_at || 0).getTime()
       if (t > u.lastActivity) u.lastActivity = t
@@ -212,7 +384,7 @@ const AdminDashboard = () => {
           new Date(b.completed_at || b.started_at || 0) - new Date(a.completed_at || a.started_at || 0))
       }))
       .sort((a, b) => b.avgScore - a.avgScore || b.attempts - a.attempts)
-  }, [enrichedAttempts])
+  }, [enrichedAttempts, getAttemptMaxMarks])
 
   const filteredUserSummaries = useMemo(() => {
     const tokens = userSearch.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -451,6 +623,40 @@ const AdminDashboard = () => {
       </header>
 
       <div className="admin-stats-grid">
+        <div
+          className="admin-stat-card admin-stat-card--clickable"
+          onClick={() => setShowProfileBreakdown(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowProfileBreakdown(true) }}
+          title="View active users per profile"
+        >
+          <div>
+            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.totalUsers}</div>
+            <div className="admin-stat-card__label">Active Users</div>
+          </div>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+            <PeopleAltIcon />
+          </div>
+        </div>
+
+        <div 
+          className="admin-stat-card admin-stat-card--clickable"
+          onClick={() => setShowOrganizationBreakdown(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowOrganizationBreakdown(true) }}
+          title="View members per organization"
+        >
+          <div>
+            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{allOrganizations.length}</div>
+            <div className="admin-stat-card__label">Organizations</div>
+          </div>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+            <BusinessIcon />
+          </div>
+        </div>
+
         <div className="admin-stat-card">
           <div>
             <div className="admin-stat-card__value" style={{ color: 'var(--color-primary)' }}>{stats.totalAttempts}</div>
@@ -473,35 +679,8 @@ const AdminDashboard = () => {
 
         <div className="admin-stat-card">
           <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.totalMarksSum}</div>
-            <div className="admin-stat-card__label">Total Marks</div>
-          </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
-            <TrendingUpIcon />
-          </div>
-        </div>
-
-        <div
-          className="admin-stat-card admin-stat-card--clickable"
-          onClick={() => setShowProfileBreakdown(true)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowProfileBreakdown(true) }}
-          title="View active users per profile"
-        >
-          <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.totalUsers}</div>
-            <div className="admin-stat-card__label">Active Users</div>
-          </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
-            <PeopleAltIcon />
-          </div>
-        </div>
-
-        <div className="admin-stat-card">
-          <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.completedAttempts}/{stats.totalAttempts}</div>
-            <div className="admin-stat-card__label">Completion Rate</div>
+            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{Math.round(stats.completionRate)}%</div>
+            <div className="admin-stat-card__label">Completion Rate ({stats.completedAttempts}/{stats.totalAttempts})</div>
           </div>
           <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
             <ScheduleIcon />
@@ -599,11 +778,17 @@ const AdminDashboard = () => {
                         <span className="badge badge--primary">{attempt.profile?.name || 'Unknown'}</span>
                       </td>
                       <td>
-                        {attempt.completed_at ? (
-                          <span className={`badge ${attempt.score >= 80 ? 'badge--success' : attempt.score >= 60 ? 'badge--warning' : 'badge--outline'}`}>
-                            {attempt.score || 0}%
-                          </span>
-                        ) : (
+                        {attempt.completed_at ? (() => {
+                          // Show actual marks: obtained (total_marks) out of the
+                          // assessment's canonical maximum possible score.
+                          const obtained = Number(attempt.total_marks) || 0
+                          const maxPossible = getAttemptMaxMarks(attempt)
+                          return (
+                            <span className={`badge ${attempt.score >= 80 ? 'badge--success' : attempt.score >= 60 ? 'badge--warning' : 'badge--outline'}`}>
+                              {obtained}/{maxPossible}
+                            </span>
+                          )
+                        })() : (
                           <span style={{ color: 'var(--color-muted-fg)', fontStyle: 'italic', fontSize: 'var(--text-sm)' }}>Pending</span>
                         )}
                       </td>
@@ -664,8 +849,8 @@ const AdminDashboard = () => {
                     <th>Organization</th>
                     <th>Attempts</th>
                     <th>Completed</th>
-                    <th>Avg Score</th>
-                    <th>Best</th>
+                    <th>Score</th>
+                    <th>Total Score</th>
                     <th>Last Activity</th>
                   </tr>
                 </thead>
@@ -691,12 +876,12 @@ const AdminDashboard = () => {
                       <td>{u.completed}/{u.attempts}</td>
                       <td>
                         {u.scoreCount > 0 ? (
-                          <span className={`badge ${scoreBadgeClass(u.avgScore)}`}>{u.avgScore}%</span>
+                          <span className={`badge ${scoreBadgeClass(u.avgScore)}`}>{u.obtainedMarks}</span>
                         ) : (
                           <span style={{ color: 'var(--color-muted-fg)', fontStyle: 'italic', fontSize: 'var(--text-sm)' }}>—</span>
                         )}
                       </td>
-                      <td>{u.scoreCount > 0 ? `${u.best}%` : '—'}</td>
+                      <td>{u.scoreCount > 0 ? u.totalMarks : '—'}</td>
                       <td style={{ fontSize: 'var(--text-sm)' }}>{u.lastActivity ? formatDate(u.lastActivity) : '—'}</td>
                     </tr>
                   ))}
@@ -741,8 +926,6 @@ const AdminDashboard = () => {
                     <th>Attempts</th>
                     <th>Users</th>
                     <th>Completion</th>
-                    <th>Avg Score</th>
-                    <th>Pass Rate</th>
                     <th>Last Activity</th>
                   </tr>
                 </thead>
@@ -758,23 +941,6 @@ const AdminDashboard = () => {
                       <td>{q.attempts}</td>
                       <td>{q.uniqueUsers}</td>
                       <td>{q.completed}/{q.attempts}</td>
-                      <td>
-                        {q.scoreCount > 0 ? (
-                          <div className="admin-score-bar" title={`${q.avgScore}%`}>
-                            <div className="admin-score-bar__track">
-                              <div className="admin-score-bar__fill" style={{ width: `${q.avgScore}%` }} />
-                            </div>
-                            <span className="admin-score-bar__val">{q.avgScore}%</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--color-muted-fg)', fontStyle: 'italic', fontSize: 'var(--text-sm)' }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        {q.scoreCount > 0 ? (
-                          <span className={`badge ${scoreBadgeClass(q.passRate)}`}>{q.passRate}%</span>
-                        ) : '—'}
-                      </td>
                       <td style={{ fontSize: 'var(--text-sm)' }}>{q.lastActivity ? formatDate(q.lastActivity) : '—'}</td>
                     </tr>
                   ))}
@@ -815,12 +981,12 @@ const AdminDashboard = () => {
                   <div className="admin-user-stat__label">Completed</div>
                 </div>
                 <div className="admin-user-stat">
-                  <div className="admin-user-stat__value">{selectedUser.scoreCount > 0 ? `${selectedUser.avgScore}%` : '—'}</div>
-                  <div className="admin-user-stat__label">Avg Score</div>
+                  <div className="admin-user-stat__value">{selectedUser.scoreCount > 0 ? selectedUser.obtainedMarks : '—'}</div>
+                  <div className="admin-user-stat__label">Score</div>
                 </div>
                 <div className="admin-user-stat">
-                  <div className="admin-user-stat__value">{selectedUser.scoreCount > 0 ? `${selectedUser.best}%` : '—'}</div>
-                  <div className="admin-user-stat__label">Best</div>
+                  <div className="admin-user-stat__value">{selectedUser.scoreCount > 0 ? selectedUser.totalMarks : '—'}</div>
+                  <div className="admin-user-stat__label">Total Score</div>
                 </div>
               </div>
 
@@ -1129,6 +1295,42 @@ const AdminDashboard = () => {
                     <li key={name} className="admin-profile-list__item">
                       <span className="admin-profile-list__name">{name}</span>
                       <span className="admin-profile-list__count">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOrganizationBreakdown && (
+        <div className="admin-modal-overlay" onClick={() => setShowOrganizationBreakdown(false)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal__header">
+              <div className="admin-modal__title">
+                <BusinessIcon />
+                <span>Organizations & Member Count</span>
+              </div>
+              <button
+                className="admin-modal__close"
+                onClick={() => setShowOrganizationBreakdown(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="admin-modal__body">
+              {orgMembers.length === 0 ? (
+                <p className="admin-modal__empty">No organizations found.</p>
+              ) : (
+                <ul className="admin-profile-list">
+                  {orgMembers.map(({ id, name, memberCount }) => (
+                    <li key={id} className="admin-profile-list__item">
+                      <span className="admin-profile-list__name">
+                        <strong>{name}</strong>
+                      </span>
+                      <span className="admin-profile-list__count">{memberCount} {memberCount === 1 ? 'member' : 'members'}</span>
                     </li>
                   ))}
                 </ul>

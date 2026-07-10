@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:local": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite",
-    "server": "node server-auth-test.js",
+    "server": "node --env-file-if-exists=.env server-auth-test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

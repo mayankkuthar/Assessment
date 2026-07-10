@@ -1,15 +1,20 @@
-// Google Cloud Translation (v2 REST) client used by the assessment page.
+// Client for the assessment page's translation feature.
 //
-// The API key is read from the Vite env var VITE_GOOGLE_TRANSLATE_API_KEY.
-// Add it to your .env file:
-//
-//   VITE_GOOGLE_TRANSLATE_API_KEY=your_key_here
-//
-// (Vite only exposes env vars prefixed with VITE_ to the browser, and you must
-// restart `npm run dev` after editing .env for the change to take effect.)
+// IMPORTANT: this file runs in the browser, so it must NOT hold the Google
+// Translate API key. Instead it calls our own backend proxy (`/api/translate`
+// in server-auth-test.js), which attaches the key server-side. The key lives in
+// the server-only env var GOOGLE_TRANSLATE_API_KEY and is never shipped to the
+// browser or visible in the Network tab.
 
-const API_KEY = import.meta.env.VITE_GOOGLE_TRANSLATE_API_KEY;
-const ENDPOINT = 'https://translation.googleapis.com/language/translate/v2';
+// Where to reach our translate proxy.
+//
+// In dev, use a RELATIVE path so Vite's dev-server proxy (see vite.config.js:
+// '/api' -> http://127.0.0.1:3001) forwards it to the local Express server that
+// holds the key. In production, hit the deployed backend that serves the API.
+// The key never appears here either way — the server attaches it.
+const ENDPOINT = import.meta.env.DEV
+  ? '/api/translate'
+  : 'https://constrain-magnifier-circling.ngrok-free.dev/api/translate';
 
 // Google's v2 endpoint accepts many strings per request; we chunk to keep each
 // request comfortably within size limits.
@@ -19,7 +24,10 @@ const CHUNK_SIZE = 100;
 // appears more than once) never hits the network twice. Key: `${target}::${text}`.
 const cache = new Map();
 
-export const isTranslationConfigured = () => Boolean(API_KEY);
+// The key now lives server-side, so the client can't (and shouldn't) check for
+// it. We optimistically report configured; if the server has no key it returns
+// 503 and callers fall back to English.
+export const isTranslationConfigured = () => true;
 
 const chunk = (arr, size) => {
   const out = [];
@@ -45,17 +53,12 @@ const decodeEntities = (str) => {
  * - If `target` is falsy or 'en', the input is returned as-is (we never
  *   translate back into English — English always uses the original text).
  *
- * Throws if the API key is missing or a request fails, so callers can surface
- * a friendly error and fall back to English.
+ * Throws if a request fails, so callers can surface a friendly error and fall
+ * back to English.
  */
 export async function translateBatch(texts, target) {
   if (!Array.isArray(texts)) return [];
   if (!target || target === 'en') return texts.slice();
-  if (!API_KEY) {
-    throw new Error(
-      'Google Translate API key is not configured. Add VITE_GOOGLE_TRANSLATE_API_KEY to your .env file and restart the dev server.'
-    );
-  }
 
   const results = new Array(texts.length);
   const toFetch = []; // { index, text }
@@ -74,9 +77,12 @@ export async function translateBatch(texts, target) {
   });
 
   for (const batch of chunk(toFetch, CHUNK_SIZE)) {
-    const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(API_KEY)}`, {
+    const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
       body: JSON.stringify({
         q: batch.map((b) => b.text),
         target,
@@ -90,9 +96,9 @@ export async function translateBatch(texts, target) {
     }
 
     const data = await res.json();
-    const translations = data?.data?.translations || [];
+    const translations = data?.translations || [];
     batch.forEach((b, j) => {
-      const translated = decodeEntities(translations[j]?.translatedText ?? b.text);
+      const translated = decodeEntities(translations[j] ?? b.text);
       cache.set(`${target}::${b.text}`, translated);
       results[b.index] = translated;
     });

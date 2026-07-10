@@ -379,7 +379,7 @@ const QuizAssignmentGraph = ({
               <button
                 className="btn btn--outline btn--sm"
                 style={{ color: 'var(--color-destructive)', borderColor: 'var(--color-destructive)', padding: '4px 12px' }}
-                onClick={() => onRemoveAssignment(assignment.profile_id, assignment.quiz_id)}
+                onClick={() => { if (window.confirm("Are you sure you want to remove this quiz assignment?")) onRemoveAssignment(assignment.profile_id, assignment.quiz_id); }}
               >
                 Remove
               </button>

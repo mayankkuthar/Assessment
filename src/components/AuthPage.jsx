@@ -1,13 +1,54 @@
 import { useState, useEffect } from 'react'
+import { LANGUAGES } from '../constants/languages'
+import { sortProfiles } from '../utils/profileOrder'
+import { useLanguage } from '../contexts/LanguageContext'
+import { useTranslatedContent } from '../hooks/useTranslatedContent'
 
+const API_BASE = 'https://constrain-magnifier-circling.ngrok-free.dev/api';
 
+// Static copy for the auth screen. Everything here is translated into the
+// user's selected language so the whole Sign-Up / Login flow is localized.
+const UI_TEXT = {
+  appTitle: 'Assessment Tool',
+  login: 'Login',
+  signUp: 'Sign Up',
+  forgotPassword: 'Forgot Password',
+  userName: 'User Name',
+  preferredLanguage: 'Preferred Language',
+  preferredLanguageHint: 'Your dashboard and assessments will be shown in this language. You can change it later from your dashboard.',
+  email: 'Email',
+  registerAs: 'Register as',
+  individual: 'Individual',
+  viaCode: 'Via Code and Company',
+  profile: 'Profile',
+  selectProfile: 'Select a profile',
+  loadingProfiles: 'Loading profiles...',
+  companyCode: 'Company Code',
+  resolvingCode: 'Resolving company code...',
+  verifiedJoining: 'Verified: Joining',
+  enterCompanyCode: 'Please enter the code provided by your company.',
+  password: 'Password',
+  signingUp: 'Signing Up...',
+  loggingIn: 'Logging In...',
+  noteLabel: 'Note:',
+  profileNote: 'Your profile selection enables us to guide you better in the expert sessions. Make sure to select the correct profile that matches your role.',
+  resetPassword: 'Reset Password',
+  checkEmail: 'Check your email!',
+  resetSentPre: "We've sent a password reset link to",
+  resetSentPost: 'Click the link in the email to reset your password.',
+};
 
 function AuthPage() {
+  const { language, setLanguage } = useLanguage()
   const [tab, setTab] = useState(0)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [userName, setUserName] = useState('')
   const [profile, setProfile] = useState('')
+  // Preferred language chosen during Sign-Up. Seeded from (and kept in sync
+  // with) the app-wide language so the choice carries into the dashboard.
+  const [preferredLanguage, setPreferredLanguage] = useState(language)
+  const [registrationType, setRegistrationType] = useState('individual')
   const [organization, setOrganization] = useState('') // Added organization state
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,12 +79,14 @@ function AuthPage() {
       setCodeVerificationError('')
       setVerifiedOrgName('')
       try {
-        const response = await fetch(`/api/auth/verify-code?code=${encodeURIComponent(onboardingCode.trim().toUpperCase())}`)
+        const response = await fetch(`${API_BASE}/auth/verify-code?code=${encodeURIComponent(onboardingCode.trim().toUpperCase())}`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        })
         if (response.ok) {
           const data = await response.json()
           setVerifiedOrgName(data.name)
-          if (data.email) setEmail(data.email)
-          if (data.userName) setUserName(data.userName)
+          if (data.email && !email.trim()) setEmail(data.email)
+          if (data.userName && !userName.trim()) setUserName(data.userName)
         } else {
           const errData = await response.json()
           setCodeVerificationError(errData.error || 'Invalid user code')
@@ -68,7 +111,9 @@ function AuthPage() {
     const fetchProfiles = async () => {
       setLoadingProfiles(true)
       try {
-        const response = await fetch('/api/profiles')
+        const response = await fetch(`${API_BASE}/profiles`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        })
         if (response.ok) {
           const profilesData = await response.json()
           setProfiles(profilesData)
@@ -103,6 +148,16 @@ function AuthPage() {
     }
   }, [success]);
 
+  const handleRegistrationTypeChange = (type) => {
+    setRegistrationType(type);
+    setProfile('');
+    if (type === 'individual') {
+      setOnboardingCode('');
+      setVerifiedOrgName('');
+      setCodeVerificationError('');
+    }
+  };
+
   const handleAuth = async (isSignUp) => {
     setLoading(true) // Move setLoading to the beginning for immediate feedback
     setError('')
@@ -122,7 +177,7 @@ function AuthPage() {
           return;
         }
         // If a company code was entered, it must resolve to a valid organization.
-        const isIndividual = profile === 'Individual';
+        const isIndividual = registrationType === 'individual';
         const trimmedCode = isIndividual ? '' : onboardingCode.trim();
         if (trimmedCode && !verifiedOrgName) {
           setError('The company code entered is not valid. Clear it to sign up individually.');
@@ -134,10 +189,11 @@ function AuthPage() {
         console.log('🚀 Starting signup process...', { email, userName, profile, userRole, organization: verifiedOrgName || 'Individual', userCode: trimmedCode })
 
         // Sign up using the API directly
-        const response = await fetch('/api/auth/signup', {
+        const response = await fetch(`${API_BASE}/auth/signup`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
           },
           body: JSON.stringify({
             email,
@@ -147,7 +203,11 @@ function AuthPage() {
             user_name: userName,
             profile: profile,
             userCode: trimmedCode ? trimmedCode.toUpperCase() : '',
-            organization: verifiedOrgName || 'Individual'
+            organization: verifiedOrgName || 'Individual',
+            // Preferred language chosen during registration (both casings for
+            // whichever the backend validator expects).
+            preferredLanguage: preferredLanguage,
+            preferred_language: preferredLanguage
           })
         });
 
@@ -168,6 +228,9 @@ function AuthPage() {
 
         if (result.user) {
           console.log('✅ Signup successful, user created:', result.user);
+          // Persist the language chosen during registration so it's already
+          // active when the user logs in and lands on their dashboard.
+          setLanguage(preferredLanguage);
           setSuccess('Account created successfully! Redirecting to sign-in...');
           // Clear form and switch to sign-in tab after successful signup
           setTimeout(() => {
@@ -177,6 +240,7 @@ function AuthPage() {
             setPassword('');
             setUserName('');
             setProfile('');
+            setRegistrationType('individual');
             setOrganization(''); // Clear organization field
             setOnboardingCode('');
             setVerifiedOrgName('');
@@ -192,10 +256,11 @@ function AuthPage() {
         }
       } else {
         // Sign in using the API directly
-        const response = await fetch('/api/auth/signin', {
+        const response = await fetch(`${API_BASE}/auth/signin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
           },
           body: JSON.stringify({
             email,
@@ -222,6 +287,10 @@ function AuthPage() {
 
         if (result.user) {
           console.log('✅ Login successful, user:', result.user);
+          // Apply the language the user chose at registration (if the backend
+          // returns it), so the dashboard renders in their preferred language.
+          const savedLang = result.user.preferredLanguage || result.user.preferred_language;
+          if (savedLang) setLanguage(savedLang);
           // Store user in localStorage for persistence
           localStorage.setItem('currentUser', JSON.stringify(result.user));
           // Reload the page to trigger app re-render with authenticated user
@@ -256,6 +325,7 @@ function AuthPage() {
       setPassword('');
       setUserName('');
       setProfile('');
+      setRegistrationType(newValue === 1 ? 'individual' : '');
       setOrganization('');
       setError('');
       setSuccess('');
@@ -263,6 +333,19 @@ function AuthPage() {
       setResetEmailSent(false);
     }
   };
+
+  // Translate all static copy plus whatever dynamic strings are currently on
+  // screen (errors, success messages, the resolved org name, profile options).
+  const authTexts = [
+    ...Object.values(UI_TEXT),
+    error,
+    success,
+    codeVerificationError,
+    verifiedOrgName,
+    ...profiles.map((p) => p.name),
+  ].filter((s) => typeof s === 'string' && s !== '');
+  const { tx } = useTranslatedContent(authTexts);
+  const t = (key) => tx(UI_TEXT[key]);
 
   return (
     <div className="auth-layout">
@@ -276,7 +359,7 @@ function AuthPage() {
         </div>
         
         <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-6)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-fg)' }}>
-          Assessment Tool
+          {t('appTitle')}
         </h2>
         
         <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 'var(--space-6)', gap: 'var(--space-2)' }}>
@@ -284,19 +367,19 @@ function AuthPage() {
             style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 0 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 0 ? 700 : 500, color: tab === 0 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
             onClick={() => handleTabChange(0)}
           >
-            Login
+            {t('login')}
           </button>
           <button 
             style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 1 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 1 ? 700 : 500, color: tab === 1 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
             onClick={() => handleTabChange(1)}
           >
-            Sign Up
+            {t('signUp')}
           </button>
           <button 
             style={{ flex: 1, padding: 'var(--space-2)', borderBottom: tab === 2 ? '2px solid var(--color-primary)' : '2px solid transparent', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontWeight: tab === 2 ? 700 : 500, color: tab === 2 ? 'var(--color-primary)' : 'var(--color-muted-fg)' }}
             onClick={() => handleTabChange(2)}
           >
-            Forgot Password
+            {t('forgotPassword')}
           </button>
         </div>
         
@@ -311,7 +394,7 @@ function AuthPage() {
             setLoading(false);
           }}>
             <div className="form-group">
-              <label className="form-label">Email</label>
+              <label className="form-label">{t('email')}</label>
               <input
                 className="form-input"
                 type="email"
@@ -320,27 +403,27 @@ function AuthPage() {
                 required
               />
             </div>
-            
-            {error && <div className="alert alert--error">{error}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
-            
+
+            {error && <div className="alert alert--error">{tx(error)}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
+
             {resetEmailSent && (
               <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
-                <strong>Check your email!</strong> We've sent a password reset link to {email}. Click the link in the email to reset your password.
+                <strong>{t('checkEmail')}</strong> {t('resetSentPre')} {email}. {t('resetSentPost')}
               </div>
             )}
 
-            <button type="submit" className="btn btn--primary" style={{ width: '100%' }}>Reset Password</button>
+            <button type="submit" className="btn btn--primary" style={{ width: '100%' }}>{t('resetPassword')}</button>
           </form>
         ) : (
           // Login / Sign Up Tabs
           <form onSubmit={(e) => { e.preventDefault(); handleAuth(tab === 1); }}>
-            {error && <div className="alert alert--error">{error}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{success}</div>}
-            
+            {error && <div className="alert alert--error">{tx(error)}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
+
             {tab === 1 && (
               <div className="form-group">
-                <label className="form-label">User Name</label>
+                <label className="form-label">{t('userName')}</label>
                 <input
                   className="form-input"
                   type="text"
@@ -350,9 +433,34 @@ function AuthPage() {
                 />
               </div>
             )}
+
+            {tab === 1 && (
+              <div className="form-group">
+                <label className="form-label">{t('preferredLanguage')}</label>
+                <select
+                  className="form-input"
+                  value={preferredLanguage}
+                  onChange={(e) => {
+                    setPreferredLanguage(e.target.value);
+                    // Keep the app-wide language in sync so the choice is
+                    // reflected everywhere immediately.
+                    setLanguage(e.target.value);
+                  }}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
+                  {t('preferredLanguageHint')}
+                </div>
+              </div>
+            )}
             
             <div className="form-group">
-              <label className="form-label">Email</label>
+              <label className="form-label">{t('email')}</label>
               <input
                 className="form-input"
                 type="email"
@@ -361,11 +469,39 @@ function AuthPage() {
                 required
               />
             </div>
-            
+
             {tab === 1 && (
               <>
                 <div className="form-group">
-                  <label className="form-label">Profile</label>
+                  <label className="form-label">{t('registerAs')}</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'individual' ? 'rgba(137, 91, 245, 0.08)' : 'transparent', borderColor: registrationType === 'individual' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
+                      <input
+                        type="radio"
+                        name="registrationType"
+                        value="individual"
+                        checked={registrationType === 'individual'}
+                        onChange={() => handleRegistrationTypeChange('individual')}
+                        style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
+                      />
+                      <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-fg)' }}>{t('individual')}</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'company' ? 'rgba(137, 91, 245, 0.08)' : 'transparent', borderColor: registrationType === 'company' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
+                      <input
+                        type="radio"
+                        name="registrationType"
+                        value="company"
+                        checked={registrationType === 'company'}
+                        onChange={() => handleRegistrationTypeChange('company')}
+                        style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
+                      />
+                      <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-fg)' }}>{t('viaCode')}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{t('profile')}</label>
                   <select
                     className="form-input"
                     value={profile}
@@ -373,29 +509,29 @@ function AuthPage() {
                     required
                     disabled={loadingProfiles}
                   >
-                    <option value="" disabled>Select a profile</option>
-                    {/* Individuals can sign up without a company — no code needed. */}
-                    <option value="Individual">Individual</option>
+                    <option value="" disabled>{t('selectProfile')}</option>
                     {loadingProfiles ? (
-                      <option disabled>Loading profiles...</option>
+                      <option disabled>{t('loadingProfiles')}</option>
                     ) : (
-                      profiles
-                        .filter((profileItem) => profileItem.name !== 'SOLV' && profileItem.name !== 'Individual')
+                      sortProfiles(profiles)
+                        .filter((profileItem) =>
+                          profileItem.name &&
+                          profileItem.name.toLowerCase() !== 'solv' &&
+                          profileItem.name.toLowerCase() !== 'individual' &&
+                          profileItem.name.toLowerCase() !== 'general'
+                        )
                         .map((profileItem) => (
                           <option key={profileItem.id} value={profileItem.name}>
-                            {profileItem.name}
+                            {tx(profileItem.name)}
                           </option>
                         ))
                     )}
                   </select>
                 </div>
 
-                {/* Unique User Code Input — only for company/organization users.
-                    Individuals don't have a code, so we hide it for them and it is
-                    never required for signup. */}
-                {profile !== 'Individual' && (
+                {registrationType === 'company' && (
                   <div className="form-group">
-                    <label className="form-label">Company Code (optional)</label>
+                    <label className="form-label">{t('companyCode')}</label>
                     <input
                       className="form-input"
                       type="text"
@@ -403,26 +539,27 @@ function AuthPage() {
                       onChange={(e) => setOnboardingCode(e.target.value)}
                       placeholder="e.g. AB12CD"
                       style={{ textTransform: 'uppercase' }}
+                      required
                     />
 
                     {/* Real-time verification display */}
                     <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
                       {verifyingCode && (
-                        <span style={{ color: 'var(--color-muted-fg)' }}>Resolving company code...</span>
+                        <span style={{ color: 'var(--color-muted-fg)' }}>{t('resolvingCode')}</span>
                       )}
                       {verifiedOrgName && (
                         <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                          ✅ Verified: Joining <strong>{verifiedOrgName}</strong>
+                          ✅ {t('verifiedJoining')} <strong>{tx(verifiedOrgName)}</strong>
                         </span>
                       )}
                       {codeVerificationError && (
                         <span style={{ color: 'var(--color-destructive)', fontWeight: 600 }}>
-                          ❌ {codeVerificationError}
+                          ❌ {tx(codeVerificationError)}
                         </span>
                       )}
                       {!onboardingCode.trim() && !verifiedOrgName && !codeVerificationError && !verifyingCode && (
                         <span style={{ color: 'var(--color-muted-fg)' }}>
-                          Only if your company gave you a code. Leave blank to sign up individually.
+                          {t('enterCompanyCode')}
                         </span>
                       )}
                     </div>
@@ -432,7 +569,7 @@ function AuthPage() {
             )}
             
             <div className="form-group">
-              <label className="form-label">Password</label>
+              <label className="form-label">{t('password')}</label>
               <input
                 className="form-input"
                 type="password"
@@ -453,18 +590,16 @@ function AuthPage() {
                   !email.trim() ||
                   !profile ||
                   !password.trim() ||
-                  // Only block if a code was entered for a non-individual but
-                  // hasn't resolved to a valid organization yet.
-                  (profile !== 'Individual' && onboardingCode.trim() && !verifiedOrgName)
+                  (registrationType === 'company' && (!onboardingCode.trim() || !verifiedOrgName))
                 ))
               }
             >
-              {loading ? (tab === 1 ? 'Signing Up...' : 'Logging In...') : (tab === 0 ? 'Login' : 'Sign Up')}
+              {loading ? (tab === 1 ? t('signingUp') : t('loggingIn')) : (tab === 0 ? t('login') : t('signUp'))}
             </button>
 
             {tab === 1 && (
               <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
-                <strong>Note:</strong> Your profile selection enables us to guide you better in the expert sessions. Make sure to select the correct profile that matches your role.
+                <strong>{t('noteLabel')}</strong> {t('profileNote')}
               </div>
             )}
           </form>

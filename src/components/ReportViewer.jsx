@@ -13,6 +13,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import './ReportViewer.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
+import { quizApi, userApi, quizPacketApi, pdfTemplateApi } from '../services/api';
 
 
 // Custom alpha function for hex/rgb to rgba conversion without material-ui
@@ -70,6 +71,82 @@ const getFilteredFooterMarkdown = (footerText) => {
   }
   
   return result.join('\n').trim();
+};
+
+// The EQ "Score Table" section is only meaningful for HappiEQ. Strip it (the
+// "Score Table" label plus the markdown table that follows) from other
+// assessments' report text. Handles the label as a markdown heading
+// ("## Score Table") or a bold line ("**Score Table**").
+const stripScoreTableSection = (text) => {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result = [];
+  let skipping = false;
+
+  // Reduce a line to letters only so "## Score Table", "**Score Table**" and
+  // "Score Table" all collapse to "scoretable".
+  const isScoreTableLabel = (t) => t.replace(/[^a-z]/gi, '').toLowerCase() === 'scoretable';
+  const isTableRow = (t) => t.startsWith('|');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (skipping) {
+      // Keep dropping the table rows and blank lines under the label.
+      if (isTableRow(trimmed) || trimmed === '') continue;
+      // Anything else marks the end of the Score Table block.
+      skipping = false;
+    }
+
+    if (isScoreTableLabel(trimmed)) {
+      skipping = true;
+      continue; // drop the label line itself
+    }
+
+    result.push(line);
+  }
+
+  return result.join('\n').trim();
+};
+
+// Strip the plain-markdown "Support Services" section from a report footer so it
+// can be replaced by the styled Support Services cards. Removes the labeled
+// heading (markdown "#" or bold "**...**") and everything under it until the
+// next heading.
+const stripSupportServicesSection = (text) => {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const result = [];
+  let skipping = false;
+
+  const isHeading = (t) =>
+    t.startsWith('#') || /^\*\*.+\*\*:?$/.test(t) || /^__.+__:?$/.test(t);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (isHeading(trimmed)) {
+      const bare = trimmed.replace(/[^a-z]/gi, '').toLowerCase();
+      skipping = bare.includes('supportservices') || bare.includes('ourservices');
+    }
+    if (!skipping) result.push(line);
+  }
+
+  return result.join('\n').trim();
+};
+
+// Split footer markdown at the "Contact Details" heading so other content (the
+// Support Services cards) can be inserted just before it. Returns
+// [beforeContact, contactOnward].
+const splitAtContactDetails = (text) => {
+  if (!text) return ['', ''];
+  const lines = text.split('\n');
+  const idx = lines.findIndex((line) => {
+    const t = line.trim();
+    const isHeading = t.startsWith('#') || /^\*\*.+\*\*:?$/.test(t) || /^__.+__:?$/.test(t);
+    return isHeading && t.replace(/[^a-z]/gi, '').toLowerCase().includes('contactdetails');
+  });
+  if (idx === -1) return [text.trim(), ''];
+  return [lines.slice(0, idx).join('\n').trim(), lines.slice(idx).join('\n').trim()];
 };
 
 const defaultTemplate = {
@@ -150,6 +227,27 @@ const FALLBACK_SCALE = [
     icon: ''
   }
 ];
+
+// Emotion face images (in /public), ordered from struggling → thriving, used
+// for HappiEQ report cards in place of a generic icon. If a face image is
+// missing, we fall back to the numbered mood faces that ship in /public.
+const HAPPIEQ_EMOTION_FACES = [
+  '/emoji-angry.png',
+  '/emoji-nervous.png',
+  '/emoji-anxious.png',
+  '/emoji-happy.png',
+  '/emoji-calm.png'
+];
+const HAPPIEQ_EMOTION_FALLBACK = ['/1.png', '/2.png', '/3.png', '/4.png', '/5.png'];
+
+// Map a performance band (by its position in the scale) to an emotion face —
+// lower bands read as struggling, higher bands as thriving.
+function getEmotionFace(rank, scaleLength) {
+  const r = rank || 1;
+  const fraction = scaleLength > 1 ? (r - 1) / (scaleLength - 1) : 0;
+  const idx = Math.round(fraction * (HAPPIEQ_EMOTION_FACES.length - 1));
+  return { src: HAPPIEQ_EMOTION_FACES[idx], fallback: HAPPIEQ_EMOTION_FALLBACK[idx] };
+}
 
 function formatDate(dateString) {
   try {
@@ -451,19 +549,19 @@ const ReportViewer = () => {
   const getServiceList = () => {
     if (isHappiEQ) {
       return [
-        { name: 'HappiGUIDE', desc: "Get expert-led insights on your profile and create a clear roadmap for growth. Together, you'll discover what your results truly mean and create a practical action plan tailored just for you." },
+        { name: 'SOLV', desc: "It provides one-on-one sessions with growth experts to help you navigate important life decisions, transitions, aspirations,and challenges. It's confidential and thoughtful environment for meaningful progress all from the comfort of your own space." },
         { name: 'HappiLEARN', desc: "Your emotional wellbeing library—open 24/7. With HappiLEARN, you get unlimited access to 5000+ minutes of curated videos, audios, blogs, and tools designed by experts to practice empathy, regulation, and resilience at your own pace." },
         { name: 'HappiBUDDY', desc: "Confidential space to enhance your relational EQ because everyone needs someone to talk to or just a safe space to vent out our emotions. HappiBUDDY connects you with a trusted professional \"buddy\" in a safe, private, and judgment-free space so you never have to face challenges alone." },
-        { name: 'HappiSELF', desc: "Empowers you to manage your emotional health with interactive programs based on Cognitive Behavioral Therapy (CBT). Build habits, track progress, and grow stronger every day." },
+        { name: 'HappiSELF', desc: "It offers interactive tools and guided practices that help you build awareness, balance and resilience in everyday life. These scientific methods are designed for everyday use that help you stay aligned and grounded to enable your growth." },
         { name: 'HappiTALK', desc: "A safe space for real conversations, allowing you to have meaningful discussions with experts to improve communication, relationships, and emotional expression." }
       ];
     }
     
     return [
-      { name: 'HappiGUIDE', desc: 'helps you to make the most out of your HappiLIFE summary with a summary reading session by our emotional wellbeing expert.' },
+      { name: 'SOLV', desc: "It provides one-on-one sessions with growth experts to help you navigate important life decisions, transitions, aspirations,and challenges. It's confidential and thoughtful environment for meaningful progress all from the comfort of your own space." },
       { name: 'HappiLEARN', desc: 'is our online self-help library that enriches you with a 24*7 access to 5000+ minutes of curated, well researched content that includes video, audio, blogs and more.' },
       { name: 'HappiBUDDY', desc: 'allows you to connect with a professional expert buddy in a personal emotional log room that is non-judgemental, anonymous, and 100% confidential.' },
-      { name: 'HappiSELF', desc: 'is our mobile Application that enables Self-management of emotional wellbeing with a globally validated, interactive program with Cognitive Behavior Therapy at its core.' },
+      { name: 'HappiSELF', desc: "It offers interactive tools and guided practices that help you build awareness, balance and resilience in everyday life. These scientific methods are designed for everyday use that help you stay aligned and grounded to enable your growth." },
       { name: 'HappiTALK', desc: 'offers you a safe space to discuss life, aspirations, personal issues, relationships and more with the best of our country’s experts from the comfort of your home.' }
     ];
   };
@@ -561,29 +659,18 @@ const ReportViewer = () => {
         setLoading(true);
         setError('');
 
-        // Load quiz, attempts, packets, and template in parallel
-        const [quizRes, attemptsRes, packetsRes, templateRes] = await Promise.all([
-          fetch(`/api/quizzes/${quizId}`),
-          fetch('/api/quiz-attempts'),
-          fetch(`/api/quiz-packets/${quizId}`),
-          fetch(`/api/pdf-templates/${quizId}`).catch(() => null)
+        // Load quiz, attempts, packets, and template in parallel using API client
+        const [quizData, attempts, packetData, templateResData] = await Promise.all([
+          quizApi.getQuizById(quizId),
+          userApi.getAllQuizAttempts(),
+          quizPacketApi.getQuizPackets(quizId),
+          pdfTemplateApi.getTemplate(quizId).catch(() => null)
         ]);
 
-        if (!quizRes.ok || !attemptsRes.ok || !packetsRes.ok) {
-          throw new Error('Failed to load report data');
-        }
-
-        const quizData = await quizRes.json();
         enrichQuizWithInstructions(quizData);
-        const attempts = await attemptsRes.json();
-        const packetData = await packetsRes.json();
-        let templateData = null;
-        if (templateRes && templateRes.ok) {
-          const t = await templateRes.json();
-          templateData = t?.template || t;
-        }
+        const templateData = templateResData?.template || templateResData;
 
-        const foundAttempt = attempts.find(a => String(a.id) === String(attemptId));
+        const foundAttempt = (attempts || []).find(a => String(a.id) === String(attemptId));
         if (!foundAttempt) {
           throw new Error('Attempt not found');
         }
@@ -591,10 +678,7 @@ const ReportViewer = () => {
         let userData = null;
         if (foundAttempt.user_id) {
           try {
-            const userRes = await fetch(`/api/users/${foundAttempt.user_id}`);
-            if (userRes.ok) {
-              userData = await userRes.json();
-            }
+            userData = await userApi.getUserById(foundAttempt.user_id);
           } catch { }
         }
 
@@ -912,11 +996,8 @@ const ReportViewer = () => {
           {/* Title and Metadata */}
           <div className="rv-print-title-block">
             <h1 className="rv-print-title">
-              {template.header.title || 'Assessment Performance Report'}
+              Comprehensive Analysis Report
             </h1>
-            <p className="rv-print-subtitle">
-              {template.header.subtitle || quiz?.name}
-            </p>
           </div>
 
           {/* Participant Profile Grid */}
@@ -989,14 +1070,20 @@ const ReportViewer = () => {
           )}
         </div>
 
-      {/* Custom Header Text */}
-      {quiz?.report_header && (
-        <div className="rv-card rv-card--intro">
-          <div className="rv-markdown-content animate-fade-in">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{quiz.report_header}</ReactMarkdown>
+      {/* Custom Header Text — the "Score Table" section is HappiEQ-only, so it
+          is stripped from every other assessment's header. */}
+      {quiz?.report_header && (() => {
+        const headerMarkdown = isHappiEQ
+          ? quiz.report_header
+          : stripScoreTableSection(quiz.report_header);
+        return headerMarkdown ? (
+          <div className="rv-card rv-card--intro">
+            <div className="rv-markdown-content animate-fade-in">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{headerMarkdown}</ReactMarkdown>
+            </div>
           </div>
-        </div>
-      )}
+        ) : null;
+      })()}
 
       {/* Modern Charts Section */}
       {template?.charts?.enabled && packetScores.length > 0 && !isSpecialReport && !showShortReportFeatures && (
@@ -1145,14 +1232,16 @@ const ReportViewer = () => {
             
             {primaryPersonality && primaryDescription && (
               <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 12px 0' }}>Primary Personality</h3>
                 <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', lineHeight: 1.8, fontSize: '15px', textAlign: 'justify', color: 'var(--color-fg)' }}>
                   {primaryDescription}
                 </div>
               </div>
             )}
-            
+
             {secondaryPersonality && secondaryDescription && (
               <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 12px 0' }}>Secondary Personality</h3>
                 <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', lineHeight: 1.8, fontSize: '15px', textAlign: 'justify', color: 'var(--color-fg)' }}>
                   {secondaryDescription}
                 </div>
@@ -1195,6 +1284,22 @@ const ReportViewer = () => {
                     >
                       {p.level?.image && p.level.image.startsWith('data:image') ? (
                         <img src={p.level.image} alt="badge" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                      ) : isHappiEQ ? (
+                        (() => {
+                          const face = getEmotionFace(p.level?.rank, p.scaleLength);
+                          return (
+                            <img
+                              src={face.src}
+                              alt=""
+                              onError={(e) => {
+                                if (e.currentTarget.src.indexOf(face.fallback) === -1) {
+                                  e.currentTarget.src = face.fallback;
+                                }
+                              }}
+                              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                          );
+                        })()
                       ) : (
                         p.level?.icon || '📘'
                       )}
@@ -1283,18 +1388,56 @@ const ReportViewer = () => {
                                 quiz?.name?.toLowerCase().includes('happi life') ||
                                 quiz?.name?.toLowerCase().includes('happi assess ei');
                                 
-        const footerMarkdown = isHappiEQOrLife 
-          ? getFilteredFooterMarkdown(quiz.report_footer) 
+        let footerMarkdown = isHappiEQOrLife
+          ? getFilteredFooterMarkdown(quiz.report_footer)
           : quiz.report_footer;
-          
+        // The Score Table is HappiEQ-only — strip it from every other report.
+        if (!isHappiEQ) footerMarkdown = stripScoreTableSection(footerMarkdown);
+        // Support Services is rendered as styled cards below, so drop the plain
+        // markdown version from the footer for every assessment.
+        footerMarkdown = stripSupportServicesSection(footerMarkdown);
+
         if (!footerMarkdown.trim()) return null;
-        
-        return (
+
+        // Support Services cards (styled) — for short reports these already
+        // render inside the Next Steps block, so only add them here for the
+        // other assessments, placed just before the Contact Details section.
+        const supportServicesCards = !showShortReportFeatures ? (
           <div className="rv-card">
-            <div className="rv-markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{footerMarkdown}</ReactMarkdown>
+            <h3 style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '18px', margin: '0 0 16px 0' }}>🤝 Support Services:</h3>
+            <div className="rv-service-grid">
+              {getServiceList().map((service) => (
+                <div key={service.name} className="rv-service-card">
+                  <h4 className="rv-service-card__name">{service.name}</h4>
+                  <p className="rv-service-card__desc">{service.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
+        ) : null;
+
+        const [beforeContact, contactOnward] = !showShortReportFeatures
+          ? splitAtContactDetails(footerMarkdown)
+          : [footerMarkdown, ''];
+
+        return (
+          <>
+            {beforeContact.trim() && (
+              <div className="rv-card">
+                <div className="rv-markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{beforeContact}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+            {supportServicesCards}
+            {contactOnward.trim() && (
+              <div className="rv-card">
+                <div className="rv-markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{contactOnward}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </>
         );
       })()}
 

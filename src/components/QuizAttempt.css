@@ -290,23 +290,24 @@
 }
 
 .quiz-attempt__desc-title {
-  font-size: var(--text-lg);
+  font-size: 1.4rem;
   font-weight: 700;
   color: var(--color-primary);
+  margin-bottom: var(--space-4);
 }
 
 .quiz-attempt__desc-body {
   max-width: 850px;
   width: 100%;
-  text-align: justify;
+  text-align: left;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-3);
   padding: 0 var(--space-4);
 }
 .quiz-attempt__desc-body p {
-  font-size: var(--text-sm);
-  line-height: 1.5;
+  font-size: 1.05rem;
+  line-height: 1.7;
   color: var(--color-secondary);
   margin: 0;
 }
@@ -315,24 +316,27 @@
 }
 
 .quiz-attempt__instructions-title {
-  font-size: var(--text-base);
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--color-primary);
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-3);
 }
 
 .quiz-attempt__instructions-list {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 var(--space-5) 0;
   max-width: 850px;
   width: 100%;
   text-align: left;
 }
 .quiz-attempt__instructions-list li {
-  font-size: var(--text-sm);
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--color-secondary);
-  padding: var(--space-1) 0;
-  padding-left: var(--space-4);
+  padding: var(--space-2) 0;
+  padding-left: var(--space-5);
   position: relative;
 }
 .quiz-attempt__instructions-list li::before {
@@ -807,21 +811,21 @@
 }
 
 .quiz-attempt__desc-markdown p {
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  margin: 0 0 var(--space-2) 0;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  margin: 0 0 var(--space-4) 0;
 }
 
 .quiz-attempt__desc-markdown ul, 
 .quiz-attempt__desc-markdown ol {
   padding-left: var(--space-6);
-  margin: 0 0 var(--space-3) 0;
+  margin: 0 0 var(--space-4) 0;
 }
 
 .quiz-attempt__desc-markdown li {
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  margin-bottom: var(--space-1);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: var(--space-2);
 }
 
 .quiz-attempt__desc-markdown h1,
@@ -832,7 +836,7 @@
 .quiz-attempt__desc-markdown h6 {
   color: var(--color-primary);
   font-weight: 700;
-  margin: var(--space-4) 0 var(--space-2) 0;
+  margin: var(--space-5) 0 var(--space-3) 0;
 }
 
 .quiz-attempt__desc-markdown strong {

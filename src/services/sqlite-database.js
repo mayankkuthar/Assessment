@@ -266,7 +266,14 @@ export const packetService = {
       // Process the JSON questions data
       return packets.map(packet => ({
         ...packet,
-        questions: packet.questions ? JSON.parse(packet.questions).filter(q => q.id !== null) : []
+        questions: packet.questions 
+          ? JSON.parse(packet.questions)
+              .filter(q => q.id !== null)
+              .map(q => ({
+                ...q,
+                options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+              }))
+          : []
       }));
     } catch (error) {
       console.error('Error getting packets:', error);
@@ -326,7 +333,14 @@ export const packetService = {
       const packet = getStmt.get(id);
       return {
         ...packet,
-        questions: packet.questions ? JSON.parse(packet.questions).filter(q => q.id !== null) : []
+        questions: packet.questions 
+          ? JSON.parse(packet.questions)
+              .filter(q => q.id !== null)
+              .map(q => ({
+                ...q,
+                options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+              }))
+          : []
       };
     } catch (error) {
       console.error('Error updating packet:', error);
@@ -633,7 +647,14 @@ export const quizPacketService = {
       
       return packets.map(packet => ({
         ...packet,
-        questions: packet.questions ? JSON.parse(packet.questions).filter(q => q.id !== null) : []
+        questions: packet.questions 
+          ? JSON.parse(packet.questions)
+              .filter(q => q.id !== null)
+              .map(q => ({
+                ...q,
+                options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+              }))
+          : []
       }));
     } catch (error) {
       console.error('Error getting quiz packets:', error);

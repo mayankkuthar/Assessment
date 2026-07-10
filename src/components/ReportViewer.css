@@ -194,7 +194,7 @@ body.dark .rv-print-header-card::after {
 }
 
 .rv-print-logo {
-  height: 48px;
+  height: 80px;
   width: auto;
   object-fit: contain;
   transition: filter var(--duration-base) var(--ease-out);

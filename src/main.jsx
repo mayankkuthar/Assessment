@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { BrowserRouter } from 'react-router-dom'
 import { DatabaseProvider } from './hooks/useDatabase'
+import { LanguageProvider } from './contexts/LanguageContext'
 
 // In production (Vercel), forward all relative /api requests to the live backend
 if (import.meta.env.PROD) {
@@ -39,9 +40,11 @@ if (import.meta.env.PROD) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <DatabaseProvider>
-        <App />
-      </DatabaseProvider>
+      <LanguageProvider>
+        <DatabaseProvider>
+          <App />
+        </DatabaseProvider>
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>,
 )

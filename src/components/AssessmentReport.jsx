@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
@@ -9,10 +9,13 @@ import PDFGenerator from '../services/pdfGenerator';
 import './AssessmentReport.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
 import { useDatabase } from '../hooks/useDatabase';
+import { quizPacketApi, userApi, questionApi, pdfTemplateApi } from '../services/api';
+import { PROFILE_ORDER, isSameProfile } from '../utils/profileOrder';
 
 
 const AssessmentReport = () => {
   const { quizzes, profiles, users, loading: dbLoading, error: dbError } = useDatabase();
+
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [quizAttempts, setQuizAttempts] = useState([]);
   const [quizPackets, setQuizPackets] = useState([]);
@@ -20,8 +23,120 @@ const AssessmentReport = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterOrg, setFilterOrg] = useState('all');
+  const [filterProfile, setFilterProfile] = useState('all');
+  const [sortBy, setSortBy] = useState('date-desc');
   const [showDetails, setShowDetails] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+
+  const getProfileInfo = (attempt) => {
+    // If we have user data from the enriched attempt, use it
+    if (attempt.user) {
+      return {
+        name: attempt.user.user_name || attempt.user.email || 'Unknown User',
+        email: attempt.user.email || 'No email',
+        role: attempt.user.profile || 'No role',
+        organization: attempt.user.organization || 'Individual'
+      };
+    }
+    
+    // Fallback: try to find profile by name if we have user data
+    if (attempt.userData && attempt.userData.profile) {
+      const profile = profiles.find(p => p.name === attempt.userData.profile);
+      if (profile) {
+        return {
+          name: profile.name || 'Unknown User',
+          email: profile.email || 'No email',
+          role: profile.role || 'No role',
+          organization: attempt.userData.organization || 'Individual'
+        };
+      }
+    }
+    
+    // Fallback to profile data if no user data
+    const profile = profiles.find(p => p.id === attempt.profile_id || p.id === attempt.user_id);
+    if (profile) {
+      return {
+        name: profile.name || 'Unknown User',
+        email: profile.email || 'No email',
+        role: profile.role || 'No role',
+        organization: 'Individual'
+      };
+    }
+    
+    // Final fallback
+    return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Individual' };
+  };
+
+  const uniqueOrgs = useMemo(() => {
+    const orgs = quizAttempts.map(a => {
+      const profileInfo = getProfileInfo(a);
+      return profileInfo.organization || 'Individual';
+    }).filter(Boolean);
+    return ['all', ...new Set(orgs)].sort();
+  }, [quizAttempts]);
+
+  // Show exactly the canonical profiles in the filter (no data-driven extras
+  // like Home Maker, HCL, SOLV, "No role", etc.).
+  const uniqueProfiles = ['all', ...PROFILE_ORDER];
+
+  const filteredAttempts = useMemo(() => {
+    // 1. Filter
+    const filtered = quizAttempts.filter(attempt => {
+      const profileInfo = getProfileInfo(attempt);
+      const matchesSearch = searchTerm === '' || 
+        String(profileInfo.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(profileInfo.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(profileInfo.role || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(profileInfo.organization || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!matchesSearch) return false;
+
+      // Filter by status
+      if (filterStatus === 'completed' && attempt.status !== 'completed') return false;
+      if (filterStatus === 'in-progress' && attempt.status !== 'in-progress') return false;
+
+      // Filter by Organization
+      if (filterOrg !== 'all') {
+        const attemptOrg = profileInfo.organization || 'Individual';
+        if (attemptOrg !== filterOrg) return false;
+      }
+
+      // Filter by Profile (case/spacing-insensitive so canonical names match
+      // stored variants like "Student(college/university)").
+      if (filterProfile !== 'all') {
+        const attemptProfileName = profileInfo.role || 'Unknown Profile';
+        if (!isSameProfile(attemptProfileName, filterProfile)) return false;
+      }
+
+      return true;
+    });
+
+    // 2. Sort
+    return filtered.sort((a, b) => {
+      const profileInfoA = getProfileInfo(a);
+      const profileInfoB = getProfileInfo(b);
+
+      if (sortBy === 'date-desc') {
+        const dateA = new Date(a.completed_at || a.started_at || 0).getTime();
+        const dateB = new Date(b.completed_at || b.started_at || 0).getTime();
+        return dateB - dateA;
+      } else if (sortBy === 'date-asc') {
+        const dateA = new Date(a.completed_at || a.started_at || 0).getTime();
+        const dateB = new Date(b.completed_at || b.started_at || 0).getTime();
+        return dateA - dateB;
+      } else if (sortBy === 'name-asc') {
+        const nameA = String(profileInfoA.name || '').toLowerCase();
+        const nameB = String(profileInfoB.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      } else if (sortBy === 'name-desc') {
+        const nameA = String(profileInfoA.name || '').toLowerCase();
+        const nameB = String(profileInfoB.name || '').toLowerCase();
+        return nameB.localeCompare(nameA);
+      }
+      return 0;
+    });
+  }, [quizAttempts, searchTerm, filterStatus, filterOrg, filterProfile, sortBy]);
 
 
   const handleQuizSelect = async (quiz) => {
@@ -29,19 +144,18 @@ const AssessmentReport = () => {
       setLoading(true);
       setError('');
       setSelectedQuiz(quiz);
+      setSearchTerm('');
+      setFilterStatus('all');
+      setFilterOrg('all');
+      setFilterProfile('all');
+      setSortBy('date-desc');
 
-      // Load quiz attempts and packets for the selected quiz
-      const [attemptsRes, packetsRes] = await Promise.all([
-        fetch(`/api/quiz-attempts?quiz_id=${quiz.id}`),
-        fetch(`/api/quiz-packets/${quiz.id}`)
+      // Load quiz attempts and packets using API services to bypass proxy drops
+      const [attemptsData, packetsData] = await Promise.all([
+        userApi.getAllQuizAttempts(),
+        quizPacketApi.getQuizPackets(quiz.id)
       ]);
 
-      if (!attemptsRes.ok || !packetsRes.ok) {
-        throw new Error('Failed to load quiz data');
-      }
-
-      const attemptsData = await attemptsRes.json();
-      const packetsData = await packetsRes.json();
       console.log('📦 Loaded packets data:', packetsData);
       console.log('📦 First packet details:', packetsData[0] ? {
         id: packetsData[0].id,
@@ -52,8 +166,11 @@ const AssessmentReport = () => {
         scoringScale: packetsData[0].scoringScale
       } : 'No packets found');
 
+      // Filter attempts for this specific quiz
+      const quizAttemptsData = (attemptsData || []).filter(attempt => String(attempt.quiz_id) === String(quiz.id));
+
       // Enrich attempts with user information
-      const enrichedAttempts = attemptsData.map((attempt) => {
+      const enrichedAttempts = quizAttemptsData.map((attempt) => {
         const userData = (users || []).find(u => String(u.id) === String(attempt.user_id)) || attempt.user || null;
         return {
           ...attempt,
@@ -85,23 +202,23 @@ const AssessmentReport = () => {
           userData = attempt.user;
         } else {
           try {
-            const userRes = await fetch(`/api/users/${attempt.user_id}`);
-            if (userRes.ok) {
-              userData = await userRes.json();
-            }
+            userData = await userApi.getUserById(attempt.user_id);
           } catch (err) {
             console.error('Failed to fetch user data:', err);
           }
         }
       }
       
-      // Get questions for all packets in this quiz
+      // Get questions for all packets in this quiz using API service
       const allQuestions = [];
       for (const packet of quizPackets) {
-        const questionsRes = await fetch(`/api/questions?packet_id=${packet.id}`);
-        if (questionsRes.ok) {
-          const questions = await questionsRes.json();
-          allQuestions.push(...questions);
+        try {
+          const questions = await questionApi.getQuestions(packet.id);
+          if (questions) {
+            allQuestions.push(...questions);
+          }
+        } catch (err) {
+          console.error(`Failed to fetch questions for packet ${packet.id}:`, err);
         }
       }
 
@@ -147,9 +264,8 @@ const AssessmentReport = () => {
       // Load template configuration for this quiz
       let template = null;
       try {
-        const templateRes = await fetch(`/api/pdf-templates/${selectedQuiz.id}?t=${Date.now()}`);
-        if (templateRes.ok) {
-          const templateData = await templateRes.json();
+        const templateData = await pdfTemplateApi.getTemplate(selectedQuiz.id);
+        if (templateData && templateData.template) {
           template = templateData.template;
           
           console.log('🔄 Loaded template data:', {
@@ -252,59 +368,7 @@ const AssessmentReport = () => {
     quiz.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getProfileInfo = (attempt) => {
-    // If we have user data from the enriched attempt, use it
-    if (attempt.user) {
-      return {
-        name: attempt.user.user_name || attempt.user.email || 'Unknown User',
-        email: attempt.user.email || 'No email',
-        role: attempt.user.profile || 'No role',
-        organization: attempt.user.organization || 'Individual'
-      };
-    }
-    
-    // Fallback: try to find profile by name if we have user data
-    if (attempt.userData && attempt.userData.profile) {
-      const profile = profiles.find(p => p.name === attempt.userData.profile);
-      if (profile) {
-        return {
-          name: profile.name || 'Unknown User',
-          email: profile.email || 'No email',
-          role: profile.role || 'No role',
-          organization: attempt.userData.organization || 'Individual'
-        };
-      }
-    }
-    
-    // Fallback to profile data if no user data
-    const profile = profiles.find(p => p.id === attempt.profile_id || p.id === attempt.user_id);
-    if (profile) {
-      return {
-        name: profile.name || 'Unknown User',
-        email: profile.email || 'No email',
-        role: profile.role || 'No role',
-        organization: 'Individual'
-      };
-    }
-    
-    // Final fallback
-    return { name: 'Unknown User', email: 'No email', role: 'No role', organization: 'Individual' };
-  };
 
-  const filteredAttempts = quizAttempts.filter(attempt => {
-    const profileInfo = getProfileInfo(attempt);
-    const matchesSearch = searchTerm === '' || 
-      String(profileInfo.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(profileInfo.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(profileInfo.role || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(profileInfo.organization || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'completed') return matchesSearch && attempt.status === 'completed';
-    if (filterStatus === 'in-progress') return matchesSearch && attempt.status === 'in-progress';
-    
-    return matchesSearch;
-  });
 
   if ((loading || dbLoading) && !selectedQuiz) {
     return (
@@ -405,8 +469,8 @@ const AssessmentReport = () => {
             </h2>
           </div>
 
-          <div className="report-toolbar">
-            <div className="report-search" style={{ flex: 'none', width: '250px' }}>
+          <div className="report-toolbar" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="report-search" style={{ flex: '1', minWidth: '200px' }}>
               <SearchIcon />
               <input
                 type="text"
@@ -421,9 +485,42 @@ const AssessmentReport = () => {
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="all">All Attempts</option>
+              <option value="all">All Statuses</option>
               <option value="completed">Completed</option>
               <option value="in-progress">In Progress</option>
+            </select>
+
+            <select
+              className="report-filter-select"
+              value={filterOrg}
+              onChange={(e) => setFilterOrg(e.target.value)}
+            >
+              <option value="all">All Organizations</option>
+              {uniqueOrgs.filter(org => org !== 'all').map(org => (
+                <option key={org} value={org}>{org}</option>
+              ))}
+            </select>
+
+            <select
+              className="report-filter-select"
+              value={filterProfile}
+              onChange={(e) => setFilterProfile(e.target.value)}
+            >
+              <option value="all">All Profiles</option>
+              {uniqueProfiles.filter(p => p !== 'all').map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+
+            <select
+              className="report-filter-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              <option value="date-desc">Latest first</option>
+              <option value="date-asc">Oldest first</option>
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
             </select>
           </div>
 
