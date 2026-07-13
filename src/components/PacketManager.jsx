@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -10,7 +10,61 @@ import CloseIcon from '@mui/icons-material/Close';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import './PacketManager.css';
 
-const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQuestion, updateQuestion, deleteQuestion, onDataChange }) => {
+const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePacket, addQuestion, updateQuestion, deleteQuestion, onDataChange }) => {
+  const configureAreaRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const packets = useMemo(() => {
+    return (rawPackets || []).map(packet => {
+      let scale = packet.scoringScale;
+      if (typeof scale === 'string') {
+        try {
+          scale = JSON.parse(scale);
+        } catch (e) {
+          console.error('Failed to parse packet scoringScale:', e);
+          scale = [];
+        }
+      }
+      return {
+        ...packet,
+        scoringScale: Array.isArray(scale) ? scale : [],
+        questions: (packet.questions || []).map(q => {
+          let opts = q.options;
+          if (typeof opts === 'string') {
+            try {
+              opts = JSON.parse(opts);
+            } catch (e) {
+              console.error('Failed to parse question options:', e);
+              opts = [];
+            }
+          }
+          return {
+            ...q,
+            options: Array.isArray(opts) ? opts : []
+          };
+        })
+      };
+    });
+  }, [rawPackets]);
+
+  const filteredPackets = useMemo(() => {
+    if (!searchQuery.trim()) return packets;
+    const query = searchQuery.toLowerCase().trim();
+    return packets.filter(p => 
+      (p.name && p.name.toLowerCase().includes(query)) ||
+      (p.description && p.description.toLowerCase().includes(query))
+    );
+  }, [packets, searchQuery]);
+
+  const handleSelectPacket = (packetId) => {
+    setSelectedPacket(packetId);
+    setTimeout(() => {
+      if (configureAreaRef.current) {
+        configureAreaRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
   const [packetName, setPacketName] = useState('');
   const [packetDescription, setPacketDescription] = useState('');
   const [scoringLogic, setScoringLogic] = useState('');
@@ -34,10 +88,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   // Scoring Scale System State
   const [scoringScaleDialog, setScoringScaleDialog] = useState(false);
   const [scoringScale, setScoringScale] = useState([
-    { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "📚", largeText: "Keep practicing! You're making progress." },
-    { min: 3, max: 5, label: "Average", color: "#895BF5", image: "📊", largeText: "Good effort! You're on the right track." },
-    { min: 6, max: 8, label: "Good", color: "#895BF5", image: "🎯", largeText: "Well done! You're showing strong understanding." },
-    { min: 9, max: 15, label: "Excellent", color: "#895BF5", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+    { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
+    { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
+    { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+    { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
   ]);
   const [enableScoringScale, setEnableScoringScale] = useState(false);
 
@@ -232,9 +286,9 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
             label: i === 0 ? "Needs Improvement" : 
                    i === 1 ? "Average" : 
                    i === 2 ? "Good" : "Excellent",
-            color: i === 0 ? "#895BF5" : 
-                   i === 1 ? "#895BF5" : 
-                   i === 2 ? "#895BF5" : "#895BF5",
+            color: i === 0 ? "#ff6b6b" : 
+                   i === 1 ? "#ffd93d" : 
+                   i === 2 ? "#6bcf7f" : "#4ecdc4",
             image: i === 0 ? "📚" : 
                    i === 1 ? "📊" : 
                    i === 2 ? "🎯" : "🏆",
@@ -358,7 +412,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
           });
           
           // Update the packet with scoring scale data
+          const currentPacket = packets.find(p => p.id === selectedPacket);
           const packetToUpdate = {
+            name: currentPacket?.name || '',
+            description: currentPacket?.description || '',
             scoringScale: scoringScale,
             enableScoringScale: true
           };
@@ -477,10 +534,10 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
       } else {
         // Reset to default scale if no custom scale found
         setScoringScale([
-          { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "📚", largeText: "Keep practicing! You're making progress." },
-          { min: 3, max: 5, label: "Average", color: "#895BF5", image: "📊", largeText: "Good effort! You're on the right track." },
-          { min: 6, max: 8, label: "Good", color: "#895BF5", image: "🎯", largeText: "Well done! You're showing strong understanding." },
-          { min: 9, max: 15, label: "Excellent", color: "#895BF5", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
+          { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
+          { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
+          { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+          { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
         ]);
         setEnableScoringScale(false);
         console.log('🔄 Reset to default scoring scale');
@@ -600,14 +657,16 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
   };
 
   const handleDeleteQuestion = async (qid) => {
-    try {
-      await deleteQuestion(qid);
-      
-      // Force re-render to update marks calculation
-      setSelectedPacket(selectedPacket);
-    } catch (error) {
-      console.error('Error deleting question:', error);
-      alert('Failed to delete question. Please try again.');
+    if (window.confirm("Are you sure you want to delete this question?")) {
+      try {
+        await deleteQuestion(qid);
+        
+        // Force re-render to update marks calculation
+        setSelectedPacket(selectedPacket);
+      } catch (error) {
+        console.error('Error deleting question:', error);
+        alert('Failed to delete question. Please try again.');
+      }
     }
   };
 
@@ -787,23 +846,41 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
           <div className="section-card" style={{ marginTop: 'var(--space-6)' }}>
             <h3 className="section-card__title">Packets</h3>
 
+            {/* Search Bar */}
+            <div className="search-bar-container" style={{ marginBottom: 'var(--space-4)' }}>
+              <input
+                type="text"
+                className="form-input search-input"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search packets..."
+                style={{
+                  paddingLeft: '36px',
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%23895BF5\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z\'/%3E%3C/svg%3E")',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: '10px center',
+                  backgroundSize: '18px 18px'
+                }}
+              />
+            </div>
+
             {/* Overall Statistics */}
-            {packets.length > 0 && (
+            {filteredPackets.length > 0 && (
               <div className="packet-stats-summary">
                 <h4 className="packet-stats-summary__title">
                   📈 Overall Assessment Statistics
                 </h4>
                 <div className="packet-stats-summary__grid">
                   <div className="packet-stats-summary__item">
-                    <span>Total Packets:</span> <strong>{packets.length}</strong>
+                    <span>Total Packets:</span> <strong>{filteredPackets.length}</strong>
                   </div>
                   <div className="packet-stats-summary__item">
-                    <span>Total Questions:</span> <strong>{packets.reduce((total, packet) => total + (packet.questions?.length || 0), 0)}</strong>
+                    <span>Total Questions:</span> <strong>{filteredPackets.reduce((total, packet) => total + (packet.questions?.length || 0), 0)}</strong>
                   </div>
                   <div className="packet-stats-summary__item">
                     <span>Min Marks:</span> <strong>
                       {(() => {
-                        const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.minMarks > 0);
+                        const allMarks = filteredPackets.map(p => calculatePacketMarks(p.id)).filter(m => m.minMarks > 0);
                         if (allMarks.length === 0) return 0;
                         return Math.min(...allMarks.map(m => m.minMarks));
                       })()}
@@ -812,7 +889,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                   <div className="packet-stats-summary__item">
                     <span>Max Marks:</span> <strong>
                       {(() => {
-                        const allMarks = packets.map(p => calculatePacketMarks(p.id)).filter(m => m.maxMarks > 0);
+                        const allMarks = filteredPackets.map(p => calculatePacketMarks(p.id)).filter(m => m.maxMarks > 0);
                         if (allMarks.length === 0) return 0;
                         return Math.max(...allMarks.map(m => m.maxMarks));
                       })()}
@@ -823,7 +900,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
             )}
 
             <div className="packet-list">
-              {packets.map((packet) => {
+              {filteredPackets.map((packet) => {
                 const isSelected = selectedPacket === packet.id && editingPacket !== packet.id;
                 const isEditingThis = editingPacket === packet.id;
 
@@ -831,7 +908,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
                   <div 
                     key={packet.id}
                     className={`packet-list-item ${isSelected ? 'packet-list-item--selected' : ''} ${isEditingThis ? 'packet-list-item--editing' : ''}`}
-                    onClick={() => !isEditingThis && setSelectedPacket(packet.id)}
+                    onClick={() => !isEditingThis && handleSelectPacket(packet.id)}
                   >
                     {isEditingThis ? (
                       <div className="packet-edit-form" onClick={e => e.stopPropagation()}>
@@ -916,7 +993,7 @@ const PacketManager = ({ packets, addPacket, updatePacket, deletePacket, addQues
         </div>
 
         {/* Right column / Main Content Area */}
-        <div className="packet-manager__main">
+        <div className="packet-manager__main" ref={configureAreaRef}>
           {selectedPacket ? (
             <div className="section-card">
               <h3 className="section-card__title">Add Question to Packet</h3>

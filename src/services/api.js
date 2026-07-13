@@ -1,7 +1,8 @@
 // API service to replace direct SQLite calls in the browser
-const API_BASE = import.meta.env.DEV
-  ? '/api'
-  : 'https://constrain-magnifier-circling.ngrok-free.dev/api';
+// const API_BASE = import.meta.env.DEV
+//   ? '/api'
+//   : 'https://constrain-magnifier-circling.ngrok-free.dev/api';
+const API_BASE = 'https://constrain-magnifier-circling.ngrok-free.dev/api';
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -193,6 +194,10 @@ export const packetApi = {
 
 // Question API
 export const questionApi = {
+  async getQuestions(packetId) {
+    return await apiCall(`/questions?packet_id=${packetId}`);
+  },
+
   async createQuestion(question) {
     return await apiCall('/questions', {
       method: 'POST',
@@ -298,6 +303,10 @@ export const userApi = {
     return await apiCall('/users');
   },
 
+  async getUserById(id) {
+    return await apiCall(`/users/${id}`);
+  },
+
   async getUserQuizAttempts(userId) {
     return await apiCall(`/users/${userId}/quiz-attempts`);
   },
@@ -362,5 +371,12 @@ export const userApi = {
   // Read the permission-action audit log (Super Admin only).
   async getAuditLog() {
     return await apiCall('/audit-log');
+  }
+};
+
+// PDF Template API
+export const pdfTemplateApi = {
+  async getTemplate(quizId) {
+    return await apiCall(`/pdf-templates/${quizId}`);
   }
 };

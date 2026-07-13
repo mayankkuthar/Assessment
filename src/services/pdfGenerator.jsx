@@ -345,8 +345,16 @@ const safeParseMargin = (margin, fallback = 0) => {
 };
 
 const getPerformanceLevel = (marks, packet = null) => {
-  if (packet && packet.scoringScale && packet.scoringScale.length > 0) {
-    const level = packet.scoringScale.find(range => marks >= range.min && marks <= range.max);
+  let scale = packet?.scoringScale;
+  if (typeof scale === 'string') {
+    try {
+      scale = JSON.parse(scale);
+    } catch {
+      scale = null;
+    }
+  }
+  if (packet && scale && Array.isArray(scale) && scale.length > 0) {
+    const level = scale.find(range => marks >= range.min && marks <= range.max);
     if (level) {
       return {
         ...level,
@@ -739,8 +747,23 @@ class ProfessionalPDFGenerator {
   }
 
   calculatePacketScores(packets, questions, answers, attemptData) {
+    const normalizedPackets = (packets || []).map(packet => {
+      let scale = packet.scoringScale;
+      if (typeof scale === 'string') {
+        try {
+          scale = JSON.parse(scale);
+        } catch {
+          scale = [];
+        }
+      }
+      return {
+        ...packet,
+        scoringScale: Array.isArray(scale) ? scale : []
+      };
+    });
+
     if (attemptData.packet_marks && Object.keys(attemptData.packet_marks).length > 0) {
-      return packets.map(packet => {
+      return normalizedPackets.map(packet => {
         const packetData = attemptData.packet_marks[packet.name];
         return {
           packet,
@@ -752,7 +775,7 @@ class ProfessionalPDFGenerator {
       });
     }
 
-    return packets.map(packet => {
+    return normalizedPackets.map(packet => {
       const packetQuestions = questions.filter(q => q.packet_id === packet.id);
       let marks = 0;
       packetQuestions.forEach(question => {

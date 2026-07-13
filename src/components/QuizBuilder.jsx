@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import PreviewIcon from '@mui/icons-material/Preview';
 import SaveIcon from '@mui/icons-material/Save';
@@ -18,6 +18,16 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
   const [showPreview, setShowPreview] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const formRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredQuizzes = useMemo(() => {
+    if (!searchQuery.trim()) return savedQuizzes;
+    const query = searchQuery.toLowerCase().trim();
+    return (savedQuizzes || []).filter(q => 
+      q.name && q.name.toLowerCase().includes(query)
+    );
+  }, [savedQuizzes, searchQuery]);
 
   const onDragEnd = (result) => {
     if (!result.destination) return;
@@ -134,6 +144,13 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       setQuizPackets(existingPackets || []);
       
       setIsEditing(true);
+
+      // Auto scroll to form
+      setTimeout(() => {
+        if (formRef.current) {
+          formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
     } catch (error) {
       console.error('Error loading quiz for editing:', error);
       alert('Failed to load quiz for editing. Please try again.');
@@ -164,7 +181,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
     <div className="quiz-builder">
       <div className="quiz-builder__grid">
         {/* Left Column - Form */}
-        <div className="quiz-card quiz-card--form">
+        <div className="quiz-card quiz-card--form" ref={formRef}>
           <h3 className="quiz-card__title">
             {isEditing ? 'Edit Quiz' : 'Build Quiz'}
           </h3>
@@ -402,11 +419,32 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
       {/* Saved Quizzes */}
       <div className="section-card saved-quizzes-card">
         <h3 className="section-card__title">Saved Quizzes</h3>
-        {savedQuizzes.length === 0 ? (
-          <p className="form-helper">No quizzes saved yet. Create your first quiz above!</p>
+
+        {/* Search Bar */}
+        <div className="search-bar-container" style={{ marginBottom: 'var(--space-4)' }}>
+          <input
+            type="text"
+            className="form-input search-input"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search quizzes..."
+            style={{
+              paddingLeft: '36px',
+              backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%23895BF5\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z\'/%3E%3C/svg%3E")',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: '10px center',
+              backgroundSize: '18px 18px'
+            }}
+          />
+        </div>
+
+        {filteredQuizzes.length === 0 ? (
+          <p className="form-helper">
+            {searchQuery ? "No quizzes match your search query." : "No quizzes saved yet. Create your first quiz above!"}
+          </p>
         ) : (
           <div className="saved-quizzes-list">
-            {savedQuizzes.map((quiz) => (
+            {filteredQuizzes.map((quiz) => (
               <div key={quiz.id} className="saved-quiz-item">
                 <div>
                   <div className="saved-quiz-item__name">{quiz.name}</div>
@@ -426,7 +464,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                   <button
                     type="button"
                     className="icon-btn icon-btn--danger"
-                    onClick={() => deleteQuiz(quiz.id)}
+                    onClick={() => { if (window.confirm("Are you sure you want to delete this quiz?")) deleteQuiz(quiz.id); }}
                     title="Delete Quiz"
                   >
                     <AddCircleOutlineIcon style={{ transform: 'rotate(45deg)', width: '18px', height: '18px' }} />

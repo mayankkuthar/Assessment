@@ -625,6 +625,49 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'Auth server is working!', timestamp: new Date().toISOString() });
 });
 
+// Server-side proxy for Google Cloud Translation. The API key lives only on the
+// server (GOOGLE_TRANSLATE_API_KEY, NOT a VITE_ var) so it is never shipped to
+// the browser or visible in the Network tab. The client posts { q, target,
+// format } and we forward it to Google with the key attached here.
+app.post('/api/translate', async (req, res) => {
+  const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({ error: 'Translation is not configured on the server.' });
+  }
+
+  const { q, target, format = 'text' } = req.body || {};
+  if (!Array.isArray(q) || q.length === 0 || !target) {
+    return res.status(400).json({ error: 'Request must include a non-empty `q` array and a `target` language.' });
+  }
+
+  try {
+    const googleRes = await fetch(
+      `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q, target, format }),
+      }
+    );
+
+    const data = await googleRes.json().catch(() => ({}));
+    if (!googleRes.ok) {
+      const detail = data?.error?.message || '';
+      console.error(`❌ Translation upstream error (${googleRes.status}): ${detail}`);
+      // Don't leak the upstream key/URL to the client; return a clean status.
+      return res.status(googleRes.status === 400 ? 400 : 502).json({
+        error: `Translation request failed (${googleRes.status}).`,
+      });
+    }
+
+    const translations = (data?.data?.translations || []).map((t) => t.translatedText);
+    res.json({ translations });
+  } catch (err) {
+    console.error('❌ Translation proxy error:', err.message);
+    res.status(502).json({ error: 'Translation request failed.' });
+  }
+});
+
 // Auth routes
 app.post('/api/auth/signin', async (req, res) => {
   const { email, password } = req.body;

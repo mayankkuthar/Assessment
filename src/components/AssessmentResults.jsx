@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Assessment as AssessmentIcon,
   Quiz as QuizIcon,
@@ -6,6 +6,8 @@ import {
   Search as SearchIcon
 } from '@mui/icons-material';
 import { useDatabase } from '../hooks/useDatabase';
+import { quizPacketApi, userApi } from '../services/api';
+import { PROFILE_ORDER, isSameProfile } from '../utils/profileOrder';
 import './AssessmentResults.css';
 
 const AssessmentResults = () => {
@@ -16,8 +18,74 @@ const AssessmentResults = () => {
   const [quizPackets, setQuizPackets] = useState([]);
   const [questionCounts, setQuestionCounts] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterOrg, setFilterOrg] = useState('all');
+  const [filterProfile, setFilterProfile] = useState('all');
+  const [sortBy, setSortBy] = useState('date-desc');
 
   const { quizzes, packets, profiles, users, loading: dataLoading, error: dataError } = useDatabase();
+
+  const uniqueOrgs = useMemo(() => {
+    const orgs = quizAttempts.map(a => a.user?.organization || 'Individual').filter(Boolean);
+    return ['all', ...new Set(orgs)].sort();
+  }, [quizAttempts]);
+
+  // Show exactly the canonical profiles in the filter (no data-driven extras
+  // like Home Maker, HCL, SOLV, "No role", etc.).
+  const uniqueProfiles = ['all', ...PROFILE_ORDER];
+
+  const filteredAndSearchedAttempts = useMemo(() => {
+    // 1. Filter
+    const filtered = quizAttempts.filter(attempt => {
+      const term = searchTerm.toLowerCase();
+      const userName = String(attempt.user?.name || '').toLowerCase();
+      const userEmail = String(attempt.user?.email || '').toLowerCase();
+      const org = String(attempt.user?.organization || '').toLowerCase();
+      const profileName = String(attempt.profile?.name || '').toLowerCase();
+      
+      const matchesSearch = userName.includes(term) ||
+             userEmail.includes(term) ||
+             org.includes(term) ||
+             profileName.includes(term);
+
+      if (!matchesSearch) return false;
+
+      // Filter by Organization
+      if (filterOrg !== 'all') {
+        const attemptOrg = attempt.user?.organization || 'Individual';
+        if (attemptOrg !== filterOrg) return false;
+      }
+
+      // Filter by Profile
+      if (filterProfile !== 'all') {
+        const attemptProfileName = attempt.profile?.name || 'Unknown Profile';
+        if (!isSameProfile(attemptProfileName, filterProfile)) return false;
+      }
+
+      return true;
+    });
+
+    // 2. Sort
+    return filtered.sort((a, b) => {
+      if (sortBy === 'date-desc') {
+        const dateA = new Date(a.completed_at || a.started_at || 0).getTime();
+        const dateB = new Date(b.completed_at || b.started_at || 0).getTime();
+        return dateB - dateA;
+      } else if (sortBy === 'date-asc') {
+        const dateA = new Date(a.completed_at || a.started_at || 0).getTime();
+        const dateB = new Date(b.completed_at || b.started_at || 0).getTime();
+        return dateA - dateB;
+      } else if (sortBy === 'name-asc') {
+        const nameA = String(a.user?.name || '').toLowerCase();
+        const nameB = String(b.user?.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      } else if (sortBy === 'name-desc') {
+        const nameA = String(a.user?.name || '').toLowerCase();
+        const nameB = String(b.user?.name || '').toLowerCase();
+        return nameB.localeCompare(nameA);
+      }
+      return 0;
+    });
+  }, [quizAttempts, searchTerm, filterOrg, filterProfile, sortBy]);
 
   // Fetch the number of questions for each quiz (sum of questions across its packets)
   useEffect(() => {
@@ -30,10 +98,8 @@ const AssessmentResults = () => {
         const entries = await Promise.all(
           quizzes.map(async (quiz) => {
             try {
-              const response = await fetch(`/api/quiz-packets/${quiz.id}`);
-              if (!response.ok) return [quiz.id, 0];
-              const packetsData = await response.json();
-              const count = packetsData.reduce(
+              const packetsData = await quizPacketApi.getQuizPackets(quiz.id);
+              const count = (packetsData || []).reduce(
                 (sum, packet) => sum + (packet.questions ? packet.questions.length : 0),
                 0
               );
@@ -63,22 +129,14 @@ const AssessmentResults = () => {
     setError(null);
     
     try {
-      // First get the quiz packets to know what columns to show
-      const packetsResponse = await fetch(`/api/quiz-packets/${quizId}`);
-      if (packetsResponse.ok) {
-        const quizPacketsData = await packetsResponse.json();
-        setQuizPackets(quizPacketsData);
-      }
+      // First get the quiz packets using API service
+      const quizPacketsData = await quizPacketApi.getQuizPackets(quizId);
+      setQuizPackets(quizPacketsData || []);
 
-      const response = await fetch(`/api/quiz-attempts`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch quiz attempts');
-      }
-      
-      const allAttempts = await response.json();
+      const allAttempts = await userApi.getAllQuizAttempts();
       
       // Filter attempts for this specific quiz
-      const filteredAttempts = allAttempts.filter(attempt => String(attempt.quiz_id) === String(quizId));
+      const filteredAttempts = (allAttempts || []).filter(attempt => String(attempt.quiz_id) === String(quizId));
       
       // Enrich attempts with user and profile data
       const enrichedAttempts = filteredAttempts.map((attempt) => {
@@ -151,6 +209,9 @@ const AssessmentResults = () => {
   const handleQuizClick = (quiz) => {
     setSelectedQuiz(quiz);
     setSearchTerm('');
+    setFilterOrg('all');
+    setFilterProfile('all');
+    setSortBy('date-desc');
     fetchQuizAttempts(quiz.id);
   };
 
@@ -160,6 +221,9 @@ const AssessmentResults = () => {
     setError(null);
     setQuizPackets([]);
     setSearchTerm('');
+    setFilterOrg('all');
+    setFilterProfile('all');
+    setSortBy('date-desc');
   };
 
   // Estimate the time needed to complete a quiz based on its question count.
@@ -268,18 +332,7 @@ const AssessmentResults = () => {
 
   // ── Detail view (quiz selected) ────────────────────────────
   if (selectedQuiz) {
-    const filteredAndSearchedAttempts = quizAttempts.filter(attempt => {
-      const term = searchTerm.toLowerCase();
-      const userName = String(attempt.user?.name || '').toLowerCase();
-      const userEmail = String(attempt.user?.email || '').toLowerCase();
-      const org = String(attempt.user?.organization || '').toLowerCase();
-      const profileName = String(attempt.profile?.name || '').toLowerCase();
-      
-      return userName.includes(term) ||
-             userEmail.includes(term) ||
-             org.includes(term) ||
-             profileName.includes(term);
-    });
+
 
         return (
           <div className="assessment-results">
@@ -317,15 +370,50 @@ const AssessmentResults = () => {
               </div>
             </div>
 
-            {/* Search Bar */}
-            <div className="results-search">
-              <SearchIcon />
-              <input
-                type="text"
-                placeholder="Search attempts by user name, email, organization, or profile..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            {/* Toolbar with Search, Filters, and Sorting */}
+            <div className="report-toolbar" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '20px' }}>
+              <div className="report-search" style={{ flex: '1', minWidth: '200px' }}>
+                <SearchIcon />
+                <input
+                  type="text"
+                  placeholder="Search students..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <select
+                className="report-filter-select"
+                value={filterOrg}
+                onChange={(e) => setFilterOrg(e.target.value)}
+              >
+                <option value="all">All Organizations</option>
+                {uniqueOrgs.filter(org => org !== 'all').map(org => (
+                  <option key={org} value={org}>{org}</option>
+                ))}
+              </select>
+
+              <select
+                className="report-filter-select"
+                value={filterProfile}
+                onChange={(e) => setFilterProfile(e.target.value)}
+              >
+                <option value="all">All Profiles</option>
+                {uniqueProfiles.filter(p => p !== 'all').map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+
+              <select
+                className="report-filter-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="date-desc">Latest first</option>
+                <option value="date-asc">Oldest first</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+              </select>
             </div>
 
             {/* Attempts Table */}

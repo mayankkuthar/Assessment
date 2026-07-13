@@ -4,12 +4,19 @@ import './index.css'
 import App from './App.jsx'
 import { BrowserRouter } from 'react-router-dom'
 import { DatabaseProvider } from './hooks/useDatabase'
+import { LanguageProvider } from './contexts/LanguageContext'
 
 // In production (Vercel), forward all relative /api requests to the live backend
 if (import.meta.env.PROD) {
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
     let url = typeof input === 'string' ? input : (input && input.url);
+    // Translation is served same-origin by the Vercel serverless function
+    // (api/translate.js), which injects the Google key server-side. Never forward
+    // it to the ngrok data backend, which has no /api/translate route.
+    if (typeof url === 'string' && url.includes('/api/translate')) {
+      return originalFetch(input, init);
+    }
     if (typeof url === 'string' && (url.startsWith('/api') || url.includes('constrain-magnifier-circling.ngrok-free.dev/api'))) {
       const targetUrl = url.startsWith('/api')
         ? `https://constrain-magnifier-circling.ngrok-free.dev${url}`
@@ -39,9 +46,11 @@ if (import.meta.env.PROD) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <DatabaseProvider>
-        <App />
-      </DatabaseProvider>
+      <LanguageProvider>
+        <DatabaseProvider>
+          <App />
+        </DatabaseProvider>
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>,
 )

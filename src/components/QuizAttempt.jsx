@@ -31,6 +31,7 @@ const UI_STRINGS = {
   instr5: 'Please answer all the questions with your natural instinct',
   instr6: 'Your responses will be kept 100% confidential',
   startBtn: 'Start Assessment',
+  chooseLang: 'Choose your own Language',
   previous: 'Previous',
   next: 'Next',
   submit: 'Submit Quiz',
@@ -979,7 +980,7 @@ const QuizAttempt = () => {
                     onClick={() => setShowLangPicker((v) => !v)}
                     disabled={translating}
                   >
-                     Choose your own Language
+                     {t('chooseLang')}
                   </button>
                 </div>
 
