@@ -179,11 +179,30 @@ export const employeeService = {
         ORDER BY e.created_at DESC
       `);
       const rows = stmt.all(orgId);
-      // Parse metadata from JSON strings back to objects
-      return rows.map(r => ({
-        ...r,
-        metadata: r.metadata ? JSON.parse(r.metadata) : {}
-      }));
+      return rows.map(r => {
+        let metadata = {};
+        if (r.metadata) {
+          try {
+            metadata = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
+          } catch (e) {
+            metadata = {};
+          }
+        }
+        const personalEmail = metadata.personal_email || '';
+        let registered = r.registered;
+        if (personalEmail && !registered) {
+          const userCheck = db.prepare('SELECT 1 FROM users WHERE LOWER(email) = ? AND organization_id = ?').get(personalEmail.toLowerCase(), orgId);
+          if (userCheck) {
+            registered = 1;
+          }
+        }
+        return {
+          ...r,
+          metadata,
+          personal_email: personalEmail,
+          registered
+        };
+      });
     } catch (error) {
       console.error('Error getting employees:', error);
       throw new Error('Failed to fetch employees');

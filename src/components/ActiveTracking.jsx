@@ -317,15 +317,16 @@ const ActiveTracking = () => {
 
     // Match each directory employee to user signup status & attempts
     return orgEmployees.map(emp => {
-      const email = emp.email.toLowerCase();
+      const email = emp.email ? emp.email.toLowerCase() : '';
+      const personalEmail = (emp.personal_email || (emp.metadata && emp.metadata.personal_email) || '').toLowerCase();
       
       // Check if user is registered: either directly from the `users` state or if they have attempts, or check if emp.registered is 1
       const isRegistered = emp.registered === 1 || (users || []).some(u => 
-        u.email.toLowerCase() === email && 
+        (u.email.toLowerCase() === email || (personalEmail && u.email.toLowerCase() === personalEmail)) && 
         String(u.organization_id) === String(currentOrg?.id)
       );
 
-      const empAttempts = emailAttempts[email] || [];
+      const empAttempts = (emailAttempts[email] || []).concat(personalEmail ? (emailAttempts[personalEmail] || []) : []);
       const attemptsCount = empAttempts.length;
 
       // Individual per-quiz scores as raw marks obtained (out of the max
@@ -337,7 +338,9 @@ const ActiveTracking = () => {
       }));
 
       // Find the user object in userMap for this email
-      const matchedUser = Object.values(userMap).find(u => u && u.email && u.email.toLowerCase() === email);
+      const matchedUser = Object.values(userMap).find(u => 
+        u && u.email && (u.email.toLowerCase() === email || (personalEmail && u.email.toLowerCase() === personalEmail))
+      );
       const baseEmployeeName = matchedUser 
         ? (matchedUser.user_name || matchedUser.email || `User ${matchedUser.id || '?'}`) 
         : null;
@@ -346,6 +349,7 @@ const ActiveTracking = () => {
         id: emp.id,
         name: emp.name,
         email: emp.email,
+        personal_email: emp.personal_email || (emp.metadata && emp.metadata.personal_email) || '',
         registered: isRegistered,
         attemptsCount,
         scores,
@@ -1073,7 +1077,8 @@ const ActiveTracking = () => {
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                   <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Employee Name</th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Email</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Official Email</th>
+                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Personal Email</th>
                   <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600 }}>Status</th>
                   <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600, textAlign: 'center' }}>Quizzes Taken</th>
                   <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 600, textAlign: 'center' }}>Scores</th>
@@ -1085,6 +1090,7 @@ const ActiveTracking = () => {
                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 500 }}>{emp.name}</td>
                     <td style={{ padding: 'var(--space-3) var(--space-4)' }}>{emp.email}</td>
+                    <td style={{ padding: 'var(--space-3) var(--space-4)' }}>{emp.personal_email || ''}</td>
                     <td style={{ padding: 'var(--space-3) var(--space-4)' }}>
                       <span 
                         className={`badge badge--${emp.registered ? 'success' : 'neutral'}`}

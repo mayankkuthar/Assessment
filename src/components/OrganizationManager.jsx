@@ -1217,7 +1217,8 @@ const OrganizationManager = ({
                               <thead style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, zIndex: 1 }}>
                                 <tr>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Name</th>
-                                  <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Email</th>
+                                  <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Official Email</th>
+                                  <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Personal Email</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>User Code</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Additional Fields</th>
                                   <th style={{ padding: 'var(--space-3)', fontWeight: 600 }}>Status</th>
@@ -1229,29 +1230,32 @@ const OrganizationManager = ({
                                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                                     <td style={{ padding: 'var(--space-3)', fontWeight: 500 }}>{emp.name}</td>
                                     <td style={{ padding: 'var(--space-3)' }}>{emp.email}</td>
+                                    <td style={{ padding: 'var(--space-3)' }}>{emp.personal_email || (emp.metadata && emp.metadata.personal_email) || ''}</td>
                                     <td style={{ padding: 'var(--space-3)', fontWeight: 600, fontFamily: 'monospace', color: 'var(--color-primary)' }}>{emp.code || '—'}</td>
                                     <td style={{ padding: 'var(--space-3)' }}>
                                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                        {Object.entries(emp.metadata || {}).map(([k, v]) => (
-                                          <span 
-                                            key={k} 
-                                            title={`${k}: ${v}`}
-                                            style={{ 
-                                              fontSize: '10px', 
-                                              background: 'var(--color-bg)', 
-                                              padding: '2px 8px', 
-                                              borderRadius: '10px',
-                                              border: '1px solid var(--color-border)',
-                                              whiteSpace: 'nowrap',
-                                              textOverflow: 'ellipsis',
-                                              overflow: 'hidden',
-                                              maxWidth: '150px'
-                                            }}
-                                          >
-                                            {k}: {String(v)}
-                                          </span>
-                                        ))}
-                                        {Object.keys(emp.metadata || {}).length === 0 && (
+                                        {Object.entries(emp.metadata || {})
+                                          .filter(([k]) => k !== 'personal_email')
+                                          .map(([k, v]) => (
+                                            <span 
+                                              key={k} 
+                                              title={`${k}: ${v}`}
+                                              style={{ 
+                                                fontSize: '10px', 
+                                                background: 'var(--color-bg)', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '10px',
+                                                border: '1px solid var(--color-border)',
+                                                whiteSpace: 'nowrap',
+                                                textOverflow: 'ellipsis',
+                                                overflow: 'hidden',
+                                                maxWidth: '150px'
+                                              }}
+                                            >
+                                              {k}: {String(v)}
+                                            </span>
+                                          ))}
+                                        {Object.keys(emp.metadata || {}).filter(k => k !== 'personal_email').length === 0 && (
                                           <span style={{ color: 'var(--color-muted-fg)', fontStyle: 'italic', fontSize: 'var(--text-xs)' }}>None</span>
                                         )}
                                       </div>
