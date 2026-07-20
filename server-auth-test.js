@@ -787,8 +787,16 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid company code' });
     }
     if (emp.email.toLowerCase() !== email.trim().toLowerCase()) {
-      return res.status(400).json({ error: 'This company code does not belong to the entered email address.' });
+      let metadata = emp.metadata || {};
+      if (typeof metadata === 'string') {
+        try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+      }
+      metadata.personal_email = email.trim();
+      emp.metadata = metadata;
+      emp.registered = 1;
+      saveData(mockData);
     }
+
     if (!mockData.organizations) {
       mockData.organizations = [];
     }
@@ -1280,12 +1288,18 @@ app.get('/api/organizations/:orgId/employees', requireAdmin, (req, res) => {
   }
   const orgEmployees = mockData.employees.filter(e => e.organization_id === orgId);
   const enriched = orgEmployees.map(emp => {
+    let metadata = emp.metadata || {};
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+    }
+    const personalEmail = (metadata.personal_email || '').toLowerCase();
     const isRegistered = mockData.users && mockData.users.some(u => 
-      u.email.toLowerCase() === emp.email.toLowerCase() && 
+      (u.email.toLowerCase() === emp.email.toLowerCase() || (personalEmail && u.email.toLowerCase() === personalEmail)) && 
       String(u.organization_id) === String(emp.organization_id)
     );
     return {
       ...emp,
+      personal_email: metadata.personal_email || '',
       registered: isRegistered ? 1 : 0
     };
   });
@@ -1361,8 +1375,13 @@ app.delete('/api/employees/:id', requireAdmin, (req, res) => {
   }
   // If the directory entry has already become a registered user account, its
   // removal is a user removal — reserved for Super Admin.
+  let metadata = emp.metadata || {};
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  const personalEmail = (metadata.personal_email || '').toLowerCase();
   const isRegisteredUser = (mockData.users || []).some(u =>
-    u.email.toLowerCase() === emp.email.toLowerCase() &&
+    (u.email.toLowerCase() === emp.email.toLowerCase() || (personalEmail && u.email.toLowerCase() === personalEmail)) &&
     String(u.organization_id) === String(emp.organization_id)
   );
   if (isRegisteredUser && !isSuperAdmin(req.actor)) {

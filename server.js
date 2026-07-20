@@ -62,8 +62,21 @@ app.post('/api/auth/signup', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'This organization is currently inactive' });
   }
   if (org.email.toLowerCase() !== email.trim().toLowerCase()) {
-    return res.status(400).json({ error: 'This user code does not belong to the entered email address.' });
+    const empRow = db.prepare('SELECT metadata FROM employees WHERE code = ?').get(userCode.trim().toUpperCase());
+    let metadata = {};
+    if (empRow && empRow.metadata) {
+      try {
+        metadata = typeof empRow.metadata === 'string' ? JSON.parse(empRow.metadata) : empRow.metadata;
+      } catch (e) {
+        metadata = {};
+      }
+    }
+    metadata.personal_email = email.trim();
+    db.prepare('UPDATE employees SET metadata = ?, registered = 1 WHERE code = ?').run(JSON.stringify(metadata), userCode.trim().toUpperCase());
+  } else {
+    db.prepare('UPDATE employees SET registered = 1 WHERE code = ?').run(userCode.trim().toUpperCase());
   }
+
 
   // Create User
   const result = await authService.signUp(email, password, role, org.id);
