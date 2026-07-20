@@ -10,6 +10,7 @@ import './QuizAttempt.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
 import { LANGUAGES, DEFAULT_LANGUAGE } from '../constants/languages';
 import { translateBatch } from '../services/translation';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // All page-level static text that should be translated along with the quiz
 // content. Keys are referenced via the `t()` helper inside the component so
@@ -94,10 +95,15 @@ const QuizAttempt = () => {
 
   // ── Language / translation state ───────────────────────────
   // `language` is the selected target code ('en' = original backend content).
+  // It comes from the app-wide LanguageContext rather than local state, so the
+  // quiz opens in the language the user chose at sign-up, and changing it from
+  // the picker below updates that same preference — which is what ReportViewer
+  // reads. That shared source of truth is what keeps a quiz taken in Hindi from
+  // producing an English report.
   // `translations` caches per-language translated copies so re-selecting a
   // language is instant and never re-hits the API. `translating` drives the
   // in-header loading indicator while a translation request is in flight.
-  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
+  const { language, setLanguage } = useLanguage();
   const [translating, setTranslating] = useState(false);
   const [translations, setTranslations] = useState({});
   // Toggles the language picker shown from the "Choose your own Language"
@@ -625,15 +631,18 @@ const QuizAttempt = () => {
   // otherwise fall back to the original English text.
   const t = (key) => tr?.ui?.[key] ?? UI_STRINGS[key];
 
-  // Handle language selection. English restores the original backend content
-  // (we never translate translated text back). For any other language we
-  // translate everything once, cache it, and re-render immediately — no page
+  // Handle language selection. Updating the app-wide preference is all this
+  // needs to do — the effect below notices the new language and fetches the
+  // translation, which is the same path used when the quiz first loads in a
+  // preferred language that isn't English.
+  const handleLanguageChange = (lang) => setLanguage(lang);
+
+  // Translate the quiz into `lang`. English restores the original backend
+  // content (we never translate translated text back). For any other language
+  // we translate everything once, cache it, and re-render immediately — no page
   // refresh. Answers are unaffected because option *values* stay in English
   // (only the displayed *text* is translated); see renderOptions below.
-  const handleLanguageChange = async (lang) => {
-    setLanguage(lang);
-    if (lang === DEFAULT_LANGUAGE || translations[lang]) return;
-
+  const translateQuiz = async (lang) => {
     try {
       setTranslating(true);
 
@@ -687,11 +696,27 @@ const QuizAttempt = () => {
     } catch (err) {
       console.error('Translation failed:', err);
       alert('Could not translate the quiz. Please check the Google Translate API key in your .env file, then try again.');
-      setLanguage(DEFAULT_LANGUAGE);
+      // Deliberately does NOT reset the language here. `language` is now the
+      // user's saved app-wide preference, and wiping it because one API call
+      // failed would silently change a setting they chose at sign-up. With no
+      // cached bundle the render already falls back to the English source, so
+      // the quiz stays usable and a retry is one picker click away.
     } finally {
       setTranslating(false);
     }
   };
+
+  // Fetch the translation whenever the active language has no cached bundle
+  // yet. This covers both the picker and — the case that was broken before —
+  // the quiz first loading in a preferred language that isn't English, where
+  // nothing ever called into the translation path.
+  useEffect(() => {
+    if (language === DEFAULT_LANGUAGE) return;
+    if (translations[language]) return;
+    if (!quiz || questions.length === 0) return;
+    translateQuiz(language);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, quiz, questions, translations]);
 
   // ── Loading state ──────────────────────────────────────────
   if (loading) {
