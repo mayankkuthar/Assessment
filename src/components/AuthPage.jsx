@@ -4,7 +4,7 @@ import { sortProfiles } from '../utils/profileOrder'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslatedContent } from '../hooks/useTranslatedContent'
 
-const API_BASE = 'https://constrain-magnifier-circling.ngrok-free.dev/api';
+const API_BASE = 'https://happimynd.com/new_api';
 
 // Static copy for the auth screen. Everything here is translated into the
 // user's selected language so the whole Sign-Up / Login flow is localized.

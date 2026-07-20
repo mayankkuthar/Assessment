@@ -10,17 +10,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const GOOGLE_TRANSLATE_API_KEY = env.GOOGLE_TRANSLATE_API_KEY || ''
 
-  // ngrok returns an HTML interstitial warning page for requests that look like
-  // they come from a browser (it forwards the browser User-Agent). Any fetch
-  // that lacks this header gets HTML instead of JSON — which breaks res.json().
-  // Inject it at the proxy so ALL forwarded requests are covered, including raw
-  // fetch('/api/…') calls in components (QuizAttempt, PDFTemplateConfig) that
-  // don't set it themselves. In prod, main.jsx adds the same header.
-  const ngrok = {
-    target: 'https://constrain-magnifier-circling.ngrok-free.dev',
+  // Proxy all /api requests to the backend. The rewrite rule converts
+  // /api/* paths to /new_api/* for the new backend URL structure.
+  const apiProxy = {
+    target: 'https://happimynd.com',
     changeOrigin: true,
     secure: false,
-    headers: { 'ngrok-skip-browser-warning': 'true' }
+    rewrite: (path) => path.replace(/^\/api/, '/new_api')
   }
 
   return {
@@ -47,11 +43,11 @@ export default defineConfig(({ mode }) => {
         // All other API traffic targets the live backend. The granular rules and
         // the general '/api' fallback must stay in sync so relative fetch('/api/…')
         // calls (e.g. QuizAttempt, PDFTemplateConfig) reach the real backend.
-        '/api/organizations': { ...ngrok },
-        '/api/auth': { ...ngrok },
-        '/api/employees': { ...ngrok },
-        '/api/local-users': { ...ngrok },
-        '/api': { ...ngrok }
+        '/api/organizations': { ...apiProxy },
+        '/api/auth': { ...apiProxy },
+        '/api/employees': { ...apiProxy },
+        '/api/local-users': { ...apiProxy },
+        '/api': { ...apiProxy }
       }
     }
   }

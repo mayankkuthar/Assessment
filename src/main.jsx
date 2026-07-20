@@ -13,22 +13,18 @@ if (import.meta.env.PROD) {
     let url = typeof input === 'string' ? input : (input && input.url);
     // Translation is served same-origin by the Vercel serverless function
     // (api/translate.js), which injects the Google key server-side. Never forward
-    // it to the ngrok data backend, which has no /api/translate route.
+    // it to the data backend, which has no /api/translate route.
     if (typeof url === 'string' && url.includes('/api/translate')) {
       return originalFetch(input, init);
     }
-    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('constrain-magnifier-circling.ngrok-free.dev/api'))) {
+    if (typeof url === 'string' && (url.startsWith('/api') || url.includes('happimynd.com/new_api'))) {
       const targetUrl = url.startsWith('/api')
-        ? `https://constrain-magnifier-circling.ngrok-free.dev${url}`
+        ? `https://happimynd.com/new_api${url.replace(/^\/api/, '')}`
         : url;
         
       if (typeof input === 'string') {
         return originalFetch(targetUrl, {
           ...init,
-          headers: {
-            'ngrok-skip-browser-warning': 'true',
-            ...(init && init.headers),
-          },
           credentials: 'omit'
         });
       } else {

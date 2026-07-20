@@ -1,8 +1,8 @@
 // API service to replace direct SQLite calls in the browser
 // const API_BASE = import.meta.env.DEV
 //   ? '/api'
-//   : 'https://constrain-magnifier-circling.ngrok-free.dev/api';
-const API_BASE = 'https://constrain-magnifier-circling.ngrok-free.dev/api';
+//   : 'https://happimynd.com/new_api';
+const API_BASE = 'https://happimynd.com/new_api';
 
 class ApiError extends Error {
   constructor(message, status) {
