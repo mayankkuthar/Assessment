@@ -69,19 +69,24 @@
   color: var(--color-secondary);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-base) var(--ease-soft);
   border-left: 3px solid transparent;
 }
 
 .nav-item:hover {
-  background-color: var(--color-bg);
+  background-color: var(--color-muted-bg);
   color: var(--color-fg);
 }
 
-.nav-item--active {
-  background-color: var(--color-primary-fg);
+.nav-item--active,
+.nav-item--active:hover {
+  background-color: var(--color-secondary-bg);
   color: var(--color-primary);
   border-left: 3px solid var(--color-primary);
+}
+
+.nav-item--active .nav-item__icon {
+  color: var(--color-primary);
 }
 
 .nav-item__icon {
@@ -205,13 +210,23 @@
   font-family: inherit;
   font-size: var(--text-base);
   color: var(--color-fg);
-  background-color: var(--color-surface);
-  transition: all var(--duration-fast) var(--ease-out);
+  background-color: var(--color-input-bg);
+  transition: all var(--duration-base) var(--ease-soft);
+}
+
+.form-input::placeholder {
+  color: var(--color-muted-fg);
+}
+
+.form-input:hover {
+  border-color: var(--color-ring);
 }
 
 .form-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
+  outline: 2px solid var(--color-ring);
+  outline-offset: -1px;
+  border-color: var(--color-ring);
+  background-color: var(--color-surface);
   box-shadow: var(--shadow-focus);
 }
 
@@ -219,7 +234,9 @@
   border-color: var(--color-destructive);
 }
 .form-input--error:focus {
-  box-shadow: 0 0 0 3px rgba(219, 36, 36, 0.2);
+  outline-color: var(--color-destructive);
+  border-color: var(--color-destructive);
+  box-shadow: 0 0 0 3px rgba(240, 76, 90, 0.25);
 }
 
 .form-helper {

@@ -268,10 +268,10 @@ const AssessmentResults = () => {
     }
     
     const defaultScale = [
-      { min: 0, max: 2, label: "Needs Improvement", color: "#895BF5", image: "" },
-      { min: 3, max: 5, label: "Average", color: "#895BF5", image: "" },
-      { min: 6, max: 8, label: "Good", color: "#895BF5", image: "" },
-      { min: 9, max: 12, label: "Excellent", color: "#895BF5", image: "" }
+      { min: 0, max: 2, label: "Needs Improvement", color: "#8E66F1", image: "" },
+      { min: 3, max: 5, label: "Average", color: "#8E66F1", image: "" },
+      { min: 6, max: 8, label: "Good", color: "#8E66F1", image: "" },
+      { min: 9, max: 12, label: "Excellent", color: "#8E66F1", image: "" }
     ];
     
     const level = defaultScale.find(range => marks >= range.min && marks <= range.max);
@@ -344,7 +344,7 @@ const AssessmentResults = () => {
               <div className="results-header__text">
                 <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <AssessmentIcon style={{ width: 28, height: 28 }} />
-                  Assessment Results: {selectedQuiz.name}
+                  Quiz Results: {selectedQuiz.name}
                 </h1>
                 <p>View all attempt records for this quiz with performance levels and packet-by-packet analysis</p>
               </div>
@@ -513,7 +513,7 @@ const AssessmentResults = () => {
           <AssessmentIcon />
         </div>
         <div className="results-header__text">
-          <h1>Assessment Results</h1>
+          <h1>Quiz Results</h1>
           <p>Click on any quiz to view detailed attempt records with performance levels and packet-by-packet analysis</p>
         </div>
       </div>
@@ -523,7 +523,7 @@ const AssessmentResults = () => {
         <div className="results-empty">
           <QuizIcon />
           <h3>No quizzes available</h3>
-          <p>Create some quizzes first to view assessment results.</p>
+          <p>Create some quizzes first to view quiz results.</p>
         </div>
       ) : (
         <div className="results-quiz-grid">

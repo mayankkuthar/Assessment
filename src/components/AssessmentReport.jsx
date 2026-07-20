@@ -290,7 +290,7 @@ const AssessmentReport = () => {
               template.packetConfigs[packetId] = {
                 borderRadius: '8px',
                 borderWidth: '1px',
-                borderColor: '#E4E4E7',
+                borderColor: '#E8E6F4',
                 backgroundColor: '#ffffff',
                 fontSize: '14px',
                 fontWeight: 'normal',
@@ -393,7 +393,7 @@ const AssessmentReport = () => {
           <AssessmentIcon />
         </div>
         <div>
-          <h1 className="report-page-header__title">Assessment Reports</h1>
+          <h1 className="report-page-header__title">Quiz Reports</h1>
           <p className="report-page-header__subtitle">
             {showDetails ? `${selectedQuiz.name} Attempts` : 'Select a quiz to view candidate attempts and generate reports'}
           </p>
@@ -465,7 +465,7 @@ const AssessmentReport = () => {
             </button>
             
             <h2 className="report-detail-title">
-              {selectedQuiz.name} - Assessment Reports
+              {selectedQuiz.name} - Quiz Reports
             </h2>
           </div>
 

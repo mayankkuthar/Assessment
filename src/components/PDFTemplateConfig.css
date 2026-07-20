@@ -198,7 +198,7 @@
 
 .pdf-config-tab-btn:hover {
   color: var(--color-primary);
-  background-color: rgba(137, 91, 245, 0.05);
+  background-color: rgba(142, 102, 241, 0.05);
 }
 
 .pdf-config-tab-btn--active {
@@ -293,7 +293,7 @@
 
 .pdf-config-action-fab:hover {
   transform: scale(1.1) translateY(-2px);
-  box-shadow: 0 12px 28px rgba(137, 91, 245, 0.4);
+  box-shadow: 0 12px 28px rgba(142, 102, 241, 0.4);
 }
 
 .pdf-config-action-fab svg {

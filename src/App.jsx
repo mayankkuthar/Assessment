@@ -60,10 +60,13 @@ import ActiveTracking from './components/ActiveTracking'
 import OrganizationManager from './components/OrganizationManager'
 import { useTranslatedContent } from './hooks/useTranslatedContent'
 
+// Product name. Deliberately kept out of CHROME_TEXT: it's a brand name, so it
+// must render identically in every language rather than being machine-translated.
+const APP_TITLE = 'Quizzard'
+
 // Static chrome copy (sidebar, navbar, dialogs) — translated into the user's
 // selected language so the whole shell, not just the dashboard, is localized.
 const CHROME_TEXT = {
-  appTitle: 'Assessment Tool',
   userDashboard: 'User Dashboard',
   adminDashboard: 'Admin Dashboard',
   howToUse: 'How to Use',
@@ -94,8 +97,8 @@ const adminNavItems = [
   { label: 'Packet Management', icon: <CategoryIcon />, permission: 'packets' },
   { label: 'Quiz Builder', icon: <QuizIcon />, permission: 'quiz_builder' },
   { label: 'Assigned Quizzes', icon: <AssignmentTurnedInIcon />, permission: 'assigned_quizzes' },
-  { label: 'Assessment Results', icon: <AssessmentIcon />, permission: 'results' },
-  { label: 'Assessment Report', icon: <AssessmentIcon />, permission: 'reports' },
+  { label: 'Quiz Results', icon: <AssessmentIcon />, permission: 'results' },
+  { label: 'Quiz Report', icon: <AssessmentIcon />, permission: 'reports' },
   { label: 'Active Tracking', icon: <InsightsIcon />, permission: 'active_tracking' },
   { label: 'PDF Templates', icon: <ShareIcon />, permission: 'pdf_templates' },
 ]
@@ -459,7 +462,7 @@ function App() {
   const theme = createTheme({
     palette: {
       mode: darkMode ? 'dark' : 'light',
-      primary: { main: '#895BF5' },
+      primary: { main: '#8E66F1' },
     },
     typography: {
       fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
@@ -539,7 +542,7 @@ function App() {
             <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
               <div className="sidebar__header">
                 <img src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png" alt="HappiMynd" className="sidebar__logo" />
-                <span className="sidebar__title">{tc(CHROME_TEXT.appTitle)}</span>
+                <span className="sidebar__title">{APP_TITLE}</span>
               </div>
               <nav className="sidebar__nav">
                 {navItems.map((item, idx) => (
@@ -776,8 +779,19 @@ function App() {
                                   (formTargetType === 'user' && formSelectedUsers.length === 0)
                                 }
                                 sx={{
-                                  background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
-                                  fontWeight: 700
+                                  background: 'var(--gradient-brand)',
+                                  color: '#fff',
+                                  fontWeight: 700,
+                                  '&:hover': {
+                                    background: 'linear-gradient(135deg, #8453ED 0%, #8453ED 100%)'
+                                  },
+                                  // The gradient above would otherwise override only the
+                                  // disabled background, leaving MUI's dark disabled text
+                                  // on full-strength purple. Mute both together instead.
+                                  '&.Mui-disabled': {
+                                    background: 'var(--color-muted-bg)',
+                                    color: 'var(--color-muted-fg)'
+                                  }
                                 }}
                               >
                                 Assign Quiz
@@ -971,7 +985,7 @@ function App() {
                                   <CardContent sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                       <Box sx={{ 
-                                        backgroundColor: 'rgba(137, 91, 245, 0.12)', 
+                                        backgroundColor: 'rgba(142, 102, 241, 0.12)', 
                                         borderRadius: 2, 
                                         p: 1,
                                         display: 'flex',
@@ -1013,11 +1027,11 @@ function App() {
                                         py: 1.2,
                                         fontWeight: 600,
                                         textTransform: 'none',
-                                        background: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
-                                        boxShadow: '0 4px 10px rgba(137, 91, 245, 0.2)',
+                                        background: 'var(--gradient-brand)',
+                                        boxShadow: '0 4px 10px rgba(142, 102, 241, 0.2)',
                                         '&:hover': {
-                                          background: 'linear-gradient(135deg, #7A4CD9 0%, #7A4CD9 100%)',
-                                          boxShadow: '0 6px 14px rgba(137, 91, 245, 0.3)'
+                                          background: 'linear-gradient(135deg, #8453ED 0%, #8453ED 100%)',
+                                          boxShadow: '0 6px 14px rgba(142, 102, 241, 0.3)'
                                         }
                                       }}
                                     >
@@ -1045,8 +1059,8 @@ function App() {
                     <li><b>Packet Management:</b> Create question packets and add questions.</li>
                     <li><b>Quiz Builder:</b> Build quizzes by combining packets and assign to profiles.</li>
                     <li><b>Assigned Quizzes:</b> View and manage quiz assignments.</li>
-                    <li><b>Assessment Results:</b> View detailed results and attempt records for all quizzes.</li>
-                    <li><b>Assessment Report:</b> Generate and download PDF reports for individual quiz submissions with detailed analysis.</li>
+                    <li><b>Quiz Results:</b> View detailed results and attempt records for all quizzes.</li>
+                    <li><b>Quiz Report:</b> Generate and download PDF reports for individual quiz submissions with detailed analysis.</li>
                     <li><b>PDF Templates:</b> Configure PDF report templates with custom styling, colors, and layout options.</li>
                     <li><b>Upload Excel:</b> Bulk import data from Excel files.</li>
                   </ol>

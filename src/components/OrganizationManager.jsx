@@ -902,7 +902,7 @@ const OrganizationManager = ({
                       <div>
                         <div style={{ 
                           padding: 'var(--space-3) var(--space-4)', 
-                          background: 'rgba(137, 91, 245, 0.05)', 
+                          background: 'rgba(142, 102, 241, 0.05)', 
                           border: '1px dashed var(--color-primary)', 
                           borderRadius: 'var(--radius-sm)',
                           fontSize: 'var(--text-xs)',

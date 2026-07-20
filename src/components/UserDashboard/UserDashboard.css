@@ -22,7 +22,9 @@
 .dashboard__header {
   padding: var(--space-6);
   margin-bottom: var(--space-8);
-  background-color: var(--color-primary);
+  /* Brand (not Hero) gradient: this banner carries white text, which the pale
+     hero lavenders can't hold at an accessible contrast. */
+  background: var(--gradient-brand);
   color: var(--color-primary-fg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -63,7 +65,7 @@
 }
 
 .dashboard__lang-select option {
-  color: #18181B;
+  color: #191928;
 }
 
 .dashboard__lang-status {
@@ -135,6 +137,15 @@
   opacity: 0.9;
 }
 
+.dashboard__tagline {
+  margin-top: var(--space-2);
+  max-width: 46ch;
+  font-weight: 500;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
 /* Grid Layout */
 .dashboard__grid-stats {
   display: grid;
@@ -168,7 +179,8 @@
 
 .stat-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--color-accent);
 }
 
 .stat-card__content {
@@ -210,8 +222,8 @@
 .stat-card--primary .stat-card__value { color: var(--color-primary); }
 .stat-card--primary .stat-card__icon { background-color: var(--color-primary); }
 
-.stat-card--success .stat-card__value { color: #22C55E; }
-.stat-card--success .stat-card__icon { background-color: #22C55E; }
+.stat-card--success .stat-card__value { color: var(--color-accent-fg); }
+.stat-card--success .stat-card__icon { background-color: var(--color-accent-fg); }
 
 .stat-card--warning .stat-card__value { color: var(--color-primary); }
 .stat-card--warning .stat-card__icon { background-color: var(--color-primary); }
@@ -238,6 +250,15 @@
   box-shadow: var(--shadow-sm);
   padding: var(--space-6);
   height: max-content;
+  transition: transform var(--duration-base) var(--ease-soft),
+              box-shadow var(--duration-base) var(--ease-soft),
+              border-color var(--duration-base) var(--ease-soft);
+}
+
+.section-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent);
 }
 
 @media (min-width: 640px) {
@@ -380,13 +401,13 @@
 }
 
 .badge--success {
-  background-color: rgba(137, 91, 245, 0.14);
+  background-color: rgba(142, 102, 241, 0.14);
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
 
 .badge--warning {
-  background-color: rgba(137, 91, 245, 0.14);
+  background-color: rgba(142, 102, 241, 0.14);
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
@@ -413,9 +434,13 @@
   padding: 10px 20px;
   font-size: var(--text-base);
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-base) var(--ease-soft), transform var(--duration-base) var(--ease-soft), box-shadow var(--duration-base) var(--ease-soft);
   text-decoration: none;
   border: none;
+}
+
+.btn:hover {
+  transform: scale(1.02);
 }
 
 .btn:active {
@@ -423,7 +448,8 @@
 }
 
 .btn:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
   box-shadow: var(--shadow-focus);
 }
 
@@ -433,7 +459,17 @@
 }
 
 .btn--primary:hover {
-  background-color: #895BF5; /* ~8% darker */
+  background-color: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.btn--secondary {
+  background-color: var(--color-secondary-bg);
+  color: var(--color-secondary);
+}
+
+.btn--secondary:hover {
+  background-color: var(--color-accent);
 }
 
 .btn--outline {
@@ -490,7 +526,7 @@
 }
 
 .alert--warning {
-  background-color: rgba(137, 91, 245, 0.14);
+  background-color: rgba(142, 102, 241, 0.14);
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }

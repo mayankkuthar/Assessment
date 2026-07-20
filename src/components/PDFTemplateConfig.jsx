@@ -90,7 +90,7 @@ const PDFTemplateConfig = () => {
       enabled: true, 
       backgroundColor: '#895BF5', 
       textColor: '#ffffff', 
-      title: 'Assessment Report', 
+      title: 'Quiz Report', 
       subtitle: 'Performance Analysis',
       showLogo: true,
       logoPosition: 'left',
@@ -241,7 +241,7 @@ const PDFTemplateConfig = () => {
       margin: '20mm',
       showPageNumbers: true,
       showWatermark: false,
-      watermarkText: 'Assessment Report',
+      watermarkText: 'Quiz Report',
       watermarkOpacity: '0.1'
     },
     typography: { 
@@ -902,7 +902,7 @@ const PDFTemplateConfig = () => {
                     label="Watermark Text"
                     value={template.page.watermarkText}
                     onChange={(e) => updateTemplate('page.watermarkText', e.target.value)}
-                    placeholder="Assessment Report"
+                    placeholder="Quiz Report"
                     variant="outlined"
                   />
                 </Grid>
@@ -3224,7 +3224,7 @@ const PDFTemplateConfig = () => {
           PDF Template Configuration
         </h1>
         <p className="pdf-config-header__subtitle">
-          Design and customize your assessment report templates
+          Design and customize your quiz report templates
         </p>
         
         {/* Search and Quick Actions */}

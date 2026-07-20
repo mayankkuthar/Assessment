@@ -1,49 +1,88 @@
 /* src/styles/global.css */
 :root {
   /* Brand */
-  --color-primary: #895BF5;
-  --color-primary-fg: #F2F0FF;
-  --color-secondary: #505058;
-  --color-secondary-fg: #FAFAFA;
-  --color-tertiary: #FAF5FF;
-  --color-accent-fg: #A655F7;
+  --color-primary: #8E66F1;
+  --color-primary-hover: #8453ED;
+  /* Text/icons sitting ON a primary surface. Not a background — for the light
+     purple tint behind active/selected states, use --color-secondary-bg. */
+  --color-primary-fg: #FCFBFF;
+
+  /* --color-secondary is a text tone (it is used as `color:` almost everywhere),
+     so it holds the palette's "secondary text"; the pale surface is -bg. */
+  --color-secondary: #3C335B;
+  --color-secondary-fg: #3C335B;
+  --color-secondary-bg: #EFEBFF;
+
+  --color-accent: #E5DFFF;
+  --color-accent-text: #31205A;
+  /* Deep end of brand gradients that start at --color-primary. */
+  --color-accent-fg: #7540EC;
+  --color-tertiary: #F6F3FF;
 
   /* Neutral / Surface */
-  --color-bg: #F2F2F3;
-  --color-fg: #18181B;
-  --color-card: #FAFAFA;
-  --color-popover: #E4E4E7;
-  --color-muted: #D2D2D5;
-  --color-muted-fg: #18181B;
-  --color-border: #D2D2D5;
-  --color-input: #D2D2D5;
+  --color-bg: #F9F7FF;
+  --color-fg: #191928;
+  --color-card: #FFFFFF;
+  --color-popover: #FFFFFF;
   --color-surface: #FFFFFF;
+  /* Mid-tone: placeholder text, empty-state icons, dividers. Must stay dark
+     enough to read against white — the pale surface is --color-muted-bg. */
+  --color-muted: #B9B3D2;
+  --color-muted-bg: #F2EFFE;
+  --color-muted-fg: #68657F;
+  --color-border: #E8E6F4;
+  /* Used as an input *border* throughout; the fill is --color-input-bg. */
+  --color-input: #E8E6F4;
+  --color-input-bg: #ECE9F8;
 
   /* Semantic */
-  --color-destructive: #DB2424;
-  --color-destructive-fg: #FEF1F1;
-  --color-ring: #895BF5;
+  --color-destructive: #F04C5A;
+  --color-destructive-fg: #FFF5F6;
+  --color-success: #2E9E7E;
+  --color-success-bg: #E6F5F0;
+  --color-warning: #C4841D;
+  --color-warning-bg: #FBF1E0;
+  --color-info: #4B7BD4;
+  --color-info-bg: #E9F0FC;
+  --color-ring: #A38AF2;
 
-  /* Chart Palette */
-  --chart-1: #A68AF9;
-  --chart-2: #BF83FC;
-  --chart-3: #7D89F7;
-  --chart-4: #895BF5;
-  --chart-5: #727279;
+  /* Brand Accent Palette */
+  --brand-lavender: #E6DFFF;
+  --brand-lavender-deep: #8453ED;
+  --brand-aqua: #ECE7FF;
+  --brand-aqua-deep: #8E66F1;
+  --brand-pastel-blue: #EDE6FF;
+  --brand-peach: #F3EFFF;
+  --brand-mint: #EFEBFF;
+  --brand-sand: #F6F3FF;
+
+  /* Gradients */
+  --gradient-hero: linear-gradient(135deg, #F3EDFF, #E0D3FF);
+  --gradient-brand: linear-gradient(135deg, #8453ED, #7540EC);
+  --gradient-lavender: linear-gradient(135deg, #E6DFFF, #D6C8FF);
+
+  /* Chart Palette — a spread of the brand purples rather than the pastel set,
+     which is too low-contrast to tell series apart. */
+  --chart-1: #8E66F1;
+  --chart-2: #7540EC;
+  --chart-3: #A38AF2;
+  --chart-4: #C7B3FD;
+  --chart-5: #68657F;
 
   /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-base: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 9999px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-base: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 18px;
+  --radius-full: 999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
-  --shadow-focus: 0 0 0 3px rgba(137, 91, 245, 0.20);
+  --shadow-sm: 0 1px 3px rgba(142, 102, 241, 0.10), 0 1px 2px rgba(25, 25, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(142, 102, 241, 0.12);
+  --shadow-lg: 0 8px 24px rgba(142, 102, 241, 0.15);
+  --shadow-hover: 0 12px 32px rgba(142, 102, 241, 0.20);
+  --shadow-focus: 0 0 0 3px rgba(163, 138, 242, 0.35);
 
   /* Spacing (8px grid) */
   --space-1: 4px;  --space-2: 8px;   --space-3: 12px;
@@ -56,40 +95,68 @@
   --text-4xl: 36px;  --text-5xl: 48px;
 
   /* Animation */
-  --duration-fast: 150ms;
-  --duration-base: 250ms;
-  --duration-slow: 300ms;
+  --duration-fast: 200ms;
+  --duration-base: 300ms;
+  --duration-slow: 400ms;
   --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-theme="dark"], body.dark {
-  --color-primary: #A68AF9;
-  --color-primary-fg: #1A0B3D;
-  --color-secondary: #A1A1AA;
-  --color-secondary-fg: #FAFAFA;
-  --color-tertiary: #2A1052;
+  --color-primary: #A88CF5;
+  --color-primary-hover: #B9A3F8;
+  --color-primary-fg: #1B1030;
+
+  /* Inverted for dark: the "secondary text" tone reads light here, and the pale
+     tint becomes a deep lavender that still separates from --color-surface. */
+  --color-secondary: #B8B2CE;
+  --color-secondary-fg: #B8B2CE;
+  --color-secondary-bg: #2E2352;
+
+  --color-accent: #3A2C63;
+  --color-accent-text: #E5DFFF;
   --color-accent-fg: #C9A6FF;
+  --color-tertiary: #241A3F;
 
   /* Layered neutrals: bg (deepest) < card < surface for visible depth */
-  --color-bg: #161618;
-  --color-fg: #FAFAFA;
-  --color-card: #1F1F23;
-  --color-surface: #27272B;
-  --color-popover: #2A2A30;
-  --color-muted: #34343A;
-  --color-muted-fg: #A1A1AA;
-  --color-border: #34343A;
-  --color-input: #34343A;
+  --color-bg: #141322;
+  --color-fg: #F6F4FF;
+  --color-card: #1D1B30;
+  --color-surface: #23203A;
+  --color-popover: #23203A;
+  --color-muted: #565073;
+  --color-muted-bg: #241F3D;
+  --color-muted-fg: #A29CBD;
+  --color-border: #322C4F;
+  --color-input: #322C4F;
+  --color-input-bg: #241F3D;
 
-  --color-destructive: #F87171;
-  --color-destructive-fg: #2A1212;
-  --color-ring: #A68AF9;
+  --color-destructive: #F87A85;
+  --color-destructive-fg: #2E1216;
+  --color-success: #4FC7A4;
+  --color-success-bg: #14332B;
+  --color-warning: #E0A63F;
+  --color-warning-bg: #33260F;
+  --color-info: #7BA5E8;
+  --color-info-bg: #16223A;
+  --color-ring: #A88CF5;
+
+  --gradient-hero: linear-gradient(135deg, #2A2149, #1E1735);
+  --gradient-brand: linear-gradient(135deg, #8453ED, #6E38E0);
+  --gradient-lavender: linear-gradient(135deg, #3A2C63, #2A2149);
+
+  --chart-1: #A88CF5;
+  --chart-2: #C9A6FF;
+  --chart-3: #8453ED;
+  --chart-4: #6E5BA8;
+  --chart-5: #A29CBD;
 
   /* Shadows need higher opacity to read against dark surfaces */
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
-  --shadow-focus: 0 0 0 3px rgba(166, 138, 249, 0.35);
+  --shadow-hover: 0 12px 32px rgba(0,0,0,0.6);
+  --shadow-focus: 0 0 0 3px rgba(168, 140, 245, 0.35);
 }
 
 /* Base Resets */

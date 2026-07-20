@@ -6,16 +6,19 @@ import { useTranslatedContent } from '../hooks/useTranslatedContent'
 
 const API_BASE = 'https://happimynd.com/new_api';
 
+// Product name. Deliberately kept out of UI_TEXT: it's a brand name, so it must
+// render identically in every language rather than being machine-translated.
+const APP_TITLE = 'Quizzard'
+
 // Static copy for the auth screen. Everything here is translated into the
 // user's selected language so the whole Sign-Up / Login flow is localized.
 const UI_TEXT = {
-  appTitle: 'Assessment Tool',
   login: 'Login',
   signUp: 'Sign Up',
   forgotPassword: 'Forgot Password',
   userName: 'User Name',
   preferredLanguage: 'Preferred Language',
-  preferredLanguageHint: 'Your dashboard and assessments will be shown in this language. You can change it later from your dashboard.',
+  preferredLanguageHint: 'Your dashboard and quizzes will be shown in this language. You can change it later from your dashboard.',
   email: 'Email',
   registerAs: 'Register as',
   individual: 'Individual',
@@ -359,7 +362,7 @@ function AuthPage() {
         </div>
         
         <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-6)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-fg)' }}>
-          {t('appTitle')}
+          {APP_TITLE}
         </h2>
         
         <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 'var(--space-6)', gap: 'var(--space-2)' }}>
@@ -405,10 +408,10 @@ function AuthPage() {
             </div>
 
             {error && <div className="alert alert--error">{tx(error)}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E5DFFF', color: '#191928', border: '1px solid #8E66F1', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
 
             {resetEmailSent && (
-              <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+              <div className="alert" style={{ backgroundColor: '#E5DFFF', color: '#191928', border: '1px solid #E5DFFF', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
                 <strong>{t('checkEmail')}</strong> {t('resetSentPre')} {email}. {t('resetSentPost')}
               </div>
             )}
@@ -419,7 +422,7 @@ function AuthPage() {
           // Login / Sign Up Tabs
           <form onSubmit={(e) => { e.preventDefault(); handleAuth(tab === 1); }}>
             {error && <div className="alert alert--error">{tx(error)}</div>}
-            {success && <div className="alert alert--success" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #895BF5', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
+            {success && <div className="alert alert--success" style={{ backgroundColor: '#E5DFFF', color: '#191928', border: '1px solid #8E66F1', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>{tx(success)}</div>}
 
             {tab === 1 && (
               <div className="form-group">
@@ -475,7 +478,7 @@ function AuthPage() {
                 <div className="form-group">
                   <label className="form-label">{t('registerAs')}</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'individual' ? 'rgba(137, 91, 245, 0.08)' : 'transparent', borderColor: registrationType === 'individual' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'individual' ? 'rgba(142, 102, 241, 0.08)' : 'transparent', borderColor: registrationType === 'individual' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
                       <input
                         type="radio"
                         name="registrationType"
@@ -486,7 +489,7 @@ function AuthPage() {
                       />
                       <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-fg)' }}>{t('individual')}</span>
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'company' ? 'rgba(137, 91, 245, 0.08)' : 'transparent', borderColor: registrationType === 'company' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', padding: '10px 14px', border: '1px solid var(--color-input)', borderRadius: 'var(--radius-md)', backgroundColor: registrationType === 'company' ? 'rgba(142, 102, 241, 0.08)' : 'transparent', borderColor: registrationType === 'company' ? 'var(--color-primary)' : 'var(--color-input)', transition: 'all 0.2s' }}>
                       <input
                         type="radio"
                         name="registrationType"
@@ -598,7 +601,7 @@ function AuthPage() {
             </button>
 
             {tab === 1 && (
-              <div className="alert" style={{ backgroundColor: '#E9D5FF', color: '#18181B', border: '1px solid #E9D5FF', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
+              <div className="alert" style={{ backgroundColor: '#E5DFFF', color: '#191928', border: '1px solid #E5DFFF', fontSize: 'var(--text-sm)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)' }}>
                 <strong>{t('noteLabel')}</strong> {t('profileNote')}
               </div>
             )}

@@ -89,8 +89,8 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
   const [scoringScaleDialog, setScoringScaleDialog] = useState(false);
   const [scoringScale, setScoringScale] = useState([
     { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
-    { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
-    { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+    { min: 3, max: 5, label: "Average", color: "#E0A63F", image: "📊", largeText: "Good effort! You're on the right track." },
+    { min: 6, max: 8, label: "Good", color: "#4FC7A4", image: "🎯", largeText: "Well done! You're showing strong understanding." },
     { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
   ]);
   const [enableScoringScale, setEnableScoringScale] = useState(false);
@@ -287,8 +287,8 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
                    i === 1 ? "Average" : 
                    i === 2 ? "Good" : "Excellent",
             color: i === 0 ? "#ff6b6b" : 
-                   i === 1 ? "#ffd93d" : 
-                   i === 2 ? "#6bcf7f" : "#4ecdc4",
+                   i === 1 ? "#E0A63F" : 
+                   i === 2 ? "#4FC7A4" : "#4ecdc4",
             image: i === 0 ? "📚" : 
                    i === 1 ? "📊" : 
                    i === 2 ? "🎯" : "🏆",
@@ -535,8 +535,8 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
         // Reset to default scale if no custom scale found
         setScoringScale([
           { min: 0, max: 2, label: "Needs Improvement", color: "#ff6b6b", image: "📚", largeText: "Keep practicing! You're making progress." },
-          { min: 3, max: 5, label: "Average", color: "#ffd93d", image: "📊", largeText: "Good effort! You're on the right track." },
-          { min: 6, max: 8, label: "Good", color: "#6bcf7f", image: "🎯", largeText: "Well done! You're showing strong understanding." },
+          { min: 3, max: 5, label: "Average", color: "#E0A63F", image: "📊", largeText: "Good effort! You're on the right track." },
+          { min: 6, max: 8, label: "Good", color: "#4FC7A4", image: "🎯", largeText: "Well done! You're showing strong understanding." },
           { min: 9, max: 15, label: "Excellent", color: "#4ecdc4", image: "🏆", largeText: "Outstanding! You've mastered this material!" }
         ]);
         setEnableScoringScale(false);
@@ -868,7 +868,7 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
             {filteredPackets.length > 0 && (
               <div className="packet-stats-summary">
                 <h4 className="packet-stats-summary__title">
-                  📈 Overall Assessment Statistics
+                  📈 Overall Quiz Statistics
                 </h4>
                 <div className="packet-stats-summary__grid">
                   <div className="packet-stats-summary__item">
@@ -1386,7 +1386,7 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
                               className="form-input"
                               value={range.color}
                               onChange={(e) => updateScoringScaleRange(index, 'color', e.target.value)}
-                              placeholder="#895BF5"
+                              placeholder="#8E66F1"
                             />
                           </div>
                           <div className="form-group image-upload-group">

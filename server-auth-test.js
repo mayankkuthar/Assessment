@@ -2172,7 +2172,7 @@ app.post('/api/quiz-attempts', (req, res) => {
   
   // Log that PDF report can be generated
   console.log('✅ Quiz attempt created:', newId);
-  console.log('📊 PDF Report can now be generated for this submission in Assessment Report section');
+  console.log('📊 PDF Report can now be generated for this submission in Quiz Report section');
   
   res.status(201).json(attempt);
 });
@@ -2390,7 +2390,7 @@ function getDefaultPDFTemplate() {
       enabled: true, 
       backgroundColor: '#895BF5', 
       textColor: '#ffffff',
-      title: 'Assessment Performance Report',
+      title: 'Quiz Performance Report',
       subtitle: 'Comprehensive Analysis Report',
       logoPosition: 'left',
       showDate: true,

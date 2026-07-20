@@ -26,6 +26,13 @@
   padding: var(--space-6);
   height: 100%;
   min-height: 400px;
+  transition: box-shadow var(--duration-base) var(--ease-soft),
+              border-color var(--duration-base) var(--ease-soft);
+}
+
+.quiz-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent);
 }
 
 .quiz-card--form {
@@ -53,7 +60,7 @@
 }
 
 .droppable-area--active {
-  background-color: rgba(137, 91, 245, 0.04);
+  background-color: rgba(142, 102, 241, 0.04);
   border-color: var(--color-primary);
 }
 
@@ -114,7 +121,7 @@
 
 .available-packet-item:hover:not(.available-packet-item--disabled) {
   border-color: var(--color-primary);
-  background-color: rgba(137, 91, 245, 0.02);
+  background-color: rgba(142, 102, 241, 0.02);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
@@ -228,7 +235,7 @@
 
 .preview-question-item__correct {
   font-weight: 600;
-  color: #895BF5;
+  color: #8E66F1;
   font-size: var(--text-sm);
 }
 
@@ -262,7 +269,7 @@
 }
 
 .btn-toggle--active {
-  background-color: var(--color-primary-fg);
+  background-color: var(--color-secondary-bg);
   color: var(--color-primary);
 }
 
@@ -270,7 +277,7 @@
 .alert--info {
   background-color: var(--color-tertiary);
   color: var(--color-primary);
-  border: 1px solid rgba(137, 91, 245, 0.2);
+  border: 1px solid rgba(142, 102, 241, 0.2);
 }
 
 .graph-view-container {

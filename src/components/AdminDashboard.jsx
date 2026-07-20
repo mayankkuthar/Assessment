@@ -632,10 +632,10 @@ const AdminDashboard = () => {
           title="View active users per profile"
         >
           <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.totalUsers}</div>
+            <div className="admin-stat-card__value" style={{ color: '#8E66F1' }}>{stats.totalUsers}</div>
             <div className="admin-stat-card__label">Active Users</div>
           </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#8E66F1' }}>
             <PeopleAltIcon />
           </div>
         </div>
@@ -649,10 +649,10 @@ const AdminDashboard = () => {
           title="View members per organization"
         >
           <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{allOrganizations.length}</div>
+            <div className="admin-stat-card__value" style={{ color: '#8E66F1' }}>{allOrganizations.length}</div>
             <div className="admin-stat-card__label">Organizations</div>
           </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#8E66F1' }}>
             <BusinessIcon />
           </div>
         </div>
@@ -669,20 +669,20 @@ const AdminDashboard = () => {
         
         <div className="admin-stat-card">
           <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{stats.completedAttempts}</div>
+            <div className="admin-stat-card__value" style={{ color: '#8E66F1' }}>{stats.completedAttempts}</div>
             <div className="admin-stat-card__label">Completed</div>
           </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#8E66F1' }}>
             <CheckCircleIcon />
           </div>
         </div>
 
         <div className="admin-stat-card">
           <div>
-            <div className="admin-stat-card__value" style={{ color: '#895BF5' }}>{Math.round(stats.completionRate)}%</div>
+            <div className="admin-stat-card__value" style={{ color: '#8E66F1' }}>{Math.round(stats.completionRate)}%</div>
             <div className="admin-stat-card__label">Completion Rate ({stats.completedAttempts}/{stats.totalAttempts})</div>
           </div>
-          <div className="admin-stat-card__icon" style={{ backgroundColor: '#895BF5' }}>
+          <div className="admin-stat-card__icon" style={{ backgroundColor: '#8E66F1' }}>
             <ScheduleIcon />
           </div>
         </div>
@@ -711,7 +711,7 @@ const AdminDashboard = () => {
           className={`admin-tab ${tab === 3 ? 'admin-tab--active' : ''}`}
           onClick={() => setTab(3)}
         >
-          Incomplete Assessments
+          Incomplete Quizzes
         </button>
       </div>
 
@@ -1173,15 +1173,15 @@ const AdminDashboard = () => {
               {incompleteAttempts.length === 0 ? (
                 <div className="coming-soon">
                   <CheckCircleIcon />
-                  <h3>No incomplete assessments</h3>
-                  <p>All users have completed their assessments</p>
+                  <h3>No incomplete quizzes</h3>
+                  <p>All users have completed their quizzes</p>
                 </div>
               ) : (
                 <table className="admin-table">
                   <thead>
                     <tr>
                       <th>User</th>
-                      <th>Assessment</th>
+                      <th>Quiz</th>
                       <th>Started At</th>
                       <th>Last Activity</th>
                       <th>Questions Attempted</th>
