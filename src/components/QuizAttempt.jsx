@@ -10,13 +10,14 @@ import './QuizAttempt.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
 import { LANGUAGES, DEFAULT_LANGUAGE } from '../constants/languages';
 import { translateBatch } from '../services/translation';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // All page-level static text that should be translated along with the quiz
 // content. Keys are referenced via the `t()` helper inside the component so
 // selecting a language swaps every visible string, not just questions/options.
 const UI_STRINGS = {
   languageLabel: 'Language:',
-  descTitle: 'Why should I take this assessment?',
+  descTitle: 'Why should I take this quiz?',
   descP1: 'Life is made up of many small and big moments, some exciting, some stressful, and some that test our patience.',
   descP2: "From experiencing joy to feeling overwhelmed by responsibilities or uncertainty to having tough conversations, making big decisions, challenges come our way every day. How we deal with them depends not just on what we know, but on how well we understand and manage our emotions while connecting with others.",
   descP3: "That's what Emotional Intelligence (EQ) means, it's simply being smart about feelings: knowing your own emotions and understanding others.",
@@ -30,7 +31,7 @@ const UI_STRINGS = {
   instr4: 'Please avoid marking the neutral response and share real time experiences',
   instr5: 'Please answer all the questions with your natural instinct',
   instr6: 'Your responses will be kept 100% confidential',
-  startBtn: 'Start Assessment',
+  startBtn: 'Start Quiz',
   chooseLang: 'Choose your own Language',
   previous: 'Previous',
   next: 'Next',
@@ -94,10 +95,15 @@ const QuizAttempt = () => {
 
   // ── Language / translation state ───────────────────────────
   // `language` is the selected target code ('en' = original backend content).
+  // It comes from the app-wide LanguageContext rather than local state, so the
+  // quiz opens in the language the user chose at sign-up, and changing it from
+  // the picker below updates that same preference — which is what ReportViewer
+  // reads. That shared source of truth is what keeps a quiz taken in Hindi from
+  // producing an English report.
   // `translations` caches per-language translated copies so re-selecting a
   // language is instant and never re-hits the API. `translating` drives the
   // in-header loading indicator while a translation request is in flight.
-  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
+  const { language, setLanguage } = useLanguage();
   const [translating, setTranslating] = useState(false);
   const [translations, setTranslations] = useState({});
   // Toggles the language picker shown from the "Choose your own Language"
@@ -625,15 +631,18 @@ const QuizAttempt = () => {
   // otherwise fall back to the original English text.
   const t = (key) => tr?.ui?.[key] ?? UI_STRINGS[key];
 
-  // Handle language selection. English restores the original backend content
-  // (we never translate translated text back). For any other language we
-  // translate everything once, cache it, and re-render immediately — no page
+  // Handle language selection. Updating the app-wide preference is all this
+  // needs to do — the effect below notices the new language and fetches the
+  // translation, which is the same path used when the quiz first loads in a
+  // preferred language that isn't English.
+  const handleLanguageChange = (lang) => setLanguage(lang);
+
+  // Translate the quiz into `lang`. English restores the original backend
+  // content (we never translate translated text back). For any other language
+  // we translate everything once, cache it, and re-render immediately — no page
   // refresh. Answers are unaffected because option *values* stay in English
   // (only the displayed *text* is translated); see renderOptions below.
-  const handleLanguageChange = async (lang) => {
-    setLanguage(lang);
-    if (lang === DEFAULT_LANGUAGE || translations[lang]) return;
-
+  const translateQuiz = async (lang) => {
     try {
       setTranslating(true);
 
@@ -686,12 +695,28 @@ const QuizAttempt = () => {
       }));
     } catch (err) {
       console.error('Translation failed:', err);
-      alert('Could not translate the assessment. Please check the Google Translate API key in your .env file, then try again.');
-      setLanguage(DEFAULT_LANGUAGE);
+      alert('Could not translate the quiz. Please check the Google Translate API key in your .env file, then try again.');
+      // Deliberately does NOT reset the language here. `language` is now the
+      // user's saved app-wide preference, and wiping it because one API call
+      // failed would silently change a setting they chose at sign-up. With no
+      // cached bundle the render already falls back to the English source, so
+      // the quiz stays usable and a retry is one picker click away.
     } finally {
       setTranslating(false);
     }
   };
+
+  // Fetch the translation whenever the active language has no cached bundle
+  // yet. This covers both the picker and — the case that was broken before —
+  // the quiz first loading in a preferred language that isn't English, where
+  // nothing ever called into the translation path.
+  useEffect(() => {
+    if (language === DEFAULT_LANGUAGE) return;
+    if (translations[language]) return;
+    if (!quiz || questions.length === 0) return;
+    translateQuiz(language);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, quiz, questions, translations]);
 
   // ── Loading state ──────────────────────────────────────────
   if (loading) {
@@ -1028,8 +1053,22 @@ const QuizAttempt = () => {
           </div>
         )}
 
-        {/* Question navigation: go back to change answers, move forward, or submit */}
-        {!showQuizDescription && (
+      </div>
+
+      {/* Bottom bar: sits in normal flow below the body so it can never
+          overlap the content or the badge, whatever height it grows to */}
+      {!showQuizDescription && (
+        <div className="quiz-attempt__footer">
+          {/* Powered by HappiMynd */}
+          <div className="quiz-attempt__powered">
+            <img
+              src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
+              alt="HappiMynd Logo"
+            />
+            <span>{t('poweredBy')}</span>
+          </div>
+
+          {/* Question navigation: go back to change answers, move forward, or submit */}
           <div className="quiz-attempt__nav">
             <button
               className="quiz-attempt__nav-btn"
@@ -1061,19 +1100,8 @@ const QuizAttempt = () => {
               </button>
             )}
           </div>
-        )}
-        
-        {/* Powered by HappiMynd Footer */}
-        {!showQuizDescription && (
-          <div className="quiz-attempt__powered">
-            <img 
-              src="https://happimynd.com/assets/Frontend/images/happimynd_logo.png"
-              alt="HappiMynd Logo"
-            />
-            <span>{t('poweredBy')}</span>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -14,14 +14,17 @@ import jsPDF from 'jspdf';
 import './ReportViewer.css';
 import { enrichQuizWithInstructions } from './QuizInstructionsMap';
 import { quizApi, userApi, quizPacketApi, pdfTemplateApi } from '../services/api';
+import { useLanguage } from '../contexts/LanguageContext';
+import { translateBatch } from '../services/translation';
+import { DEFAULT_LANGUAGE } from '../constants/languages';
 
 
 // Custom alpha function for hex/rgb to rgba conversion without material-ui
 const alpha = (color, opacity) => {
-  if (!color) return `rgba(137, 91, 245, ${opacity})`;
-  if (color === 'primary') return `rgba(137, 91, 245, ${opacity})`;
+  if (!color) return `rgba(142, 102, 241, ${opacity})`;
+  if (color === 'primary') return `rgba(142, 102, 241, ${opacity})`;
   if (color.startsWith('var(')) {
-    if (color.includes('--color-primary')) return `rgba(137, 91, 245, ${opacity})`;
+    if (color.includes('--color-primary')) return `rgba(142, 102, 241, ${opacity})`;
     if (color.includes('--color-secondary')) return `rgba(80, 80, 88, ${opacity})`;
     if (color.includes('--color-fg')) return `rgba(24, 24, 27, ${opacity})`;
   }
@@ -152,7 +155,7 @@ const splitAtContactDetails = (text) => {
 const defaultTemplate = {
   header: {
     enabled: true,
-    backgroundColor: 'linear-gradient(135deg, #895BF5 0%, #895BF5 100%)',
+    backgroundColor: 'linear-gradient(135deg, #8E66F1 0%, #8E66F1 100%)',
     textColor: '#ffffff',
     title: 'Emotional Intelligence Report',
     subtitle: 'You can book a guidance session with our expert',
@@ -162,28 +165,28 @@ const defaultTemplate = {
   userInfo: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#E4E4E7',
+    borderColor: '#E8E6F4',
     borderRadius: '16px',
     padding: '24px'
   },
   overallScore: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#E4E4E7',
+    borderColor: '#E8E6F4',
     borderRadius: '16px',
     padding: '24px'
   },
   charts: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#E4E4E7',
+    borderColor: '#E8E6F4',
     borderRadius: '16px',
     padding: '24px'
   },
   sectionAnalysis: {
     enabled: true,
     backgroundColor: '#ffffff',
-    borderColor: '#E4E4E7',
+    borderColor: '#E8E6F4',
     borderRadius: '16px',
     padding: '24px'
   }
@@ -193,8 +196,8 @@ const FALLBACK_SCALE = [
   {
     min: 0, max: 2,
     label: 'Needs Improvement',
-    color: '#DB2424',
-    lightColor: '#FEF1F1',
+    color: '#F04C5A',
+    lightColor: '#FFF5F6',
     image: '',
     largeText: "Keep practicing! You're making progress. Focus on building fundamental skills.",
     icon: ''
@@ -202,8 +205,8 @@ const FALLBACK_SCALE = [
   {
     min: 3, max: 5,
     label: 'Developing',
-    color: '#895BF5',
-    lightColor: '#E9D5FF',
+    color: '#8E66F1',
+    lightColor: '#E5DFFF',
     image: '',
     largeText: "Good effort! You're on the right track. Continue building on your foundation.",
     icon: ''
@@ -211,8 +214,8 @@ const FALLBACK_SCALE = [
   {
     min: 6, max: 8,
     label: 'Proficient',
-    color: '#895BF5',
-    lightColor: '#E9D5FF',
+    color: '#8E66F1',
+    lightColor: '#E5DFFF',
     image: '',
     largeText: "Well done! You're showing strong understanding and solid skills.",
     icon: ''
@@ -220,8 +223,8 @@ const FALLBACK_SCALE = [
   {
     min: 9, max: 12,
     label: 'Excellent',
-    color: '#895BF5',
-    lightColor: '#faf5ff',
+    color: '#8E66F1',
+    lightColor: '#F6F3FF',
     image: '',
     largeText: "Outstanding! You've mastered this material with exceptional performance!",
     icon: ''
@@ -289,7 +292,7 @@ const ModernBarChart = ({ data, height = 200 }) => {
     <div style={{ height: `${height}px`, display: 'flex', alignItems: 'flex-end', gap: '16px', paddingLeft: '16px', paddingRight: '16px' }}>
       {data.map((item, index) => {
         const heightPercent = (item.rank / maxRank) * 100;
-        const color = item.level?.color || '#895BF5';
+        const color = item.level?.color || '#8E66F1';
         
         return (
           <div key={item.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -353,7 +356,7 @@ const PerformanceRing = ({ level, size = 150, marks = 0, totalMarks = 0 }) => {
   const circumference = 2 * Math.PI * 45;
   const percentage = totalMarks > 0 ? (marks / totalMarks) * 100 : 0;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
-  const color = level?.color || '#895BF5';
+  const color = level?.color || '#8E66F1';
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -460,7 +463,7 @@ const RadarChart = ({ scores, size = 660 }) => {
 
   const dots = scores.map((s, i) => {
     const point = getPoint((s.rank || 0) / Math.max(1, s.scaleLength || 1), i).split(',').map(Number);
-    const color = s.level?.color || '#895BF5';
+    const color = s.level?.color || '#8E66F1';
     const angle = -Math.PI / 2 + angleStep * i;
     const offsetDistance = 12;
     const offsetX = offsetDistance * Math.cos(angle);
@@ -494,12 +497,12 @@ const RadarChart = ({ scores, size = 660 }) => {
   return (
     <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
       <svg width={660} height={360} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={center} cy={center} r={radius} fill="var(--color-primary-fg)" stroke="var(--color-border)" />
+        <circle cx={center} cy={center} r={radius} fill="var(--color-muted-bg)" stroke="var(--color-border)" />
         {gridPolygons}
         {axes}
         <polygon
           points={valuePoints}
-          fill="rgba(137, 91, 245, 0.2)"
+          fill="rgba(142, 102, 241, 0.2)"
           stroke="var(--color-primary)"
           strokeWidth={2}
         />
@@ -522,12 +525,39 @@ const ReportViewer = () => {
   const [template, setTemplate] = useState(defaultTemplate);
   const [selectedPacketId, setSelectedPacketId] = useState('all');
 
+  // Multilingual reports. `language` defaults to the user's app-wide preferred
+  // language (LanguageContext / localStorage) and can be overridden from the
+  // selector in the report header. The report JSX always renders in English;
+  // when a non-English language is active we translate the rendered DOM text
+  // in place (see the effect below), so both the on-screen report and the
+  // exported PDF — which rasterises the same #report-container node — match.
+  const { language, setLanguage, languages } = useLanguage();
+  const reportRef = useRef(null);
+  const [translating, setTranslating] = useState(false);
+
+  // Static chrome that lives OUTSIDE #report-container (nav buttons, status
+  // labels) can't be reached by the in-place DOM translation, so we translate
+  // this small set of UI strings the idiomatic React way and render via t().
+  const UI_STRINGS = {
+    backToDashboard: 'Back to Dashboard',
+    downloadPdf: 'Download PDF Report',
+    loading: 'Loading your report...',
+    reportLanguage: 'Report language',
+    translating: 'Translating…',
+  };
+  const [uiTranslations, setUiTranslations] = useState(null);
+  const t = (key) =>
+    (language !== DEFAULT_LANGUAGE && uiTranslations?.[key]) || UI_STRINGS[key];
+
+  // The '...assessment' names below predate the rename to '...quiz' and are kept
+  // so attempts saved against the old quiz name still resolve to this layout.
   const isSpecialReport = useMemo(() => {
     const name = quiz?.name?.toLowerCase() || '';
     return (
-      name.includes('happieq') || 
+      name.includes('happieq') ||
       name.includes('happi eq') ||
       name.includes('happiness quotient') ||
+      name.includes('emotional intelligence quiz') ||
       name.includes('emotional intelligence assessment') ||
       name.includes('happilife') ||
       name.includes('happi assess ei') ||
@@ -541,6 +571,7 @@ const ReportViewer = () => {
       name.includes('happieq') || 
       name.includes('happi eq') ||
       name.includes('happiness quotient') ||
+      name.includes('emotional intelligence quiz') ||
       name.includes('emotional intelligence assessment') ||
       name.includes('happi assess ei')
     );
@@ -600,8 +631,8 @@ const ReportViewer = () => {
             </a>
             <a href="https://apps.apple.com/in/app/happimynd-emotional-self-help/id1634742782" target="_blank" rel="noopener noreferrer">
               <img 
-                src="https://apps.apple.com/in/app/happimynd-emotional-self-help/id1634742782" 
-                alt="Download on App Store" 
+                src="https://happimynd.com/assets/Frontend/images/app_store.png"
+                alt="Download on App Store"
                 style={{ height: '40px', borderRadius: '4px' }} 
               />
             </a>
@@ -645,6 +676,7 @@ const ReportViewer = () => {
     const isHappiEQOrLife = quiz?.name?.toLowerCase().includes('happieq') || 
                             quiz?.name?.toLowerCase().includes('happi eq') ||
                             quiz?.name?.toLowerCase().includes('happiness quotient') ||
+                            quiz?.name?.toLowerCase().includes('emotional intelligence quiz') ||
                             quiz?.name?.toLowerCase().includes('emotional intelligence assessment') ||
                             quiz?.name?.toLowerCase().includes('happilife') ||
                             quiz?.name?.toLowerCase().includes('happi life') ||
@@ -765,6 +797,97 @@ const ReportViewer = () => {
     if (selectedPacketId === 'all') return packetScores;
     return packetScores.filter(s => s.id === selectedPacketId);
   }, [packetScores, selectedPacketId]);
+
+  // Translate the rendered report into the active language.
+  //
+  // The container is keyed on `language` + `selectedPacketId`, so any change to
+  // either remounts it and React repaints the pristine English DOM first. This
+  // effect then runs after commit, walks the freshly-rendered English text
+  // nodes, batch-translates them through the same server-proxied Google
+  // Translate endpoint the rest of the app uses, and swaps the text in place.
+  // Because we always start from a clean English remount, nodes are never
+  // double-translated. Numbers/scores (no letters) and SVG chart text are left
+  // untouched. Selecting English is a no-op here — the remount already shows it.
+  useEffect(() => {
+    if (loading || error) return;
+    if (language === DEFAULT_LANGUAGE) return;
+    const el = reportRef.current;
+    if (!el) return;
+
+    let cancelled = false;
+
+    const collectNodes = () => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          const tag = parent.tagName;
+          if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+          // Leave chart/graphic text alone — translating SVG tspans reflows them.
+          if (parent.closest('svg')) return NodeFilter.FILTER_REJECT;
+          const text = node.nodeValue;
+          // Skip whitespace-only and number/punctuation-only nodes (scores, dates).
+          if (!text || !/[A-Za-z]/.test(text)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+      const nodes = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+      return nodes;
+    };
+
+    (async () => {
+      const nodes = collectNodes();
+      if (!nodes.length) return;
+      try {
+        setTranslating(true);
+        const out = await translateBatch(nodes.map((n) => n.nodeValue), language);
+        if (cancelled) return;
+        nodes.forEach((n, i) => {
+          const translated = out[i];
+          if (typeof translated !== 'string') return;
+          // Preserve the original node's surrounding whitespace so inline runs
+          // (e.g. text around <strong>) keep their spacing.
+          const orig = n.nodeValue;
+          const lead = orig.match(/^\s*/)[0];
+          const trail = orig.match(/\s*$/)[0];
+          n.nodeValue = lead + translated.trim() + trail;
+        });
+      } catch (err) {
+        console.error('Report translation failed:', err);
+      } finally {
+        if (!cancelled) setTranslating(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // filteredPacketScores/packets/attempt are included so the effect re-runs
+    // once real data has populated the DOM after the initial load.
+  }, [language, loading, error, selectedPacketId, packets, attempt, filteredPacketScores]);
+
+  // Translate the header/chrome UI strings (outside #report-container) whenever
+  // the language changes. English clears the bundle so t() falls back to source.
+  useEffect(() => {
+    if (language === DEFAULT_LANGUAGE) {
+      setUiTranslations(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const keys = Object.keys(UI_STRINGS);
+        const out = await translateBatch(keys.map((k) => UI_STRINGS[k]), language);
+        if (cancelled) return;
+        const bundle = {};
+        keys.forEach((k, i) => { bundle[k] = out[i]; });
+        setUiTranslations(bundle);
+      } catch (err) {
+        console.error('Header translation failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const handleDownloadPDF = async () => {
     try {
@@ -927,7 +1050,7 @@ const ReportViewer = () => {
     return (
       <div className="rv-loading-screen">
         <div className="rv-spinner" />
-        <p style={{ fontWeight: 600, color: 'var(--color-secondary)' }}>Loading your report...</p>
+        <p style={{ fontWeight: 600, color: 'var(--color-secondary)' }}>{t('loading')}</p>
       </div>
     );
   }
@@ -942,7 +1065,7 @@ const ReportViewer = () => {
           className="rv-btn rv-btn--outline"
           onClick={() => navigate('/')}
         >
-          <ArrowBackIcon style={{ marginRight: '8px', verticalAlign: 'middle' }} /> Back to Dashboard
+          <ArrowBackIcon style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {t('backToDashboard')}
         </button>
       </div>
     );
@@ -956,7 +1079,7 @@ const ReportViewer = () => {
           className="rv-btn rv-btn--outline"
           onClick={() => navigate('/')}
         >
-          <ArrowBackIcon style={{ marginRight: '8px', fontSize: '20px' }} /> Back to Dashboard
+          <ArrowBackIcon style={{ marginRight: '8px', fontSize: '20px' }} /> {t('backToDashboard')}
         </button>
         
         <div className="rv-logo-wrap">
@@ -967,16 +1090,46 @@ const ReportViewer = () => {
           />
         </div>
 
-        <button
-          className="rv-btn rv-btn--primary"
-          onClick={handleDownloadPDF}
-        >
-          <DownloadIcon style={{ marginRight: '8px', fontSize: '20px' }} /> Download PDF Report
-        </button>
+        <div className="rv-header-actions">
+          {/* Language selector — lives OUTSIDE #report-container, so it is not
+              captured in the exported PDF. Defaults to the user's preferred
+              language; switching re-translates the report in place. */}
+          <div className="rv-lang-wrap">
+            <span className="rv-lang-icon" aria-hidden="true">🌐</span>
+            <select
+              id="report-language"
+              className="rv-lang-select"
+              aria-label={t('reportLanguage')}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              disabled={translating}
+            >
+              {languages.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
+            {translating && <span className="rv-lang-status">{t('translating')}</span>}
+          </div>
+
+          <button
+            className="rv-btn rv-btn--primary"
+            onClick={handleDownloadPDF}
+            disabled={translating}
+          >
+            <DownloadIcon style={{ marginRight: '8px', fontSize: '20px' }} /> {t('downloadPdf')}
+          </button>
+        </div>
       </div>
 
       {/* Printable Report Content */}
-      <div id="report-container" className="report-viewer-container">
+      {/* Keyed on language + packet so a change remounts a pristine English DOM
+          before the translation effect re-runs (prevents double-translation). */}
+      <div
+        id="report-container"
+        className="report-viewer-container"
+        ref={reportRef}
+        key={`report-${language}-${selectedPacketId}`}
+      >
         {/* Official Printable Header Card */}
         <div className="rv-card rv-print-header-card">
           <div className="rv-print-header-top">
@@ -986,7 +1139,7 @@ const ReportViewer = () => {
               className="rv-print-logo"
             />
             <div className="rv-print-meta">
-              <span className="rv-print-badge-official">Official Assessment Record</span>
+              <span className="rv-print-badge-official">Official Quiz Record</span>
               <span className="rv-print-date">Generated: {formatDate(attempt?.completed_at)}</span>
             </div>
           </div>
@@ -1043,7 +1196,7 @@ const ReportViewer = () => {
                   </svg>
                 </div>
                 <div className="rv-profile-details">
-                  <span className="rv-profile-label">Assessment</span>
+                  <span className="rv-profile-label">Quiz</span>
                   <p className="rv-profile-value">
                     {quiz?.name || 'Untitled'}
                   </p>
@@ -1113,7 +1266,7 @@ const ReportViewer = () => {
                 </h3>
                 <div className="rv-parameter-list">
                   {filteredPacketScores.map(score => {
-                    const scoreColor = score.level?.color || '#895BF5';
+                    const scoreColor = score.level?.color || '#8E66F1';
                     return (
                       <div className="rv-parameter-item" key={score.id}>
                         <div className="rv-parameter-meta">
@@ -1249,7 +1402,7 @@ const ReportViewer = () => {
             )}
 
             {!primaryPersonality && !secondaryPersonality && (
-              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#FEF1F1', color: '#DB2424', border: '1px solid #DB2424' }}>
+              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#FFF5F6', color: '#F04C5A', border: '1px solid #F04C5A' }}>
                 Personality analysis requires at least one completed section.
               </div>
             )}
@@ -1263,7 +1416,7 @@ const ReportViewer = () => {
           <h2 className="rv-card__title">🔍 Analysis</h2>
           <div className={`rv-analysis-grid ${filteredPacketScores.length > 1 ? 'rv-analysis-grid--2cols' : ''}`}>
             {filteredPacketScores.map(p => {
-              const pColor = p.level?.color || '#895BF5';
+              const pColor = p.level?.color || '#8E66F1';
               const lightBg = p.level?.lightColor || '#FFFFFF';
               return (
                 <div 
@@ -1383,6 +1536,7 @@ const ReportViewer = () => {
         const isHappiEQOrLife = quiz?.name?.toLowerCase().includes('happieq') || 
                                 quiz?.name?.toLowerCase().includes('happi eq') ||
                                 quiz?.name?.toLowerCase().includes('happiness quotient') ||
+                                quiz?.name?.toLowerCase().includes('emotional intelligence quiz') ||
                                 quiz?.name?.toLowerCase().includes('emotional intelligence assessment') ||
                                 quiz?.name?.toLowerCase().includes('happilife') ||
                                 quiz?.name?.toLowerCase().includes('happi life') ||

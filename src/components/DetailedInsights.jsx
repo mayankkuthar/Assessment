@@ -33,7 +33,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import './DetailedInsights.css'
 
 // Shared brand palette (kept in sync with ActiveTracking)
-const CHART_COLORS = ['#895BF5', '#A68AF9', '#BF83FC', '#7D89F7', '#727279', '#C7B3FD', '#5C6BC0', '#9575CD']
+const CHART_COLORS = ['#8E66F1', '#C7B3FD', '#5E3BC4', '#A38AF2', '#8F8AA6', '#D6C8FF', '#6E5BA8', '#7540EC']
 
 // Brand palette as RGB tuples for jsPDF (mirrors the Active Tracking export so
 // both reports share one visual identity).
@@ -135,23 +135,23 @@ const DEPT_RE = /\b(department|dept|division|team|function|unit|group)\b/i
 const DESIG_RE = /\b(designation|role|title|position|grade|level|band|seniority)\b/i
 const EXP_RE = /\b(experience|exp|tenure|years|yoe|service)\b/i
 
-// Diverging fill for a correlation cell: purple for positive, pink for
+// Diverging fill for a correlation cell: purple for positive, rose for
 // negative, with opacity scaling by strength so the matrix reads as a heatmap.
 const corrColor = (r) => {
-  if (r === null || r === undefined) return '#F4F4F5'
+  if (r === null || r === undefined) return '#F2EFFE'
   const a = Math.min(1, Math.abs(r))
-  return r >= 0 ? `rgba(137,91,245,${0.12 + 0.88 * a})` : `rgba(224,108,159,${0.12 + 0.88 * a})`
+  return r >= 0 ? `rgba(142,102,241,${0.12 + 0.88 * a})` : `rgba(224,105,159,${0.12 + 0.88 * a})`
 }
 const shortLabel = (s, n = 16) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s))
 
 // Sequential brand fill for a 0–100 performance value: pink-tinted when weak,
 // deepening to brand purple as it strengthens. Used by the heatmap & treemap.
 const heatColor = (pct) => {
-  if (pct === null || pct === undefined) return '#F4F4F5'
+  if (pct === null || pct === undefined) return '#F2EFFE'
   const t = Math.max(0, Math.min(1, pct / 100))
-  // Interpolate pink (#E06C9F → weak) to purple (#5B3FB8 → strong).
+  // Interpolate rose (#E0699F → weak) to brand purple (#7540EC → strong).
   const lerp = (a, b) => Math.round(a + (b - a) * t)
-  const r = lerp(0xE0, 0x5B), g = lerp(0x6C, 0x3F), b = lerp(0x9F, 0xB8)
+  const r = lerp(0xE0, 0x75), g = lerp(0x69, 0x40), b = lerp(0x9F, 0xEC)
   return `rgb(${r}, ${g}, ${b})`
 }
 
@@ -194,9 +194,9 @@ const pickIdentity = (cols, rows) => {
 // Excellent / Good / Needs Improvement split (and its colors). Scores are
 // normalized by their scale first, so bands also work for marks out of 5/10/20.
 const BAND_DEFS = [
-  { name: 'Excellent', color: '#895BF5' },
-  { name: 'Good', color: '#A68AF9' },
-  { name: 'Needs Improvement', color: '#BF83FC' }
+  { name: 'Excellent', color: '#7540EC' },
+  { name: 'Good', color: '#A38AF2' },
+  { name: 'Needs Improvement', color: '#E0699F' }
 ]
 const detectScale = (max) => (max <= 5 ? 5 : max <= 10 ? 10 : max <= 20 ? 20 : 100)
 const bandForPct = (pct) => (pct >= 80 ? 'Excellent' : pct >= 60 ? 'Good' : 'Needs Improvement')
@@ -262,7 +262,7 @@ const linReg = (pairs) => {
 
 // Map a raw score to a performance band using its detected scale (out of 5/10/100).
 const BAND_KEYS = ['Excellent', 'Good', 'Needs Improvement']
-const BAND_COLOR = { Excellent: '#895BF5', Good: '#A68AF9', 'Needs Improvement': '#E06C9F' }
+const BAND_COLOR = { Excellent: '#7540EC', Good: '#A38AF2', 'Needs Improvement': '#E0699F' }
 const bandOf = (raw, scale) => bandForPct((raw / scale) * 100)
 
 // Default opening statement pre-filled into the report narrative. It appears in
@@ -1233,7 +1233,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
               <div className="di-livecard__icon"><StorageIcon /></div>
               <div className="di-livecard__text">
                 <h3>Use current tracking data</h3>
-                <p>Analyze the {liveDataset.rows.length} assessment {liveDataset.rows.length === 1 ? 'attempt' : 'attempts'} already in Active Tracking — no file needed</p>
+                <p>Analyze the {liveDataset.rows.length} quiz {liveDataset.rows.length === 1 ? 'attempt' : 'attempts'} already in Active Tracking — no file needed</p>
               </div>
             </button>
           )}
@@ -1527,7 +1527,7 @@ const DetailedInsights = ({ onBack, liveDataset }) => {
             <div className="di-panel__head">
               <h2><InsightsIcon /> Dashboards</h2>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button className="btn btn--primary" onClick={addSmartCharts} title="Detect every Score column as an assessment and build per-assessment + comparative reports with executive commentary">
+                <button className="btn btn--primary" onClick={addSmartCharts} title="Detect every Score column as a quiz and build per-quiz + comparative reports with executive commentary">
                   <InsightsIcon className="btn-icon" /> Smart charts
                 </button>
                 <button className="btn btn--outline" onClick={() => setBuilderOpen(true)} title="Build your own chart — pick the type, fields, scale, order and color">
@@ -2254,12 +2254,12 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
     if (isStacked) return stacked.byBands ? `${measure} Distribution by ${dimension}` : `${dimension} by ${series} (split)`
     if (isScatter) return `${yMeasure} vs ${xMeasure}`
     if (isRisk) return `Risk Matrix — ${measure} vs Headcount by ${dimension}`
-    if (isGrouped) return `${dimension} — Comparison Across Assessments`
-    if (isCorr) return 'Assessment Correlation Matrix'
+    if (isGrouped) return `${dimension} — Comparison Across Quizzes`
+    if (isCorr) return 'Quiz Correlation Matrix'
     if (isRadar) return 'Strength & Weakness Radar'
     if (isRange) return `${measure} Range & Average by ${dimension}`
     if (isPareto) return `Participation Concentration by ${dimension}`
-    if (isHeatmap) return `${dimension} × Assessment Heatmap`
+    if (isHeatmap) return `${dimension} × Quiz Heatmap`
     if (isTreemap) return `${dimension} Map — Size = Headcount, Color = Avg ${measure}`
     if (isQuadrant) return `Talent Matrix — ${yMeasure} vs ${xMeasure}`
     if (isDual) return `${measure} vs ${widget.measure2} by ${dimension}`
@@ -2673,17 +2673,17 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={comboData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} label={{ value: 'Responses', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis yAxisId="right" orientation="right" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#68657F' }} allowDecimals={false} label={{ value: 'Responses', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis yAxisId="right" orientation="right" domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `Avg ${measure}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <Tooltip formatter={(v, n, p) => (n === 'Responses' ? [`${v} of ${p.payload.total}`, 'Responses'] : [v, n])} />
             <Legend />
             <Bar yAxisId="left" dataKey="count" name="Responses" fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory}>
-              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#68657F', fontWeight: 'bold' }} />
             </Bar>
-            <Line yAxisId="right" type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#895BF5" strokeWidth={2.6} dot={{ r: 3.5, fill: '#895BF5' }} activeDot={{ r: 5 }}>
-              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#895BF5', fontWeight: 'bold' }} />
+            <Line yAxisId="right" type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#8E66F1" strokeWidth={2.6} dot={{ r: 3.5, fill: '#8E66F1' }} activeDot={{ r: 5 }}>
+              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#8E66F1', fontWeight: 'bold' }} />
             </Line>
           </ComposedChart>
         </ResponsiveContainer>
@@ -2693,9 +2693,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={stacked.data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#68657F' }} allowDecimals={false} />
             <Tooltip />
             <Legend />
             {stacked.keys.map((k, i) => (
@@ -2711,14 +2711,14 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={320}>
           <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis type="number" dataKey="y" name={yMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis type="number" dataKey="y" name={yMeasure} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <ZAxis range={[45, 45]} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-            <Scatter data={scatter.points} fill="#895BF5" fillOpacity={0.6} />
+            <Scatter data={scatter.points} fill="#8E66F1" fillOpacity={0.6} />
             {scatter.trend && (
-              <Line data={scatter.trend} dataKey="y" type="linear" dot={false} stroke="#E06C9F" strokeWidth={2} strokeDasharray="6 4" isAnimationActive={false} legendType="none" />
+              <Line data={scatter.trend} dataKey="y" type="linear" dot={false} stroke="#E0699F" strokeWidth={2} strokeDasharray="6 4" isAnimationActive={false} legendType="none" />
             )}
           </ScatterChart>
         </ResponsiveContainer>
@@ -2728,17 +2728,17 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 12 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis type="number" dataKey="x" name={`Avg ${measure}`} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis type="number" dataKey="y" name="Headcount" allowDecimals={false} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: 'Headcount →', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis type="number" dataKey="x" name={`Avg ${measure}`} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `Avg ${measure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis type="number" dataKey="y" name="Headcount" allowDecimals={false} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: 'Headcount →', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <ZAxis dataKey="y" range={[120, 600]} />
-            <ReferenceLine x={risk.avgThresh} stroke="#A1A1AA" strokeDasharray="5 5" label={{ value: `avg ${risk.avgThresh}`, fontSize: 10, fill: '#A1A1AA' }} />
-            <ReferenceLine y={risk.countThresh} stroke="#A1A1AA" strokeDasharray="5 5" />
+            <ReferenceLine x={risk.avgThresh} stroke="#8F8AA6" strokeDasharray="5 5" label={{ value: `avg ${risk.avgThresh}`, fontSize: 10, fill: '#8F8AA6' }} />
+            <ReferenceLine y={risk.countThresh} stroke="#8F8AA6" strokeDasharray="5 5" />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v, n) => [v, n]} />
             <Scatter data={risk.points} cursor="pointer" onClick={drillCategory}>
               {risk.points.map((p) => {
                 const highRisk = p.x < risk.avgThresh && p.y >= risk.countThresh
-                return <Cell key={p.name} fill={highRisk ? '#E06C9F' : '#895BF5'} fillOpacity={highRisk ? 0.85 : 0.55} />
+                return <Cell key={p.name} fill={highRisk ? '#E0699F' : '#8E66F1'} fillOpacity={highRisk ? 0.85 : 0.55} />
               })}
               <LabelList dataKey="name" position="top" style={{ fontSize: 10, fill: '#52525B', fontWeight: 600 }} />
             </Scatter>
@@ -2750,9 +2750,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <BarChart data={grouped.data} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#68657F' }} />
             <Tooltip />
             <Legend />
             {grouped.keys.map((k, i) => (
@@ -2770,10 +2770,10 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
           <ScatterChart margin={{ top: 16, right: 24, left: 70, bottom: 90 }}>
             <XAxis type="number" dataKey="x" domain={[-0.5, n - 0.5]} ticks={ticks} interval={0}
               tickFormatter={(i) => shortLabel(corr.labels[i] ?? '', 12)} angle={-30} textAnchor="end"
-              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} />
+              tick={{ fontSize: 10, fill: '#68657F' }} axisLine={false} tickLine={false} />
             <YAxis type="number" dataKey="y" domain={[-0.5, n - 0.5]} ticks={ticks} interval={0} reversed
               tickFormatter={(i) => shortLabel(corr.labels[i] ?? '', 12)}
-              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} width={70} />
+              tick={{ fontSize: 10, fill: '#68657F' }} axisLine={false} tickLine={false} width={70} />
             <ZAxis range={[1600, 1600]} />
             <Tooltip cursor={false}
               formatter={(v, name, p) => [p?.payload?.r ?? '—', `${shortLabel(p?.payload?.yLabel ?? '')} ↔ ${shortLabel(p?.payload?.xLabel ?? '')}`]} />
@@ -2790,10 +2790,10 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <RadarChart data={radar} outerRadius="72%">
-            <PolarGrid stroke="#E4E4E7" />
-            <PolarAngleAxis dataKey="assessment" tick={{ fontSize: 11, fill: '#727279' }} tickFormatter={(v) => shortLabel(v, 14)} />
-            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: '#A1A1AA' }} />
-            <Radar name="Avg %" dataKey="value" stroke="#895BF5" fill="#895BF5" fillOpacity={0.35} />
+            <PolarGrid stroke="#E8E6F4" />
+            <PolarAngleAxis dataKey="assessment" tick={{ fontSize: 11, fill: '#68657F' }} tickFormatter={(v) => shortLabel(v, 14)} />
+            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: '#8F8AA6' }} />
+            <Radar name="Avg %" dataKey="value" stroke="#8E66F1" fill="#8E66F1" fillOpacity={0.35} />
             <Tooltip formatter={(v, name, p) => [`${v}% (avg ${p?.payload?.raw})`, p?.payload?.assessment]} />
           </RadarChart>
         </ResponsiveContainer>
@@ -2803,9 +2803,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ComposedChart data={rangeData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis tick={{ fontSize: 12, fill: '#727279' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis tick={{ fontSize: 12, fill: '#68657F' }} />
             <Tooltip formatter={(v, n, p) => {
               if (n === 'Range') return [`${p.payload.lo} – ${p.payload.hi}`, 'Min–Max']
               if (n === `Avg ${measure}`) return [`${v}  (n=${p.payload.count} of ${p.payload.total})`, n]
@@ -2813,8 +2813,8 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
             }} />
             <Legend />
             <Bar dataKey="range" name="Range" fill="#C7B3FD" radius={[5, 5, 5, 5]} barSize={26} cursor="pointer" onClick={drillCategory} />
-            <Line type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#895BF5" strokeWidth={0} dot={{ r: 5, fill: '#895BF5' }} activeDot={{ r: 6 }} legendType="circle">
-              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#895BF5', fontWeight: 'bold' }} />
+            <Line type="monotone" dataKey="avg" name={`Avg ${measure}`} stroke="#8E66F1" strokeWidth={0} dot={{ r: 5, fill: '#8E66F1' }} activeDot={{ r: 6 }} legendType="circle">
+              <LabelList dataKey="avg" position="top" style={{ fontSize: 9, fill: '#8E66F1', fontWeight: 'bold' }} />
             </Line>
           </ComposedChart>
         </ResponsiveContainer>
@@ -2824,16 +2824,16 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ComposedChart data={paretoData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} label={{ value: 'Respondents', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#727279' }} unit="%" label={{ value: 'Cumulative %', angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#68657F' }} allowDecimals={false} label={{ value: 'Respondents', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 12, fill: '#68657F' }} unit="%" label={{ value: 'Cumulative %', angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <Tooltip formatter={(v, n) => (n === 'Cumulative %' ? [`${v}%`, n] : [v, n])} />
             <Legend />
-            <Bar yAxisId="left" dataKey="count" name="Respondents" fill="#895BF5" radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory}>
-              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            <Bar yAxisId="left" dataKey="count" name="Respondents" fill="#8E66F1" radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory}>
+              <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: '#68657F', fontWeight: 'bold' }} />
             </Bar>
-            <Line yAxisId="right" type="monotone" dataKey="cumPct" name="Cumulative %" stroke="#E06C9F" strokeWidth={2.4} dot={{ r: 3, fill: '#E06C9F' }} activeDot={{ r: 5 }} />
+            <Line yAxisId="right" type="monotone" dataKey="cumPct" name="Cumulative %" stroke="#E0699F" strokeWidth={2.4} dot={{ r: 3, fill: '#E0699F' }} activeDot={{ r: 5 }} />
           </ComposedChart>
         </ResponsiveContainer>
       )
@@ -2848,15 +2848,15 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
           <ScatterChart margin={{ top: 16, right: 24, left: 95, bottom: 90 }}>
             <XAxis type="number" dataKey="x" domain={[-0.5, nx - 0.5]} ticks={xticks} interval={0}
               tickFormatter={(i) => shortLabel(heat.cols[i] ?? '', 12)} angle={-30} textAnchor="end"
-              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} />
+              tick={{ fontSize: 10, fill: '#68657F' }} axisLine={false} tickLine={false} />
             <YAxis type="number" dataKey="y" domain={[-0.5, ny - 0.5]} ticks={yticks} interval={0} reversed
               tickFormatter={(i) => shortLabel(heat.cats[i] ?? '', 14)}
-              tick={{ fontSize: 10, fill: '#727279' }} axisLine={false} tickLine={false} width={95} />
+              tick={{ fontSize: 10, fill: '#68657F' }} axisLine={false} tickLine={false} width={95} />
             <ZAxis range={[1400, 1400]} />
             <Tooltip cursor={false}
               formatter={(v, name, p) => [p?.payload?.raw == null ? '—' : `${p.payload.raw}  (${p.payload.pct}%, n=${p.payload.n})`, `${shortLabel(p?.payload?.cat ?? '')} · ${shortLabel(p?.payload?.assessment ?? '')}`]} />
             <Scatter data={heat.cells} shape="square">
-              {heat.cells.map((c) => <Cell key={`${c.x}-${c.y}`} fill={c.pct == null ? '#F4F4F5' : heatColor(c.pct)} />)}
+              {heat.cells.map((c) => <Cell key={`${c.x}-${c.y}`} fill={c.pct == null ? '#F2EFFE' : heatColor(c.pct)} />)}
               <LabelList dataKey="pct" position="center" formatter={(v) => (v === null || v === undefined ? '' : `${Math.round(v)}`)}
                 style={{ fontSize: 10, fontWeight: 700 }} fill="#fff" />
             </Scatter>
@@ -2877,28 +2877,28 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       const { points, xMid, yMid, xMax, yMax } = quadrant
       const quadColor = (p) => {
         const hx = p.x >= xMid, hy = p.y >= yMid
-        if (hx && hy) return '#5B3FB8'
-        if (!hx && !hy) return '#E06C9F'
-        return '#A68AF9'
+        if (hx && hy) return '#7540EC'
+        if (!hx && !hy) return '#E0699F'
+        return '#A38AF2'
       }
-      const areaLabel = { fontSize: 10, fill: '#A1A1AA', fontWeight: 600 }
+      const areaLabel = { fontSize: 10, fill: '#8F8AA6', fontWeight: 600 }
       return (
         <ResponsiveContainer width="100%" height={360}>
           <ScatterChart margin={{ top: 16, right: 24, left: 0, bottom: 16 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis type="number" dataKey="x" name={xMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `${xMeasure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis type="number" dataKey="y" name={yMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `${yMeasure} →`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis type="number" dataKey="x" name={xMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `${xMeasure} →`, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis type="number" dataKey="y" name={yMeasure} domain={[0, 'dataMax']} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `${yMeasure} →`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <ZAxis range={[55, 55]} />
             {points.length > 0 && (
               <>
-                <ReferenceArea x1={xMid} y1={yMid} x2={xMax} y2={yMax} fill="#895BF5" fillOpacity={0.07} label={{ value: 'Top Talent', position: 'insideTopRight', ...areaLabel, fill: '#5B3FB8' }} />
-                <ReferenceArea x1={0} y1={yMid} x2={xMid} y2={yMax} fill="#A68AF9" fillOpacity={0.05} label={{ value: `High ${shortLabel(yMeasure, 12)}`, position: 'insideTopLeft', ...areaLabel }} />
-                <ReferenceArea x1={xMid} y1={0} x2={xMax} y2={yMid} fill="#A68AF9" fillOpacity={0.05} label={{ value: `High ${shortLabel(xMeasure, 12)}`, position: 'insideBottomRight', ...areaLabel }} />
-                <ReferenceArea x1={0} y1={0} x2={xMid} y2={yMid} fill="#E06C9F" fillOpacity={0.05} label={{ value: 'Development', position: 'insideBottomLeft', ...areaLabel, fill: '#E06C9F' }} />
+                <ReferenceArea x1={xMid} y1={yMid} x2={xMax} y2={yMax} fill="#8E66F1" fillOpacity={0.07} label={{ value: 'Top Talent', position: 'insideTopRight', ...areaLabel, fill: '#7540EC' }} />
+                <ReferenceArea x1={0} y1={yMid} x2={xMid} y2={yMax} fill="#A38AF2" fillOpacity={0.05} label={{ value: `High ${shortLabel(yMeasure, 12)}`, position: 'insideTopLeft', ...areaLabel }} />
+                <ReferenceArea x1={xMid} y1={0} x2={xMax} y2={yMid} fill="#A38AF2" fillOpacity={0.05} label={{ value: `High ${shortLabel(xMeasure, 12)}`, position: 'insideBottomRight', ...areaLabel }} />
+                <ReferenceArea x1={0} y1={0} x2={xMid} y2={yMid} fill="#E0699F" fillOpacity={0.05} label={{ value: 'Development', position: 'insideBottomLeft', ...areaLabel, fill: '#E0699F' }} />
               </>
             )}
-            <ReferenceLine x={xMid} stroke="#A1A1AA" strokeDasharray="5 5" />
-            <ReferenceLine y={yMid} stroke="#A1A1AA" strokeDasharray="5 5" />
+            <ReferenceLine x={xMid} stroke="#8F8AA6" strokeDasharray="5 5" />
+            <ReferenceLine y={yMid} stroke="#8F8AA6" strokeDasharray="5 5" />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v, n) => [v, n === 'x' ? xMeasure : n === 'y' ? yMeasure : n]} />
             <Scatter data={points} fillOpacity={0.7}>
               {points.map((p, i) => <Cell key={i} fill={quadColor(p)} />)}
@@ -2911,14 +2911,14 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ComposedChart data={dual} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis yAxisId="left" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${measure}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#727279' }} label={{ value: `Avg ${widget.measure2}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis yAxisId="left" domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `Avg ${measure}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: `Avg ${widget.measure2}`, angle: 90, position: 'insideRight', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <Tooltip />
             <Legend />
             <Bar yAxisId="left" dataKey="left" name={`Avg ${measure}`} fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} cursor="pointer" onClick={drillCategory} />
-            <Line yAxisId="right" type="monotone" dataKey="right" name={`Avg ${widget.measure2}`} stroke="#895BF5" strokeWidth={2.6} dot={{ r: 3.5, fill: '#895BF5' }} activeDot={{ r: 5 }} />
+            <Line yAxisId="right" type="monotone" dataKey="right" name={`Avg ${widget.measure2}`} stroke="#8E66F1" strokeWidth={2.6} dot={{ r: 3.5, fill: '#8E66F1' }} activeDot={{ r: 5 }} />
           </ComposedChart>
         </ResponsiveContainer>
       )
@@ -2927,14 +2927,14 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#A1A1AA' } }} />
-            <YAxis type="number" dataKey="y" domain={valueDomain} name={yMeasure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis type="number" dataKey="x" name={xMeasure} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: xMeasure, position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: '#8F8AA6' } }} />
+            <YAxis type="number" dataKey="y" domain={valueDomain} name={yMeasure} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: yMeasure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <ZAxis range={[45, 45]} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} />
             <Legend />
-            <Scatter data={scatterLine.points} name="Individuals" fill={accent || '#895BF5'} fillOpacity={0.5} />
-            <Line data={scatterLine.line} dataKey="y" name="Average trend" type="monotone" stroke="#E06C9F" strokeWidth={2.6} dot={{ r: 3, fill: '#E06C9F' }} isAnimationActive={false} legendType="line" />
+            <Scatter data={scatterLine.points} name="Individuals" fill={accent || '#8E66F1'} fillOpacity={0.5} />
+            <Line data={scatterLine.line} dataKey="y" name="Average trend" type="monotone" stroke="#E0699F" strokeWidth={2.6} dot={{ r: 3, fill: '#E0699F' }} isAnimationActive={false} legendType="line" />
           </ScatterChart>
         </ResponsiveContainer>
       )
@@ -2949,14 +2949,14 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 12 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis type="number" dataKey="x" name="Date" domain={['dataMin', 'dataMax']} tickFormatter={fmtTs} tick={{ fontSize: 11, fill: '#727279' }} />
-            <YAxis type="number" dataKey="y" domain={valueDomain} name={measure} tick={{ fontSize: 12, fill: '#727279' }} label={{ value: measure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#A1A1AA' } }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis type="number" dataKey="x" name="Date" domain={['dataMin', 'dataMax']} tickFormatter={fmtTs} tick={{ fontSize: 11, fill: '#68657F' }} />
+            <YAxis type="number" dataKey="y" domain={valueDomain} name={measure} tick={{ fontSize: 12, fill: '#68657F' }} label={{ value: measure, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#8F8AA6' } }} />
             <ZAxis range={[40, 40]} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} labelFormatter={fmtTs} formatter={(v, n) => [v, n === 'x' ? 'Date' : measure]} />
             <Legend />
-            <Scatter data={progression.points} name="Individual attempts" fill={accent || '#895BF5'} fillOpacity={0.4} />
-            <Line data={progression.line} dataKey="y" name="Average per period" type="monotone" stroke="#E06C9F" strokeWidth={2.6} dot={{ r: 3, fill: '#E06C9F' }} isAnimationActive={false} legendType="line" />
+            <Scatter data={progression.points} name="Individual attempts" fill={accent || '#8E66F1'} fillOpacity={0.4} />
+            <Line data={progression.line} dataKey="y" name="Average per period" type="monotone" stroke="#E0699F" strokeWidth={2.6} dot={{ r: 3, fill: '#E0699F' }} isAnimationActive={false} legendType="line" />
           </ScatterChart>
         </ResponsiveContainer>
       )
@@ -2965,13 +2965,13 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={340}>
           <ComposedChart data={meanSpread.cats} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" type="category" allowDuplicatedCategory={false} tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" type="category" allowDuplicatedCategory={false} tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} />
             <Legend />
             <Bar dataKey="avg" name={`Avg ${measure}`} fill={accent || '#C7B3FD'} radius={[5, 5, 0, 0]} barSize={28} cursor="pointer" onClick={drillCategory} />
-            <Scatter data={meanSpread.points} dataKey="value" name="Individuals" fill="#5B3FB8" fillOpacity={0.55} />
+            <Scatter data={meanSpread.points} dataKey="value" name="Individuals" fill="#7540EC" fillOpacity={0.55} />
           </ComposedChart>
         </ResponsiveContainer>
       )
@@ -2980,13 +2980,13 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={Math.max(220, data.length * 32)}>
           <BarChart layout="vertical" data={data} margin={{ top: 8, right: 28, left: 8, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
-            <XAxis type="number" domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
-            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 12, fill: '#727279' }} tickFormatter={(v) => (v.length > 20 ? `${v.slice(0, 19)}…` : v)} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" horizontal={false} />
+            <XAxis type="number" domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} />
+            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 12, fill: '#68657F' }} tickFormatter={(v) => (v.length > 20 ? `${v.slice(0, 19)}…` : v)} />
             <Tooltip formatter={withSampleSize} />
             <Bar dataKey="value" name={measureLabel} fill={accent || undefined} radius={[0, 6, 6, 0]} barSize={18} cursor="pointer" onClick={drillCategory}>
               {!accent && data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+              <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: '#68657F', fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -2998,12 +2998,12 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={tickInterval} tickMargin={8} minTickGap={16} />
-            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={tickInterval} tickMargin={8} minTickGap={16} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} />
             <Tooltip />
-            <Line type="monotone" dataKey="value" name={measureLabel} stroke={accent || '#895BF5'} strokeWidth={2.5} dot={{ r: 3, fill: accent || '#895BF5' }} activeDot={{ r: 5 }}>
-              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            <Line type="monotone" dataKey="value" name={measureLabel} stroke={accent || '#8E66F1'} strokeWidth={2.5} dot={{ r: 3, fill: accent || '#8E66F1' }} activeDot={{ r: 5 }}>
+              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#68657F', fontWeight: 'bold' }} />
             </Line>
           </LineChart>
         </ResponsiveContainer>
@@ -3039,12 +3039,12 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
       return (
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={histData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} barCategoryGap={1}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} />
-            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} />
+            <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} allowDecimals={false} />
             <Tooltip formatter={(v) => [`${v} record${v === 1 ? '' : 's'}`, 'Records']} />
-            <Bar dataKey="value" name="Records" fill={accent || '#895BF5'} radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange}>
-              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#727279', fontWeight: 'bold' }} />
+            <Bar dataKey="value" name="Records" fill={accent || '#8E66F1'} radius={[4, 4, 0, 0]} cursor="pointer" onClick={drillRange}>
+              <LabelList dataKey="value" position="top" style={{ fontSize: 9, fill: '#68657F', fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -3053,13 +3053,13 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
     return (
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#727279' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
-          <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#727279' }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#68657F' }} interval={0} angle={-25} textAnchor="end" height={60} tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)} />
+          <YAxis domain={valueDomain} tick={{ fontSize: 12, fill: '#68657F' }} />
           <Tooltip formatter={withSampleSize} />
           <Bar dataKey="value" name={measureLabel} fill={accent || undefined} radius={[6, 6, 0, 0]} cursor="pointer" onClick={drillCategory}>
             {!accent && data.map((entry, i) => <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-            <LabelList dataKey="value" position="top" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+            <LabelList dataKey="value" position="top" style={{ fontSize: 10, fill: '#68657F', fontWeight: 'bold' }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -3137,9 +3137,9 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
             </optgroup>
           )}
           {numericCols.length >= 2 && (
-            <optgroup label="Multi-assessment">
-              <option value="grouped">Grouped · compare all assessments</option>
-              <option value="heatmap">Heatmap · group × assessment</option>
+            <optgroup label="Multi-quiz">
+              <option value="grouped">Grouped · compare all quizzes</option>
+              <option value="heatmap">Heatmap · group × quiz</option>
               <option value="correlation">Correlation matrix</option>
               <option value="radar">Strength / weakness radar</option>
             </optgroup>
@@ -3171,7 +3171,7 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
 
             {/* Multi-assessment charts span every Score column — no single measure to pick. */}
             {(isGrouped || isCorr || isRadar || isHeatmap) && (
-              <span className="di-chart-controls__sep">across {scoreList.length} assessment{scoreList.length === 1 ? '' : 's'}</span>
+              <span className="di-chart-controls__sep">across {scoreList.length} {scoreList.length === 1 ? 'quiz' : 'quizzes'}</span>
             )}
 
             {/* Stacked: choose the second factor to split each bar by. */}
@@ -3277,7 +3277,7 @@ const ChartWidget = ({ widget, rows, columns, dimensionCols, numericCols, identi
             <div className="di-customize__field">
               <label>Color</label>
               <div className="di-customize__color">
-                <input type="color" value={color || '#895BF5'} onChange={(e) => onUpdate(widget.id, { color: e.target.value })} />
+                <input type="color" value={color || '#8E66F1'} onChange={(e) => onUpdate(widget.id, { color: e.target.value })} />
                 {color && <button type="button" className="di-link" onClick={() => onUpdate(widget.id, { color: null })}>Reset</button>}
               </div>
             </div>
@@ -3484,9 +3484,9 @@ const ChartBuilderModal = ({ columns, dimensionCols, numericCols, categoricalCol
                 </optgroup>
               )}
               {numericCols.length >= 2 && (
-                <optgroup label="Multi-assessment">
-                  <option value="grouped">Grouped · all assessments</option>
-                  <option value="heatmap">Heatmap · group × assessment</option>
+                <optgroup label="Multi-quiz">
+                  <option value="grouped">Grouped · all quizzes</option>
+                  <option value="heatmap">Heatmap · group × quiz</option>
                   <option value="correlation">Correlation matrix</option>
                   <option value="radar">Strength / weakness radar</option>
                 </optgroup>
@@ -3583,8 +3583,8 @@ const ChartBuilderModal = ({ columns, dimensionCols, numericCols, categoricalCol
 
           {isMulti && (
             <div className="di-builder__field di-builder__field--wide">
-              <label>Assessments</label>
-              <div className="di-builder__note">Uses all {scoreCols.length} detected assessment{scoreCols.length === 1 ? '' : 's'} automatically.</div>
+              <label>Quizzes</label>
+              <div className="di-builder__note">Uses all {scoreCols.length} detected {scoreCols.length === 1 ? 'quiz' : 'quizzes'} automatically.</div>
             </div>
           )}
 
@@ -3603,7 +3603,7 @@ const ChartBuilderModal = ({ columns, dimensionCols, numericCols, categoricalCol
             <div className="di-builder__field">
               <label>Color</label>
               <div className="di-customize__color">
-                <input type="color" value={draft.color || '#895BF5'} onChange={(e) => set({ color: e.target.value })} />
+                <input type="color" value={draft.color || '#8E66F1'} onChange={(e) => set({ color: e.target.value })} />
                 {draft.color && <button type="button" className="di-link" onClick={() => set({ color: null })}>Reset</button>}
               </div>
             </div>

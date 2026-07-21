@@ -32,12 +32,15 @@ const API_BASE = ''
 // Selectable limits for the per-employee chart so labels stay readable
 const EMPLOYEE_LIMIT_OPTIONS = [10, 15, 25, 50]
 
-// Brand chart palette (purple-based)
-const CHART_COLORS = ['#895BF5', '#A68AF9', '#BF83FC', '#7D89F7', '#727279']
+// Brand chart palette (purple-based). Ordered light/dark alternating so
+// neighbouring series stay separable.
+const CHART_COLORS = ['#8E66F1', '#C7B3FD', '#5E3BC4', '#A38AF2', '#8F8AA6']
+// Bands stay hue-separated, not just lightness-separated, so the wellness
+// rating survives greyscale printing and colour-vision deficiency.
 const BAND_COLORS = {
-  Excellent: '#895BF5',
-  Good: '#A68AF9',
-  'Needs Improvement': '#BF83FC'
+  Excellent: '#7540EC',
+  Good: '#A38AF2',
+  'Needs Improvement': '#E0699F'
 }
 
 const scoreBand = (score) => {
@@ -806,7 +809,7 @@ const ActiveTracking = () => {
         const boxY = 134
         const rows = [
           ['View', viewLabel],
-          ['Assessment', selectedQuiz === 'all' ? 'All assessments' : selectedQuiz],
+          ['Quiz', selectedQuiz === 'all' ? 'All quizzes' : selectedQuiz],
           ['Period', periodLabel],
           ['Generated', generatedAt]
         ]
@@ -1061,7 +1064,7 @@ const ActiveTracking = () => {
             <span>
               Employee Progress Directory
               <span className="at-chart-card__note">
-                {' '}— {registeredCount} of {totalCount} registered · track signup and assessment status
+                {' '}— {registeredCount} of {totalCount} registered · track signup and quiz status
               </span>
             </span>
           </h3>
@@ -1112,7 +1115,7 @@ const ActiveTracking = () => {
                               style={{
                                 fontWeight: 600,
                                 color: 'var(--color-primary)',
-                                background: 'var(--color-primary-soft, rgba(166, 138, 249, 0.12))',
+                                background: 'var(--color-primary-soft, rgba(163, 138, 242, 0.12))',
                                 borderRadius: '4px',
                                 padding: '2px 8px',
                                 fontSize: 'var(--text-sm)',
@@ -1185,7 +1188,7 @@ const ActiveTracking = () => {
         <div className="at-header__icon"><InsightsIcon /></div>
         <div className="at-header__text">
           <h1>Active Tracking</h1>
-          <p>Select an organization to visualize its employees' assessment performance</p>
+          <p>Select an organization to visualize its employees' quiz performance</p>
         </div>
         <button
           className="btn btn--outline at-insights-btn"
@@ -1223,7 +1226,7 @@ const ActiveTracking = () => {
 
             <div className="at-controls__group">
               <AssignmentIcon style={{ color: 'var(--color-primary)' }} />
-              <label htmlFor="at-quiz-select" className="at-controls__label">Assessment</label>
+              <label htmlFor="at-quiz-select" className="at-controls__label">Quiz</label>
               <select
                 id="at-quiz-select"
                 className="at-select"
@@ -1231,7 +1234,7 @@ const ActiveTracking = () => {
                 onChange={(e) => setSelectedQuiz(e.target.value)}
                 disabled={availableQuizzes.length === 0}
               >
-                <option value="all">All assessments{availableQuizzes.length ? ` (${availableQuizzes.length})` : ''}</option>
+                <option value="all">All quizzes{availableQuizzes.length ? ` (${availableQuizzes.length})` : ''}</option>
                 {availableQuizzes.map(name => (
                   <option key={name} value={name}>{name}</option>
                 ))}
@@ -1389,20 +1392,20 @@ const ActiveTracking = () => {
                         data={shownEmployees}
                         margin={{ top: 8, right: 32, left: 8, bottom: 8 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#727279' }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#68657F' }} />
                         <YAxis
                           type="category"
                           dataKey="name"
                           width={150}
-                          tick={{ fontSize: 12, fill: '#727279' }}
+                          tick={{ fontSize: 12, fill: '#68657F' }}
                           tickFormatter={(v) => (v.length > 20 ? `${v.slice(0, 19)}…` : v)}
                         />
                         <Tooltip formatter={(v, n, p) => `${v} / ${p?.payload?.avgMax ?? ''}`} />
                         <Bar
                           dataKey="avgMarks"
                           name="Avg Marks"
-                          fill="#895BF5"
+                          fill="#8E66F1"
                           radius={[0, 6, 6, 0]}
                           barSize={18}
                           cursor="pointer"
@@ -1411,7 +1414,7 @@ const ActiveTracking = () => {
                             if (name) setSelectedEmployee(name)
                           }}
                         >
-                          <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 11, fill: '#727279', fontWeight: 'bold' }} />
+                          <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 11, fill: '#68657F', fontWeight: 'bold' }} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1457,12 +1460,12 @@ const ActiveTracking = () => {
                   <h3 className="at-chart-card__title">Score Trend Over Time</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={scoreTrend} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-                      <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#727279' }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#727279' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#68657F' }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#68657F' }} />
                       <Tooltip formatter={(v, n, p) => `${v} / ${p?.payload?.avgMax ?? ''}`} />
-                      <Line type="monotone" dataKey="avgMarks" name="Avg Marks" stroke="#895BF5" strokeWidth={3} dot={{ r: 4, fill: '#895BF5' }}>
-                        <LabelList dataKey="avgMarks" position="top" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+                      <Line type="monotone" dataKey="avgMarks" name="Avg Marks" stroke="#8E66F1" strokeWidth={3} dot={{ r: 4, fill: '#8E66F1' }}>
+                        <LabelList dataKey="avgMarks" position="top" style={{ fontSize: 10, fill: '#68657F', fontWeight: 'bold' }} />
                       </Line>
                     </LineChart>
                   </ResponsiveContainer>
@@ -1474,13 +1477,13 @@ const ActiveTracking = () => {
                   <div className="at-chart-scroll">
                     <ResponsiveContainer width="100%" height={Math.max(240, quizAverages.length * 32)}>
                       <BarChart layout="vertical" data={quizAverages} margin={{ top: 8, right: 32, left: 8, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#727279' }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#68657F' }} />
                         <YAxis
                           type="category"
                           dataKey="name"
                           width={150}
-                          tick={{ fontSize: 12, fill: '#727279' }}
+                          tick={{ fontSize: 12, fill: '#68657F' }}
                           tickFormatter={(v) => (v.length > 20 ? `${v.slice(0, 19)}…` : v)}
                         />
                         <Tooltip formatter={(v, n, p) => `${v} / ${p?.payload?.avgMax ?? ''}`} />
@@ -1488,7 +1491,7 @@ const ActiveTracking = () => {
                           {quizAverages.map((entry, i) => (
                             <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                           ))}
-                          <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+                          <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 10, fill: '#68657F', fontWeight: 'bold' }} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1514,18 +1517,18 @@ const ActiveTracking = () => {
                     <div className="at-chart-scroll">
                       <ResponsiveContainer width="100%" height={Math.max(240, packetAverages.length * 32)}>
                         <BarChart layout="vertical" data={packetAverages} margin={{ top: 8, right: 48, left: 8, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
-                          <XAxis type="number" tick={{ fontSize: 12, fill: '#727279' }} allowDecimals={false} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E8E6F4" horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 12, fill: '#68657F' }} allowDecimals={false} />
                           <YAxis
                             type="category"
                             dataKey="name"
                             width={160}
-                            tick={{ fontSize: 12, fill: '#727279' }}
+                            tick={{ fontSize: 12, fill: '#68657F' }}
                             tickFormatter={(v) => (v.length > 22 ? `${v.slice(0, 21)}…` : v)}
                           />
                           <Tooltip formatter={(v, n, p) => `${v} / ${p?.payload?.avgMax ?? ''}`} />
-                          <Bar dataKey="avgMarks" name="Avg Score" fill="#A68AF9" radius={[0, 6, 6, 0]} barSize={16}>
-                            <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 10, fill: '#727279', fontWeight: 'bold' }} />
+                          <Bar dataKey="avgMarks" name="Avg Score" fill="#A38AF2" radius={[0, 6, 6, 0]} barSize={16}>
+                            <LabelList dataKey="avgMarks" position="right" style={{ fontSize: 10, fill: '#68657F', fontWeight: 'bold' }} />
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
@@ -1546,18 +1549,18 @@ const ActiveTracking = () => {
                     </h3>
                     <ResponsiveContainer width="100%" height={420}>
                       <RadarChart data={packetRadar} outerRadius="72%" margin={{ top: 16, right: 48, bottom: 16, left: 48 }}>
-                        <PolarGrid stroke="#E4E4E7" />
+                        <PolarGrid stroke="#E8E6F4" />
                         <PolarAngleAxis
                           dataKey="name"
-                          tick={{ fontSize: 11, fill: '#727279' }}
+                          tick={{ fontSize: 11, fill: '#68657F' }}
                           tickFormatter={(v) => {
                             const item = packetRadar.find(p => p.name === v);
                             const label = v.length > 16 ? `${v.slice(0, 15)}…` : v;
                             return item ? `${label} (${item.avgMarks}/${item.avgMax})` : label;
                           }}
                         />
-                        <PolarRadiusAxis angle={90} tick={{ fontSize: 10, fill: '#A1A1AA' }} />
-                        <Radar name="Avg Marks" dataKey="avgMarks" stroke="#895BF5" fill="#895BF5" fillOpacity={0.35} />
+                        <PolarRadiusAxis angle={90} tick={{ fontSize: 10, fill: '#8F8AA6' }} />
+                        <Radar name="Avg Marks" dataKey="avgMarks" stroke="#8E66F1" fill="#8E66F1" fillOpacity={0.35} />
                         <Tooltip formatter={(v, n, p) => `${v} / ${p?.payload?.avgMax ?? ''}`} />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -1603,7 +1606,7 @@ const ActiveTracking = () => {
                 <p style={{ margin: 0 }}>
                   For each area, across every attempt in the selected filters:
                 </p>
-                <pre style={{ background: 'var(--color-surface-2, #f4f4f5)', padding: 'var(--space-3)', borderRadius: 8, overflowX: 'auto', fontSize: 'var(--text-sm)', margin: 'var(--space-2) 0 0' }}>
+                <pre style={{ background: 'var(--color-surface-2, #F2EFFE)', padding: 'var(--space-3)', borderRadius: 8, overflowX: 'auto', fontSize: 'var(--text-sm)', margin: 'var(--space-2) 0 0' }}>
 {`Avg Score = Σ (marks in the area)  ÷  number of attempts`}
                 </pre>
                 <p style={{ marginTop: 'var(--space-2)' }}>
@@ -1616,7 +1619,7 @@ const ActiveTracking = () => {
               <div>
                 <h3 className="at-modal__section">Scope</h3>
                 <p style={{ margin: 0 }}>
-                  Respects the current <strong>Organization</strong>, <strong>Assessment</strong>,
+                  Respects the current <strong>Organization</strong>, <strong>Quiz</strong>,
                   {' '}<strong>Period</strong> and <strong>View</strong> (Internal Team / Company)
                   filters. Only areas with recorded marks appear.
                 </p>

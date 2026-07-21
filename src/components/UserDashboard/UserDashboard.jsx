@@ -9,16 +9,17 @@ import { useTranslatedContent } from '../../hooks/useTranslatedContent';
 // hook so the whole page renders in the user's selected language.
 const UI_TEXT = {
   welcome: 'Welcome!',
+  tagline: 'Small steps toward conscious growth. Take a moment to check in with yourself today.',
   language: 'Language',
-  mapped: 'Mapped Assessments',
-  taken: 'Assessments Taken',
+  mapped: 'Mapped Quizzes',
+  taken: 'Quizzes Taken',
   totalAttempts: 'Total Attempts',
   assignedQuizzes: 'Assigned Quizzes',
   noQuizzes: 'No quizzes assigned yet',
   noQuizzesSub: 'New quizzes will appear here when assigned',
   pending: 'Pending Completion',
   startQuiz: 'Start Quiz',
-  resumeAssessment: 'Resume Assessment',
+  resumeAssessment: 'Resume Quiz',
   recentAttempts: 'Recent Attempts',
   noAttempts: 'No attempts yet',
   noAttemptsSub: 'Your quiz results will show up here',
@@ -263,6 +264,7 @@ const UserDashboard = ({ setTab }) => {
               <EmailIcon />
               <span>{user.email}</span>
             </div>
+            <p className="dashboard__tagline">{t('tagline')}</p>
           </div>
         </div>
 
@@ -388,7 +390,7 @@ const UserDashboard = ({ setTab }) => {
         {/* Recent Attempts */}
         <section className="section-card">
           <h2 className="section-card__header">
-            <div className="section-card__header-icon" style={{ backgroundColor: '#895BF5' }}>
+            <div className="section-card__header-icon" style={{ backgroundColor: '#8E66F1' }}>
               <TrendingUpIcon />
             </div>
             {t('recentAttempts')}
@@ -409,9 +411,9 @@ const UserDashboard = ({ setTab }) => {
                     <div className="list-item__content">
                       <div className="list-item__header">
                         {isCompleted ? (
-                          <CheckCircleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
+                          <CheckCircleIcon className="list-item__icon" style={{ color: '#8E66F1' }} />
                         ) : (
-                          <ScheduleIcon className="list-item__icon" style={{ color: '#895BF5' }} />
+                          <ScheduleIcon className="list-item__icon" style={{ color: '#8E66F1' }} />
                         )}
                         <div>
                           <h3 className="list-item__title" style={{ marginBottom: '4px' }}>

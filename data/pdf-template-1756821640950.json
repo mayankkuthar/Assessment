@@ -3,7 +3,7 @@
     "enabled": true,
     "backgroundColor": "#2563eb",
     "textColor": "#ffffff",
-    "title": "Assessment Report",
+    "title": "Quiz Report",
     "subtitle": "Performance Analysis",
     "showLogo": true,
     "logoPosition": "left",
@@ -154,7 +154,7 @@
     "margin": "20mm",
     "showPageNumbers": true,
     "showWatermark": false,
-    "watermarkText": "Assessment Report",
+    "watermarkText": "Quiz Report",
     "watermarkOpacity": "0.1"
   },
   "typography": {

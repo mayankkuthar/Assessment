@@ -66,8 +66,8 @@ const QuizAssignmentGraph = ({
             type: 'quiz'
           },
           style: {
-            background: '#e3f2fd',
-            border: '2px solid #2196f3',
+            background: '#E9F0FC',
+            border: '2px solid #4B7BD4',
             borderRadius: '8px',
             padding: '10px',
             minWidth: '150px',
@@ -181,7 +181,7 @@ const QuizAssignmentGraph = ({
           source: sourceId,
           target: targetId,
           type: 'bezier',
-          style: { stroke: '#4caf50', strokeWidth: 3 },
+          style: { stroke: '#2E9E7E', strokeWidth: 3 },
           data: { assignment: { quiz_id: quizId, profile_id: profileId } },
           animated: true,
         };
@@ -255,25 +255,25 @@ const QuizAssignmentGraph = ({
                 cursor: grabbing;
               }
               .react-flow__handle {
-                background: #4caf50;
+                background: #2E9E7E;
                 border: 2px solid #fff;
                 width: 12px;
                 height: 12px;
                 opacity: 0.8;
               }
               .react-flow__handle:hover {
-                background: #45a049;
+                background: #268A6D;
                 opacity: 1;
               }
               .react-flow__handle.connecting {
-                background: #ff9800;
+                background: #C4841D;
               }
               .react-flow__connection-path {
-                stroke: #4caf50;
+                stroke: #2E9E7E;
                 stroke-width: 3;
               }
               .react-flow__connection-line {
-                stroke: #4caf50;
+                stroke: #2E9E7E;
                 stroke-width: 2;
               }
               .react-flow__pane {
@@ -305,7 +305,7 @@ const QuizAssignmentGraph = ({
               selectNodesOnDrag={false}
               defaultEdgeOptions={{
                 type: 'bezier',
-                style: { stroke: '#4caf50', strokeWidth: 3 },
+                style: { stroke: '#2E9E7E', strokeWidth: 3 },
                 animated: true,
               }}
             >
@@ -329,7 +329,7 @@ const QuizAssignmentGraph = ({
             padding: 'var(--space-3) var(--space-4)', 
             backgroundColor: 'var(--color-tertiary)', 
             borderRadius: 'var(--radius-md)', 
-            border: '1px solid rgba(137, 91, 245, 0.2)' 
+            border: '1px solid rgba(142, 102, 241, 0.2)' 
           }}>
             <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
               {quiz.name}
