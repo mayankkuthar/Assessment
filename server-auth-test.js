@@ -1368,11 +1368,12 @@ app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) 
   const imported = [];
   const allCurrentEmployees = [...(mockData.employees || [])];
   for (const emp of employees) {
-    if (!emp.name || !emp.email) {
-      return res.status(400).json({ error: 'Name and Email are mandatory fields' });
+    if (!emp.name) {
+      return res.status(400).json({ error: 'Name is a mandatory field' });
     }
-    if (existingEmails.includes(emp.email.toLowerCase())) {
-      return res.status(400).json({ error: `Email ${emp.email} already exists in this organization` });
+    const cleanEmail = emp.email?.trim() ? emp.email.trim() : null;
+    if (cleanEmail && existingEmails.includes(cleanEmail.toLowerCase())) {
+      return res.status(400).json({ error: `Email ${cleanEmail} already exists in this organization` });
     }
 
     // Preserve the supplied code exactly as given - only trim whitespace.
@@ -1388,7 +1389,7 @@ app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) 
       id: String(Date.now() + Math.random()),
       organization_id: orgId,
       name: emp.name.trim(),
-      email: emp.email.trim(),
+      email: cleanEmail,
       code,
       metadata: emp.metadata || {},
       created_at: new Date().toISOString(),
@@ -1397,7 +1398,9 @@ app.post('/api/organizations/:orgId/employees/import', requireAdmin, (req, res) 
 
     imported.push(newEmp);
     allCurrentEmployees.push(newEmp);
-    existingEmails.push(newEmp.email.toLowerCase());
+    if (cleanEmail) {
+      existingEmails.push(cleanEmail.toLowerCase());
+    }
     existingCodes.push(code.toUpperCase());
   }
 
