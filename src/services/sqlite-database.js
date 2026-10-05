@@ -219,7 +219,7 @@ export const employeeService = {
       const imported = [];
       for (const emp of list) {
         const id = generateId();
-        const code = generateUniqueEmployeeCode(db);
+        const code = emp.code ? String(emp.code).trim() : generateUniqueEmployeeCode(db);
         const metadataStr = JSON.stringify(emp.metadata || {});
         stmt.run(id, orgId, emp.name, emp.email, code, metadataStr);
         imported.push({

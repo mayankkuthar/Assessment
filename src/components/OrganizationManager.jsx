@@ -73,6 +73,7 @@ const OrganizationManager = ({
   const [previewRows, setPreviewRows] = useState([]);
   const [previewFilter, setPreviewFilter] = useState('all'); // 'all' | 'valid' | 'errors'
   const [importSummary, setImportSummary] = useState(null);
+  const [importProgress, setImportProgress] = useState('');
 
   // Manual Add Employee State
   const [isManualAddMode, setIsManualAddMode] = useState(false);
@@ -447,19 +448,6 @@ const OrganizationManager = ({
   };
 
   const handleSaveImport = async () => {
-    // A duplicate Code anywhere in the file blocks the entire upload -
-    // no records are imported until the file is fixed and re-uploaded.
-    const duplicateCodeRows = previewRows.filter(
-      r => r.errors.includes('Duplicate Code in file') || r.errors.includes('Code already exists')
-    );
-    if (duplicateCodeRows.length > 0) {
-      alert(
-        `Import blocked: duplicate Code found on row(s) ${duplicateCodeRows.map(r => r.rowNumber).join(', ')}. ` +
-        `Fix the Code column and re-upload - no records were imported.`
-      );
-      return;
-    }
-
     const validRows = previewRows.filter(r => r.isValid);
     if (validRows.length === 0) {
       alert('No valid records to import.');
@@ -475,7 +463,15 @@ const OrganizationManager = ({
         ...(r.code ? { code: r.code } : {})
       }));
 
-      await importEmployees(viewingOrg.id, employeesToSave);
+      // Import in chunks of 200 to prevent payload size limits (HTTP 413) and timeouts with 4000+ rows
+      const BATCH_SIZE = 200;
+      const totalBatches = Math.ceil(employeesToSave.length / BATCH_SIZE);
+      for (let i = 0; i < employeesToSave.length; i += BATCH_SIZE) {
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const currentBatch = employeesToSave.slice(i, i + BATCH_SIZE);
+        setImportProgress(`Importing batch ${batchNum} of ${totalBatches} (${Math.min(i + BATCH_SIZE, employeesToSave.length)}/${employeesToSave.length})...`);
+        await importEmployees(viewingOrg.id, currentBatch);
+      }
       
       // Calculate summary
       setImportSummary({
@@ -494,6 +490,7 @@ const OrganizationManager = ({
       alert(err.message || 'Failed to save employees.');
     } finally {
       setEmployeesLoading(false);
+      setImportProgress('');
     }
   };
 
@@ -1332,10 +1329,16 @@ const OrganizationManager = ({
                                 Re-upload file
                               </button>
                               
-                              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {previewRows.some(r => !r.isValid) && (
+                                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
+                                    {previewRows.filter(r => !r.isValid).length} invalid {previewRows.filter(r => !r.isValid).length === 1 ? 'row' : 'rows'} will be skipped
+                                  </span>
+                                )}
                                 <button 
                                   type="button" 
                                   className="btn btn--outline" 
+                                  disabled={employeesLoading}
                                   onClick={() => { setExcelFile(null); setPreviewRows([]); setPreviewFilter('all'); setIsImportMode(false); }}
                                 >
                                   Cancel
@@ -1345,11 +1348,13 @@ const OrganizationManager = ({
                                   className="btn btn--primary"
                                   onClick={handleSaveImport}
                                   disabled={
-                                    previewRows.filter(r => r.isValid).length === 0 ||
-                                    previewRows.some(r => r.errors.includes('Duplicate Code in file') || r.errors.includes('Code already exists'))
+                                    employeesLoading ||
+                                    previewRows.filter(r => r.isValid).length === 0
                                   }
                                 >
-                                  Import Valid Rows ({previewRows.filter(r => r.isValid).length})
+                                  {employeesLoading 
+                                    ? (importProgress || 'Importing...') 
+                                    : `Import Valid Rows (${previewRows.filter(r => r.isValid).length})`}
                                 </button>
                               </div>
                             </div>
