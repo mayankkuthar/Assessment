@@ -1,6 +1,6 @@
 # HappiMynd Assessment Platform
 
-A React (Vite) web app for building, assigning and taking psychometric / emotional-intelligence assessments, and for generating per-user PDF reports. It is used by **HappiMynd (Super Admin)**, **client organisations (Admin)** and **end users** (students, employees, etc.).
+A React (Vite) web app for building, assigning and taking psychometric / emotional-intelligence assessments, and for generating per-user PDF reports. It is used by the **HappiMynd team (Super Admin)**, **internal HappiMynd staff such as HR (Admin)**, who mainly export data and download reports, and **end users** (students, employees, etc.).
 
 > ⚠️ **This frontend talks to the LIVE production backend.**
 > All API calls go to `https://happimynd.com/new_api`, which is deployed on AWS and backed by a **live AWS MySQL database**. That holds even when you run `npm run dev` on your laptop. Any user, quiz, organisation or attempt you create, edit or delete locally changes **real production data**. Read [Live backend & data](#live-backend--data) before you click anything.
@@ -260,7 +260,7 @@ The roles are defined in `src/services/rbac.js`. The **backend is the source of 
 | Role | Can |
 |---|---|
 | `super_admin` (HappiMynd) | Everything: manage organisations, delete users, reset passwords any time, change locked permissions, view the audit log |
-| `admin` (client org) | Add users, set a user's onboarding password **once**, edit permissions while they're unlocked, see admin screens they've been granted |
+| `admin` (internal HappiMynd staff, e.g. HR; exact audience still being decided) | Mainly export data and download reports from the tabs they've been granted. Can also add users, set a user's onboarding password **once**, edit permissions while they're unlocked, see admin screens they've been granted |
 | `user` | Take assigned quizzes and view their own records and reports |
 
 Menu visibility is per permission key (in `App.jsx`). Admin-side keys: `admin_dashboard, organizations, profiles, packets, quiz_builder, assigned_quizzes, results, reports, active_tracking, pdf_templates`. User-side keys: `home, quiz_records`.
