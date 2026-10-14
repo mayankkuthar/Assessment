@@ -429,7 +429,7 @@ const QuizBuilder = ({ profiles, packets, savedQuizzes, addQuiz, updateQuiz, del
                   <div className="preview-question-item__meta">
                     Type: {(question.question_type === 'mcq' || question.type === 'mcq') ? 'Multiple Choice' : 'True/False'} | Packet: {question.packetName}
                   </div>
-                  {(question.question_type === 'mcq' || question.type === 'mcq') && question.options && (
+                  {question.options && Array.isArray(question.options) && question.options.length > 0 && (
                     <div className="preview-question-item__options">
                       {question.options.map((option, optIndex) => (
                         <div key={optIndex} className="preview-question-item__option">

@@ -49,9 +49,15 @@ async function apiCall(endpoint, options = {}) {
       } else if (errorData.message) {
         errMsg = errorData.message;
       } else if (errorData.detail) {
-        errMsg = typeof errorData.detail === 'string'
-          ? errorData.detail
-          : JSON.stringify(errorData.detail);
+        if (typeof errorData.detail === 'string') {
+          errMsg = errorData.detail;
+        } else if (Array.isArray(errorData.detail)) {
+          errMsg = errorData.detail
+            .map(d => `${d.loc ? d.loc.filter(l => l !== 'body').join('.') : 'field'}: ${d.msg}`)
+            .join('; ');
+        } else {
+          errMsg = JSON.stringify(errorData.detail);
+        }
       }
       throw new ApiError(errMsg, response.status);
     }
