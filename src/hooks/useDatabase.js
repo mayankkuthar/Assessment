@@ -21,6 +21,9 @@ const useDatabaseState = () => {
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const clearError = useCallback(() => {
+    setError(null)
+  }, [])
   const [quizAssignments, setQuizAssignments] = useState([])
   const [userQuizAttempts, setUserQuizAttempts] = useState([])
   const [allQuizAttempts, setAllQuizAttempts] = useState([])
@@ -203,7 +206,6 @@ const useDatabaseState = () => {
       return newPacket
     } catch (err) {
       console.error('Error adding packet:', err)
-      setError(err.message)
       throw err
     }
   }, [])
@@ -216,7 +218,6 @@ const useDatabaseState = () => {
       return updatedPacket
     } catch (err) {
       console.error('Error updating packet:', err)
-      setError(err.message)
       throw err
     }
   }, [])
@@ -227,7 +228,6 @@ const useDatabaseState = () => {
       setPackets(prev => prev.filter(p => p.id !== id))
     } catch (err) {
       console.error('Error deleting packet:', err)
-      setError(err.message)
       throw err
     }
   }, [])
@@ -244,22 +244,32 @@ const useDatabaseState = () => {
       return newQuestion
     } catch (err) {
       console.error('Error adding question:', err)
-      setError(err.message)
       throw err
     }
   }, [])
 
   const updateQuestion = useCallback(async (id, updates) => {
     try {
-      const updatedQuestion = await questionService.updateQuestion(id, updates)
+      let fullUpdates = { ...updates }
+      if (!fullUpdates.packet_id) {
+        setPackets(currentPackets => {
+          for (const p of currentPackets) {
+            if ((p.questions || []).some(q => q.id === id)) {
+              fullUpdates.packet_id = p.id
+              break
+            }
+          }
+          return currentPackets
+        })
+      }
+      const updatedQuestion = await questionService.updateQuestion(id, fullUpdates)
       setPackets(prev => prev.map(p => ({
         ...p,
-        questions: (p.questions || []).map(q => q.id === id ? updatedQuestion : q)
+        questions: (p.questions || []).map(q => q.id === id ? { ...q, ...updatedQuestion } : q)
       })))
       return updatedQuestion
     } catch (err) {
       console.error('Error updating question:', err)
-      setError(err.message)
       throw err
     }
   }, [])
@@ -273,7 +283,6 @@ const useDatabaseState = () => {
       })))
     } catch (err) {
       console.error('Error deleting question:', err)
-      setError(err.message)
       throw err
     }
   }, [])
@@ -495,6 +504,7 @@ const useDatabaseState = () => {
     employees,
     
     // Actions
+    clearError,
     loadData,
     addProfile,
     updateProfile,

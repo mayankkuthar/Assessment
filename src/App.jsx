@@ -121,6 +121,7 @@ function App() {
     quizzes: savedQuizzes,
     loading,
     error,
+    clearError,
     addProfile,
     updateProfile,
     deleteProfile,
@@ -512,7 +513,22 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', p: 3 }}>
-          <Alert severity="error" sx={{ maxWidth: 600 }}>
+          <Alert 
+            severity="error" 
+            sx={{ maxWidth: 600 }}
+            action={
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button color="inherit" size="small" onClick={() => { clearError?.(); loadData(); }}>
+                  Retry
+                </Button>
+                {user && (
+                  <Button color="inherit" size="small" onClick={() => { clearError?.(); }}>
+                    Dismiss
+                  </Button>
+                )}
+              </Box>
+            }
+          >
             <Typography variant="h6" sx={{ mb: 1 }}>Database Connection Error</Typography>
             <Typography sx={{ mb: 2 }}>{error}</Typography>
             {error.includes('Database connection failed') && (

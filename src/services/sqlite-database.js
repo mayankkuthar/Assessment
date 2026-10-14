@@ -416,7 +416,15 @@ export const questionService = {
 
   async updateQuestion(id, updates) {
     try {
-      const fields = Object.keys(updates).filter(key => key !== 'id');
+      let validCols = null;
+      try {
+        const tableInfo = db.prepare("PRAGMA table_info(questions)").all();
+        validCols = new Set(tableInfo.map(c => c.name));
+      } catch (e) {
+        // fallback if table info fails
+      }
+
+      const fields = Object.keys(updates).filter(key => key !== 'id' && (!validCols || validCols.has(key)));
       const setClause = fields.map(field => `${field} = ?`).join(', ');
       const values = fields.map(field => {
         if (field === 'options') {
@@ -425,8 +433,10 @@ export const questionService = {
         return updates[field];
       });
       
-      const stmt = db.prepare(`UPDATE questions SET ${setClause} WHERE id = ?`);
-      stmt.run(...values, id);
+      if (fields.length > 0) {
+        const stmt = db.prepare(`UPDATE questions SET ${setClause} WHERE id = ?`);
+        stmt.run(...values, id);
+      }
       
       // Return the updated question
       const getStmt = db.prepare('SELECT * FROM questions WHERE id = ?');

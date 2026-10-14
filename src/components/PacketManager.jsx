@@ -155,7 +155,9 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
 
   // Add new option for edit MCQ
   const addEditOption = () => {
-    setEditOptions([...editOptions, { text: '', marks: 0 }]);
+    const newOptions = [...editOptions, { text: '', marks: 0 }];
+    setEditOptions(newOptions);
+    window.lastEditOptions = newOptions;
   };
 
   // Remove option for MCQ
@@ -171,6 +173,7 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
     if (editOptions.length > 1) {
       const newOptions = editOptions.filter((_, i) => i !== index);
       setEditOptions(newOptions);
+      window.lastEditOptions = newOptions;
     }
   };
 
@@ -184,14 +187,15 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
   // Update edit option text
   const updateEditOptionText = (index, text) => {
     const newOptions = [...editOptions];
-    newOptions[index].text = text;
+    newOptions[index] = { ...newOptions[index], text };
     setEditOptions(newOptions);
+    window.lastEditOptions = newOptions;
   };
 
   // Update option marks
   const updateOptionMarks = (index, marks) => {
     const newOptions = [...options];
-    const parsedMarks = parseInt(marks);
+    const parsedMarks = parseInt(marks, 10);
     const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
     console.log(`🔍 updateOptionMarks: index=${index}, input=${marks}, parsed=${parsedMarks}, final=${finalMarks}`);
     newOptions[index].marks = finalMarks;
@@ -202,25 +206,15 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
   // Update edit option marks
   const updateEditOptionMarks = (index, marks) => {
     const newOptions = [...editOptions];
-    const parsedMarks = parseInt(marks);
+    const parsedMarks = parseInt(marks, 10);
     const finalMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
     console.log(`🔍 updateEditOptionMarks: index=${index}, input=${marks}, parsed=${parsedMarks}, final=${finalMarks}`);
-    console.log(`🔍 Before update - option ${index}:`, newOptions[index]);
-    newOptions[index].marks = finalMarks;
-    console.log(`🔍 After update - option ${index}:`, newOptions[index]);
+    newOptions[index] = { ...newOptions[index], marks: finalMarks };
     
-    // Update the state
+    // Update the state and window ref
     setEditOptions(newOptions);
-    console.log(`🔍 Updated edit options:`, newOptions);
-    
-    // Store the updated options in a ref to ensure we have the latest values
     window.lastEditOptions = newOptions;
-    
-    // Force a re-render to ensure state is updated
-    setTimeout(() => {
-      console.log(`🔍 State after timeout - editOptions:`, editOptions);
-      console.log(`🔍 Window stored options:`, window.lastEditOptions);
-    }, 100);
+    console.log(`🔍 Updated edit options:`, newOptions);
   };
 
   // Image upload handler for scoring scale
@@ -699,122 +693,91 @@ const PacketManager = ({ packets: rawPackets, addPacket, updatePacket, deletePac
     console.log('🔍 startEditQuestion - Question type:', q.question_type);
     
     setEditingQuestionId(q.id);
-    setEditQuestionText(q.question_text || q.text);
-    setEditQuestionType(q.question_type === 'mcq' ? 'MCQ' : 'TrueFalse');
-    
-    if (q.question_type === 'mcq' && q.options) {
-      // Convert options to new format if they're in old format
-      if (Array.isArray(q.options) && typeof q.options[0] === 'string') {
-        console.log('🔍 Converting MCQ options from old format');
-        setEditOptions(q.options.map((opt, idx) => ({
-          text: opt,
-          marks: q.marks || 0
-        })));
-      } else {
-        console.log('🔍 Using MCQ options as-is');
-        setEditOptions(q.options || [{ text: '', marks: 0 }]);
-      }
-    } else if (q.question_type === 'true_false') {
-      // For True/False questions, check if they have individual marks
-      if (q.options && Array.isArray(q.options) && q.options.length === 2) {
-        // Check if options have individual marks
-        const hasIndividualMarks = q.options[0]?.hasOwnProperty('marks') && q.options[1]?.hasOwnProperty('marks');
-        
-        console.log('🔍 True/False options found:', q.options);
-        console.log('🔍 Has individual marks:', hasIndividualMarks);
-        console.log('🔍 Option 0:', q.options[0]);
-        console.log('🔍 Option 1:', q.options[1]);
-        
-        if (hasIndividualMarks) {
-          // Use existing individual marks
-          console.log('🔍 Using existing individual marks:', q.options[0]?.marks, q.options[1]?.marks);
-          const newOptions = [
-            { text: 'True', marks: q.options[0].marks },
-            { text: 'False', marks: q.options[1].marks }
-          ];
-          console.log('🔍 Setting editOptions to:', newOptions);
-          setEditOptions(newOptions);
-          
-          // Also store in window for debugging
-          window.lastEditOptions = newOptions;
-        } else {
-          // Convert from old format (total marks) to individual marks
-          console.log('🔍 Converting from total marks to individual marks');
-          const totalMarks = q.marks || 2;
-          const trueMarks = Math.ceil(totalMarks * 0.6); // 60% for True
-          const falseMarks = totalMarks - trueMarks; // Remaining for False
-          
-          const newOptions = [
-            { text: 'True', marks: trueMarks },
-            { text: 'False', marks: falseMarks }
-          ];
-          console.log('🔍 Setting editOptions to:', newOptions);
-          setEditOptions(newOptions);
-          
-          // Also store in window for debugging
-          window.lastEditOptions = newOptions;
-        }
-      } else {
-        // Default marks for new True/False questions
-        console.log('🔍 Using default marks for new True/False question');
-        const newOptions = [
-          { text: 'True', marks: 3 },
-          { text: 'False', marks: 2 }
-        ];
-        console.log('🔍 Setting editOptions to:', newOptions);
-        setEditOptions(newOptions);
-        
-        // Also store in window for debugging
-        window.lastEditOptions = newOptions;
+    setEditQuestionText(q.question_text || q.text || q.question || '');
+
+    const isTrueFalse = q.question_type === 'true_false' || q.type === 'true_false';
+    setEditQuestionType(isTrueFalse ? 'TrueFalse' : 'MCQ');
+
+    let optionsToSet = [];
+    let rawOptions = q.options;
+    if (typeof rawOptions === 'string') {
+      try {
+        rawOptions = JSON.parse(rawOptions);
+      } catch (e) {
+        rawOptions = [];
       }
     }
-    
-    console.log('🔍 startEditQuestion - Final editOptions set to:', editOptions);
+
+    if (isTrueFalse) {
+      if (Array.isArray(rawOptions) && rawOptions.length === 2 && rawOptions[0]?.marks !== undefined && rawOptions[1]?.marks !== undefined) {
+        optionsToSet = [
+          { text: rawOptions[0].text || 'True', marks: Number(rawOptions[0].marks) || 0 },
+          { text: rawOptions[1].text || 'False', marks: Number(rawOptions[1].marks) || 0 }
+        ];
+      } else {
+        const totalMarks = q.marks || 2;
+        const trueMarks = Math.ceil(totalMarks * 0.6);
+        const falseMarks = totalMarks - trueMarks;
+        optionsToSet = [
+          { text: 'True', marks: trueMarks },
+          { text: 'False', marks: falseMarks }
+        ];
+      }
+    } else {
+      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+        if (typeof rawOptions[0] === 'string') {
+          optionsToSet = rawOptions.map(opt => ({
+            text: opt,
+            marks: q.marks || 0
+          }));
+        } else {
+          optionsToSet = rawOptions.map(opt => ({
+            text: opt?.text ?? '',
+            marks: typeof opt?.marks === 'number' ? opt.marks : (parseInt(opt?.marks, 10) || 0)
+          }));
+        }
+      } else {
+        optionsToSet = [{ text: '', marks: 0 }];
+      }
+    }
+
+    console.log('🔍 Setting editOptions to:', optionsToSet);
+    setEditOptions(optionsToSet);
+    window.lastEditOptions = optionsToSet;
   };
 
   const saveEditQuestion = async (qid) => {
     try {
-      // Log the current state right before creating updates
-      console.log('🔍 saveEditQuestion - Current editOptions state:', editOptions);
-      console.log('🔍 saveEditQuestion - Current editQuestionText:', editQuestionText);
-      console.log('🔍 saveEditQuestion - Current editQuestionType:', editQuestionType);
-      console.log('🔍 saveEditQuestion - Window stored options:', window.lastEditOptions);
-      
-      // Use the stored options if there's a state mismatch
-      const optionsToUse = window.lastEditOptions && window.lastEditOptions.length > 0 ? window.lastEditOptions : editOptions;
-      console.log('🔍 saveEditQuestion - Options to use for save:', optionsToUse);
-      
+      const currentPacket = packets.find(p => p.id === selectedPacket);
+      const currentQ = currentPacket?.questions?.find(q => q.id === qid);
+
+      const optionsToUse = (editOptions && editOptions.length > 0) ? editOptions : (window.lastEditOptions || []);
+      const resolvedPacketId = selectedPacket || currentQ?.packet_id;
+      const questionTypeToSend = editQuestionType === 'TrueFalse' 
+        ? 'true_false' 
+        : (currentQ?.question_type && currentQ.question_type !== 'true_false' ? currentQ.question_type : 'mcq');
+
       const updates = {
+        packet_id: resolvedPacketId,
         question_text: editQuestionText,
-        question_type: editQuestionType === 'MCQ' ? 'mcq' : 'true_false',
+        question_type: questionTypeToSend,
         options: optionsToUse,
-        marks: optionsToUse.reduce((sum, opt) => sum + opt.marks, 0) // Total marks for the question
+        marks: optionsToUse.reduce((sum, opt) => sum + (Number(opt.marks) || 0), 0)
       };
       
       console.log('🚀 Frontend sending edit data:', updates);
-      console.log('🔍 Edit options being sent:', editOptions);
-      console.log('🔍 Edit question type:', editQuestionType);
-      console.log('🔍 Edit options structure check:');
-      console.log('  - Edit options is array:', Array.isArray(editOptions));
-      console.log('  - Edit options length:', editOptions.length);
-      console.log('  - First edit option:', editOptions[0]);
-      console.log('  - First edit option has text:', editOptions[0]?.hasOwnProperty('text'));
-      console.log('  - First edit option has marks:', editOptions[0]?.hasOwnProperty('marks'));
-      console.log('  - First edit option text:', editOptions[0]?.text);
-      console.log('  - First edit option marks:', editOptions[0]?.marks);
-      console.log('  - Second edit option text:', editOptions[1]?.text);
-      console.log('  - Second edit option marks:', editOptions[1]?.marks);
       
       await updateQuestion(qid, updates);
       setEditingQuestionId(null);
       setEditQuestionText('');
       setEditOptions([{ text: '', marks: 0 }]);
+      window.lastEditOptions = null;
       
       // Force re-render to update marks calculation
       setSelectedPacket(selectedPacket);
     } catch (error) {
       console.error('Error updating question:', error);
-      alert('Failed to update question. Please try again.');
+      alert('Failed to update question: ' + (error?.message || 'Please try again.'));
     }
   };
 

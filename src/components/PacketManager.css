@@ -342,6 +342,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: var(--space-2);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(142, 102, 241, 0.4) transparent;
 }
 
 .option-row {
